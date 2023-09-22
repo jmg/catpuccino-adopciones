@@ -1,0 +1,16 @@
+<h4>
+Formulario de pre-adopción{% if animal %} para {{animal}}{% endif %}
+</h4>
+
+<hr>
+<a href="https://{{settings.HOST}}/formularios/{{form_hash}}/">Ver formulario en la web</a>
+<hr>
+
+{% for field, value in fields %}
+{{ field }}:<br>
+{{ value|safe|linebreaks }}<br>
+{% endfor %}
+
+<hr>
+<a href="https://{{settings.HOST}}/formularios/{{form_hash}}/">Ver formulario en la web</a>
+<br>

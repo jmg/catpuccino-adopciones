@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="col-lg-10 col-md-10 mx-auto small-padding-mobile">
+
+    <div class="alert alert-success text-center col-md-11 mx-auto px-md-4" >
+        <b>¡En todos los casos la plataforma es completamente gratuita!</b>
+    </div>
+
+    <div class="row mx-auto">
+        <div class="col-md-5 p-3 container-colored mx-auto p-md-4 mb-4 text-justify faq-text">
+            <h3>Quiero Adoptar <i class="fa fa-cat"></i> </h3>
+            <hr>
+            <ul>
+                <li>
+                    Si quieres adoptar un gato o perro simplemente tenés que completar el formulario de pre-adopción para el animal que hayas elegido:
+                    <ul class="sub-ul">
+                        <li class="li-cat"><a href="/pre-adopcion/" target="_blank">Formulario para gatos</a></li>
+                        <li class="li-dog"><a href="/pre-adopcion/perros/" target="_blank">Formulario para perros</a></li>
+                    </ul>
+                </li>
+                <li>
+                    Una vez que completes el formulario lo recibirá el/la transitante del animal para revisarlo.
+                </li>
+                <li>
+                    En caso de proceder, el/la transitante se va a contactar con vos para concretar la adopción.
+                </li>
+                <li>
+                    Recordá que buscamos adopciones de por vida y que los animales deben ser tratados con amor y respeto. ¡Fomentemos las adopciones responsables!
+                </li>
+            </ul>
+        </div>
+        <div class="col-md-5 p-3 container-colored mx-auto p-md-4 mb-4 text-justify faq-text">
+            <h3>Quiero Publicar en Adopción <i class="fa fa-paw"></i> </h3>
+            <hr>
+            <ul>
+                <li>
+                    Para publicar un animal en adopción hace <b><a href="/accounts/profile/" target="_blank">click acá</a></b>.
+                </li>
+                <li>
+                    Primero vas a tener que crear una cuenta con email y contraseña. Esto sirve para poder volver a ingresar y modificar los datos del animal que cargaste.
+                </li>
+                <li>
+                    Además el email que ingreses es a donde te van a llegar los formularios de pre-adopción que completen los candidatos.
+                </li>
+                <li>
+                    Una vez creada la cuenta vas a poder cargar al animal en adopción. Los datos que te pediremos son: Nombre, edad, sexo, una breve descripción y al menos una foto. Mientras más fotos subas mejor!
+                </li>
+                <li>
+                    Cuando termines de cargar los datos, los creadores de este sitio vamos a revisar la publicación y, si está todo bien, se publicará en la página principal de esta web.
+                </li>
+                <li>
+                    Una vez publicado los interesados en adoptar podrán completar el formulario de pre-adopción para tu rescatado. Cuando esto suceda recibirás un mail con los datos del formulario.
+                </li>
+                <li>
+                    Finalmente, si está todo bien con el formulario. ¡Podrás contactar al adoptante para concretar la adopción!
+                </li>
+            </ul>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block css %}
+<style>
+    @media only screen and (max-width: 992px) {
+        main {
+            margin-top: 10px !important;
+            margin-bottom: 20px !important;
+        }
+    }
+    a {
+        color: #007bff;
+    }
+</style>
+{% endblock %}

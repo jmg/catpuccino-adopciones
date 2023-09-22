@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block header %}
+<div class="site-heading">
+
+  <h1><i class="fa fa-paw"></i> Catpuccino Adopciones </h1>
+
+  <span class="subheading"><b></b>¡Adoptá de forma responsable! </span>
+  <div id="main-button"><a id="main-button-action" class="btn btn-primary btn-main">
+    <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block subheader %}
+{% if animals %}
+  <div id="gatitos-en-adopcion" class="p-3 p-md-4 search-container container-fluid">
+    <form class="form">
+
+      <div class="form-row">
+
+      <div class="col-12 col-md-4  mb-2">
+        <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="text" name="zone" placeholder="🔎 Buscar por zona o nombre">
+      </div>
+
+      <div class="col-6 col-md-4">
+        <select id="filter-type" class="form-control" name="type">
+          <option value="all">🐱🐶 Todos</option>
+          <option value="G">🐱 Gatos</option>
+          <option value="P">🐶 Perros</option>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-4">
+        <select id="filter-sort" class="form-control" name="type">
+          <option value="">↑↓ Ordenar </option>
+          <option value="desc">Más Recientes</option>
+          <option value="asc">Más Antiguos</option>
+        </select>
+      </div>
+
+      </div>
+
+    </form>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row mx-1 mx-md-4 text-center">
+
+    {% if animals %}
+
+      <div id="animal-list" class="row w-100 mx-auto mt-4">
+
+      {% for animal in animals %}
+      <div data-id="{{animal.id}}" class="animal-card col-md-{{cols}}">
+        {% include "adoption/card.html" %}
+      </div>
+      {% endfor %}
+      </div>
+
+    {% else %}
+
+    <div class="mx-auto alert alert-info w-100" id="gatitos-en-adopcion">
+      <div class="mx-auto text-md-justify">
+        <i class="fa fa-paw"></i>
+        {% if main %}
+        En este momento no tenemos ningún animal en adopción
+        {% else %}
+        Todavía no cargaste ningún animal en adopción. <br>
+        <i class="fa fa-paw"></i> O los que cargaste aún están en <b>revisión</b>. Si es así en un momento serán publicados!
+        {% endif %}
+
+      </div>
+      <div class="mx-auto">
+        <img class="cat-image" src="/static/500.png">
+      </div>
+    </div>
+
+    {% endif %}
+
+    </div>
+
+</div>
+{% endblock %}
+
+{% block css %}
+<style>
+  .search-container {
+    background: #e3e3e3
+  }
+  main {
+    margin-top: 0;
+  }
+  .autocomplete-suggestions { border: 1px solid #999; background: #FFF; overflow: auto; }
+  .autocomplete-suggestion { padding: 2px 5px; white-space: nowrap; overflow: hidden; }
+  .autocomplete-selected { background: #F0F0F0; }
+  .autocomplete-suggestions strong { font-weight: normal; color: #3b33cc; }
+  .autocomplete-group { padding: 2px 5px; }
+  .autocomplete-group strong { display: block; border-bottom: 1px solid #000; }
+
+  {% if main %}
+  #gatitos-en-adopcion {
+    margin-bottom: 15px;
+  }
+  {% endif %}
+</style>
+{% endblock %}
+
+{% block js %}
+<script src='{% static "js/jquery.autocomplete.min.js" %}'></script>
+{% endblock %}

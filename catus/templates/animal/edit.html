@@ -1,0 +1,337 @@
+{% extends "base_form.html" %}
+{% load bootstrap4 %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+
+<div class="container px-2">
+
+    <div class="col-lg-8 col-md-10 mx-auto container-colored">
+
+        <div id="adoption-form-container">
+
+            {% if animal %}
+            <h2 class="text-center mt-3">{{ animal.nombre }} </h2>
+            <hr>
+            {% else %}
+            <div style="margin-top: 10px;"></div>
+            {% endif %}
+
+            {% if is_post %}
+                {% if not success %}
+                <div id="response-text-error" class="alert alert-danger" role="alert">
+                    <span id="response-text-error-message">{{errors}}</span>
+                </div>
+                {% endif %}
+            {% endif %}
+
+            <form id="adoption-form" class="needs-validation" action="{{post_url}}" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="text-center">
+                    <button id="send-form-button" class="btn btn-primary btn-rounded">Guardar <i class="fa fa-save"></i></button>
+                </div>
+                <br>
+
+                <div class="mb-3 mb-md-2">
+                    <input type="checkbox" id="ig-publicado-checkbox" onclick="$('#ig-pull-data-contatiner').slideToggle();">
+                    <a style="color: #007bff" onclick="$('#ig-pull-data-contatiner').slideToggle(); $('#ig-publicado-checkbox')[0].checked = !$('#ig-publicado-checkbox')[0].checked;">
+                        ¿Está publicado en Instagram?
+                    </a>
+                </div>
+
+                <div id="ig-pull-data-contatiner" class="mb-4" style="display: none;">
+                    <div class="alert alert-success">
+                        Si está publicado en Instagram podés copiar el link del post y automáticamente se completarán los datos y fotos del animal en adopción.
+                        Un link de ejemplo es: <a href="https://www.instagram.com/p/Cq6AYP9rCob/" target="_blank">https://www.instagram.com/p/Cq6AYP9rCob/</a>
+                    </div>
+
+                    <input type="hidden" name="chatgpt_response" id="chatgpt-response-input">
+
+                    <input name="ig_url_for_chatgpt" class="form-control form-input" id="ig-url-input" placeholder="Copiar aquí el link del post en Instagram">
+                    <div class="d-flex justify-content-center">
+                        <button type="button" class="mx-auto btn btn-primary mb-1 mt-2 btn-rounded" onclick="getDataFromIG(this, '{{animal.id}}'); return false;">
+                            Obtener datos desde Instagram <i class="fab fa-instagram"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {% crispy animal_form %}
+
+                <div class="mt-4 mb-4" style="display: none;" id="images-container-div">
+                    <h3>Fotos de Instagram</h3>
+                    <div id="images-container" class="row">
+                    </div>
+                </div>
+
+                <div id="show-photos-button" class="text-center" {% if not animal or animal.animalimage_set.count == 0 %}style="display: none"{% endif %}>
+                    <a style="margin-top: 10px;" class="btn btn-primary fotos-btn" onclick="$('#form-set-container').slideDown(); $(this).hide()"> Ver Fotos ({{animal.animalimage_set.count}}) <i class="fa fa-camera"></i> </a>
+                <hr>
+                </div>
+
+                <div id="form-set-container" {% if animal and animal.animalimage_set.count > 0 %}style="display: none"{% endif %}>
+
+                    <div id="form-set" class="row">
+                    {{ images_form.management_form }}
+                    {% for form in images_form %}
+                        <div class="col-md-6">
+                        {% bootstrap_form form %}
+                        </div>
+                    {% endfor %}
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <a id="add_more" class="btn btn-primary fotos-btn"> Agregar Foto <i class="fa fa-plus-circle"></i> </a>
+                    </div>
+                    <hr>
+                    <div id="empty_form" style="display:none">
+                        <div class="col-md-12">
+                            <table class='no_error'>
+                                {% bootstrap_form images_form.empty_form %}
+                            </table>
+                        </div>
+                    </div>
+
+                {% buttons %}
+                <br>
+
+                <div class="text-center">
+                    <button id="send-form-button" style="border-radius: 15px;" class="btn btn-primary">Guardar <i class="fa fa-save"></i></button>
+                </div>
+                <br>
+                {% endbuttons %}
+            </form>
+        </div>
+
+        <hr>
+        <br>
+        <div class="text-center">
+            <a id="btn-volver" class="btn btn-primary btn-volver" href="/accounts/profile/">Volver <i class="fa fa-arrow-left"></i></a>
+        </div>
+        <br>
+        <br>
+   </div>
+</div>
+
+{% endblock %}
+
+{% block css %}
+<style type="text/css">
+    textarea {
+        height: 100px !important;
+    }
+    label {
+        display: block;
+    }
+    .fotos-btn {
+        border-radius: 15px; padding: 10px; color: white !important;
+    }
+    #id_datos {
+        height: 300px !important;
+    }
+    .transito-field {
+        background: white;
+    }
+    fieldset legend {
+        font-size: 1rem;
+        text-align: center;
+        font-weight: bold;
+        width: auto;
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    fieldset {
+        border: 1px solid #c9c9c9;
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 10px;
+        margin-bottom: 10px;
+    }
+    main {
+        margin-top: 8px !important;
+        margin-bottom: 8px !important;
+    }
+</style>
+{% endblock %}
+
+{% block js %}
+
+<script src="https://cdn.tiny.cloud/1/84qalir3z1a9cnmgj78tz6n3p4gm0wlf9jvsgis1o8zw2wrk/tinymce/5/tinymce.min.js" referrerpolicy="origin"></script>
+
+<script>
+
+    function enableForm(btn, oldHtml) {
+
+        $(btn).attr('disabled', false);
+        $(btn).html(oldHtml);
+
+        $("#id_nombre").attr('disabled', false);
+        $("#id_sexo").attr('disabled', false);
+        $("#id_tipo").attr('disabled', false);
+        $("#id_edad").attr('disabled', false);
+        tinyMCE.get('id_datos').setMode('design');
+    }
+
+    function disableForm(btn) {
+
+        $(btn).attr('disabled', true);
+        var oldHtml = $(btn).html();
+        $(btn).html('Cargando datos... <i class="fa fa-spinner fa-spin"></i>');
+
+        $("#id_nombre").attr('disabled', true);
+        $("#id_sexo").attr('disabled', true);
+        $("#id_tipo").attr('disabled', true);
+        $("#id_edad").attr('disabled', true);
+        tinyMCE.get('id_datos').setMode('readonly');
+
+        return oldHtml;
+    }
+
+    function getDataFromIG(btn, animalId) {
+
+        var url = $("#ig-url-input").val();
+        if (!url) {
+            $.alert("Debe ingresar un link de Instagram");
+            return;
+        }
+
+        var oldHtml = disableForm(btn)
+
+        $.get("/animal/pulldatafromig/", {"id": animalId, "url": url }, function(response) {
+
+            enableForm(btn, oldHtml)
+
+            //console.log(response["response"])
+            $("#chatgpt-response-input").val(response["response"])
+
+            var imgContainer = $("#images-container")
+            imgContainer.html("")
+
+            if (response["images"].length > 0) {
+                $("#images-container-div").show();
+                for (var i=0; i < response["images"].length; i++) {
+                    imgContainer.append("<div class='col-md-6 mb-4'><img src='" + response["images"][i] + "' style='width: 100%;'><input name='instagram_image' type='hidden' value='" + response["images"][i] + "'></div>")
+                }
+            }
+
+            if (!response["Nombre"] || !response["Descripcion"]) {
+                $.alert("No se encontraron datos en el link ingresado... :( Por favor intenta nuevamente o ingresá otro link.");
+                return;
+            }
+
+            $.info("Datos obtenidos de Instagram con éxito para " + response["Nombre"] + "!");
+
+            $([document.documentElement, document.body]).animate({
+                scrollTop: $("#id_tipo").offset().top - 20
+            }, 250);
+
+            $("#id_nombre").val(response["Nombre"])
+            $("#id_sexo").val(response["Sexo"])
+            $("#id_edad").val(response["Edad"])
+            $("#id_tipo").val(response["Tipo"])
+
+            if (!!response["Descripcion"]) {
+                tinyMCE.get('id_datos').setContent(response["Descripcion"])
+            }
+
+        }, 'json').fail(function() {
+
+            $.alert("Error al obtener datos de Instagram");
+            enableForm(btn, oldHtml)
+        });
+    }
+
+    $(document).ready(function() {
+
+        var forms = document.querySelectorAll('.needs-validation')
+
+            Array.prototype.slice.call(forms).forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+
+                if (!form.checkValidity()) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                }
+
+                form.classList.add('was-validated')
+            }, false)
+        })
+
+        tinymce.init({
+            selector: '#id_datos',
+            menubar: false,
+            plugins: [
+            'advlist autolink lists link image charmap print preview anchor',
+            'searchreplace visualblocks code fullscreen',
+            'insertdatetime media table paste code help wordcount'
+            ],
+            toolbar: 'undo redo | bold italic underline strikethrough | fontselect fontsizeselect formatselect | alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist | forecolor backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons | fullscreen  preview save print | insertfile image media pageembed template link anchor codesample | a11ycheck ltr rtl | showcomments addcomment',
+        });
+
+        $("#id_nombre").change(function() {
+
+            var name = $("#id_nombre").val();
+            var data = {name: name, csrfmiddlewaretoken: "{{ csrf_token }}"}
+            var that = this;
+
+            $.post("/animal/validatename/", data, function(response) {
+
+                $(".error-message-name").remove();
+
+                if (!response.valid) {
+                    var error = $("<div class='error-message-name'><div class='error-message'>El nombre ya existe.</div><div>Te recomendamos agregarle algo más como el color. Ejemplo: " + name + " (tricolor).</div></div>")
+                    $("#id_nombre").parent().append(error);
+                    $("#id_nombre").addClass("is-invalid")
+                    $("#id_nombre").removeClass("is-valid")
+                    that.setCustomValidity('El nombre ya existe.');
+                } else {
+                    $("#id_nombre").removeClass("is-invalid")
+                    $("#id_nombre").addClass("is-valid")
+                    that.setCustomValidity('');
+                }
+
+            }, 'json');
+        });
+
+        $('#add_more').click(function() {
+
+            $("#form-set-container").show();
+            $("#show-photos-button").hide();
+
+            var form_idx = $('#id_animalimage_set-TOTAL_FORMS').val();
+            $('#form-set').append($('#empty_form').html().replace(/__prefix__/g, form_idx));
+            $('#id_animalimage_set-TOTAL_FORMS').val(parseInt(form_idx) + 1);
+
+            $("#id_animalimage_set-" + form_idx + "-DELETE").click(function() {
+
+                updateRemoveAdded(this);
+            });
+
+            $([document.documentElement, document.body]).animate({
+                scrollTop: $("#id_animalimage_set-" + form_idx + "-DELETE").offset().top - 20
+            }, 250);
+        });
+
+        for (var i=0; i < $('#id_animalimage_set-TOTAL_FORMS').val(); i++) {
+            $("#id_animalimage_set-" + i + "-DELETE").click(function() {
+
+                updateRemove(this);
+            })
+        }
+
+        function updateRemoveAdded(el) {
+
+            $(el).parent().parent().prev().remove();
+            $(el).parent().parent().remove();
+        }
+
+        function updateRemove(el) {
+
+            if ($(el)[0].checked) {
+                $.info("Por favor clickear en GUARDAR para confirmar eliminar la foto.");
+            }
+        }
+    });
+</script>
+{% endblock %}

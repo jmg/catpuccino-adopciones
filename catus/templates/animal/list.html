@@ -1,0 +1,179 @@
+{% extends "base_form.html" %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+
+<div class="container">
+  <div class="row">
+
+    <div class="col-md-10 mx-auto container-colored mb-3">
+
+        <div style="display: inline; cursor: pointer;" data-toggle="collapse" data-target="#collapseUser" aria-expanded="false">
+            <i class="fa fa-chevron-down mr-2"></i>
+            <h5 class="mb-0" style="display: inline">Mis datos</h5>
+        </div>
+
+        {% if usuario_save_success %}
+            <div id="response-text" class="alert alert-success" role="alert">
+                <div class="text-center">¡Datos actualizados correctamente! </div>
+            </div>
+
+        {% elif usuario_save_error %}
+            <div id="response-text" class="alert alert-danger" role="alert">
+                <div class="text-center">Ocurrio un error: {{usuario_save_error|safe}} </div>
+            </div>
+        {% endif %}
+
+        <div id="collapseUser" class="collapse mt-2 {% if usuario_save_success %}show{% endif %}">
+            <form id="user-form" class="form" action="/usuario/save/" method="post">
+                {% csrf_token %}
+                {{user_form|crispy}}
+
+                <div class="text-md-left text-center">
+                    <button class="btn btn-primary btn-md btn-rounded">
+                        <i class="fa fa-save"></i> Actualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-10 mx-auto container-colored">
+
+        {% if is_new_animal %}
+            <div id="response-text" class="alert alert-success" role="alert">
+                <div class="text-center">¡Guardado correctamente! Estamos revisando la publicación y si está todo bien aparecerá en el sitio web a la brevedad. </div>
+            </div>
+        {% elif is_new_animal_approved %}
+            <div id="response-text" class="alert alert-success" role="alert">
+                <div class="text-center">¡Guardado correctamente! ¡Ya fue aprobado y aparece en el sitio web! </div>
+            </div>
+        {% elif success %}
+            <div id="response-text" class="alert alert-success" role="alert">
+                <div class="text-center">¡Guardado correctamente! </div>
+            </div>
+        {% endif %}
+
+        <div class="mb-2 text-md-left text-center">
+            <a href="/animales/" class="btn btn-primary btn-rounded mb-2">
+                Cargar Animal <i class="fa fa-cat"></i>
+            </a>
+            <a target="_blank" href="/usuario/{{request.user.id}}/animales/" class="btn btn-rounded">
+                Link a mis Animales <i class="fa fa-copy"></i>
+            </a>
+        </div>
+
+        {% if page == "adopcion" %}
+        <div id="response-text" class="alert alert-info" role="alert">
+            <b>Importante</b>: Cuando cargues un animal lo revisaremos para comprobar que este todo bien con la publicación.
+        </div>
+        {% endif %}
+
+        {% if animals %}
+        <table id="forms-table" class="table table-striped table-bordered table-hover">
+            <thead>
+                <th>Nombre</th>
+                <th>Estado</th>
+                <th>Publicado</th>
+                <th title="Link para compartir el animal">Link pre-adopción</th>
+                <th></th>
+            </thead>
+
+            <tbody>
+                {% for animal in animals %}
+                <tr>
+                    <td><a class="a-blue" href="/animales/{{animal.id}}/">{{animal.nombre}}</a></td>
+                    <td>
+                        <span class="badge badge-{{animal.get_estado_badge}}">{{animal.get_estado_display}}</span>
+                    </td>
+                    <td>
+                        <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En Revisión{% else %}Publicado{% endif %}</span>
+                    </td>
+
+                    <td>
+                        <i class="fa fa-copy"></i>
+                        <a onclick="copyTextToClipboard('{{settings.SSL_HOST}}{{animal.get_adoption_url}}')">
+                            Copiar
+                        </a>
+                    </td>
+
+                    <td><a href="/animales/{{animal.id}}/"><i class="fa fa-edit"></i> Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <hr>
+        <br>
+
+        <div class="text-md-left text-center">
+        <a href="/accounts/logout/" class="btn btn-secondary btn-rounded ">
+            Salir
+        </a>
+        </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block css %}
+<style type="text/css">
+    .dataTables_filter {
+        text-align: left !important;
+    }
+    .dataTables_filter input {
+        width: 100% !important;
+    }
+    @media only screen and (max-width: 992px) {
+        main {
+            margin-top: 10px !important;
+            margin-bottom: 30px !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block js %}
+{{ block.super }}
+<script type="text/javascript">
+
+    /*$(document).ready(function() {
+
+        $("#forms-table").DataTable({
+            "order": [[ 0, "desc" ]],
+            "autoWidth" : true,
+            "iDisplayLength" : 100,
+            "responsive": true,
+            "language": {
+                "sProcessing":     "Procesando...",
+                "sLengthMenu":     "Mostrar _MENU_ registros",
+                "sZeroRecords":    "No se encontraron resultados",
+                "sEmptyTable":     "Ningún dato disponible en esta tabla =(",
+                "sInfo":           "Mostrando registros del _START_ al _END_ de un total de _TOTAL_ registros",
+                "sInfoEmpty":      "Mostrando registros del 0 al 0 de un total de 0 registros",
+                "sInfoFiltered":   "(filtrado de un total de _MAX_ registros)",
+                "sInfoPostFix":    "",
+                "sSearch":         "Buscar:",
+                "sUrl":            "",
+                "sInfoThousands":  ",",
+                "sLoadingRecords": "Cargando...",
+                "oPaginate": {
+                    "sFirst":    "Primero",
+                    "sLast":     "Último",
+                    "sNext":     "Siguiente",
+                    "sPrevious": "Anterior"
+                },
+                "oAria": {
+                    "sSortAscending":  ": Activar para ordenar la columna de manera ascendente",
+                    "sSortDescending": ": Activar para ordenar la columna de manera descendente"
+                },
+                "buttons": {
+                    "copy": "Copiar",
+                    "colvis": "Visibilidad"
+                }
+            }
+        });
+    });*/
+</script>
+{% endblock %}

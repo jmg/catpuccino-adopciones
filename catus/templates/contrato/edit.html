@@ -1,0 +1,340 @@
+{% extends "base_form.html" %}
+{% load bootstrap4 %}
+
+{% block content %}
+<style type="text/css">
+    textarea {
+        height: 100px !important;
+    }
+    label {
+        display: block;
+    }
+    .fotos-btn {
+        border-radius: 15px; padding: 10px; color: white !important;
+    }
+    .btn {
+        white-space: pre-wrap !important;
+    }
+    #id_mail_content {
+        height: 450px !important;
+    }
+</style>
+
+<div class="container">
+  <div class="row">
+    <div class="col-lg-8 col-md-10 mx-auto container-colored">
+
+        <div style="margin-top: 10px;">
+
+            <h3 class="text-center">Contrato de adopción responsable{% if gato %} para {{ gato.nombre }}{% endif %}</h3>
+            <hr>
+
+            {% if is_persona %}
+            <div class="contrato-form">
+                <div class="alert alert-info" role="info">
+                    <i class="fa fa-paw"></i> Antes de completar tus datos podés ver el contrato de adopción responsable para leerlo haciendo click en el siguiente boton.
+                </div>
+
+                <div style="margin-top: 15px; margin-bottom: 10px;" class="text-center">
+                    <a class="btn btn-primary btn-volver" href="/contrato_adopcion/download/"><i class="fa fa-id-badge"></i> Descargar contrato vacio </a>
+                    <!--<a onclick="showContrato()" class="btn btn-primary btn-volver">Ver contrato vacio <i class="fa fa-id-badge"></i></a>-->
+                </div>
+
+                <div id="contrato-vacio" class="text-center" style="display: none;">
+                    <iframe src="https://docs.google.com/viewer?url=https://feliscatus.com.ar/static/contrato/contrato.pdf&embedded=true" style="width:100%; height: 600px;" frameborder="0"></iframe>
+                </div>
+            </div>
+            {% else %}
+
+            {% if contrato.contrato_aceptado %}
+            <div class="alert alert-success" role="info">
+                <i class="fa fa-user"></i> El adoptante ya completo el contrato de adopción responsable. <a target="_blank" href="https://{{settings.HOST}}/static/contrato/{{contrato.hash}}/contrato_adopcion_responsable_felis_catus_completado.pdf"> Click para descargarlo</a>
+            </div>
+            {% else %}
+            <div class="alert alert-success" role="info">
+                <i class="fa fa-paw"></i> En esta sección podrás generar un <b>contrato de adopción para el adoptante</b>. <br>
+                <i class="fa fa-paw"></i> Una vez completados los datos del animal, en la parte inferior del formulario, podrás copiar el link para enviarle al adoptante.<br>
+                <i class="fa fa-paw"></i> Con ese link el adoptante podrá completar sus datos personales. Una vez hecho esto le llegará una copia del contrato completado al mail a él y a vos.
+            </div>
+            {% endif %}
+
+            <div class="alert alert-info" role="info">
+                <i class="fa fa-cat"></i> Datos del {{gato.get_tipo_display}} a completar por el responsable de la adopción.
+            </div>
+            {% endif %}
+
+            <div style="margin-top: 10px;"></div>
+
+            <div id="response-text-error" class="alert alert-danger" role="alert" style="display: none">
+                Se ha producido un error.
+                <br><br>
+                Detalles: <span id="response-text-error-msg"></span>
+            </div>
+
+            <div id="response-text" class="alert alert-success" role="alert" style="display: none">
+                ¡Gracias por completar el contrato de adopción!
+                <br><br>
+
+                <div class="text-center">
+                    <img src="/static/logo_2.png" style="width: 250px;">
+                    <br><br>
+                    Atte. Equipo de Catpuccino Adopciones
+                </div>
+            </div>
+
+            {% if is_persona %}
+            <div id="datos-gato-container">
+                <div style="margin-top: 15px; margin-bottom: 10px;" class="text-center"> <button onclick="showDatosGato()" class="btn btn-secondary" style="border-radius: 10px;"> <i class="fa fa-cat"></i> Ver datos del {{gato.get_tipo_display}} a adoptar </button> </div>
+
+                <div id="datos-gato" style="display: none; margin-bottom: 20px;" >
+
+                    <div style=" background: #eee; padding: 10px; border-radius: 10px;">
+                    {% for field, value in gato_data.items %}
+                    <div style="line-height: 26px;">
+                    {{field}}: <b>{{value}}</b>
+                    </div>
+                    {% endfor %}
+                    </div>
+
+                    <div id="response-text" class="alert alert-success" role="alert">
+                    <i class="fa fa-cat"></i> Todos estos datos aparecerán en el contrato de adopción responsable
+                    </div>
+                </div>
+            </div>
+
+            {% endif %}
+
+            <form id="contrato-form" class="contrato-form" method="post" onsubmit="saveForm(this); return false;">
+                {% csrf_token %}
+                {% bootstrap_form form %}
+
+                {% buttons %}
+
+                <div>
+                    {% if not is_persona %}
+
+                    <div class="text-center">
+                        <button onclick="setSendEmail(false)" id="send-form-button" style="border-radius: 15px;" class="btn btn-primary">Guardar y copiar link para enviar al adoptante <i class="fa fa-save"></i></button>
+
+                        <div class="alert alert-success" role="info" style="margin-top: 15px">
+                            <a target="_blank" href="http{% if settings.ENV != 'LOCAL' %}s{% endif %}://{{settings.HOST}}/contrato/{{contrato.hash}}/">Link para que el adoptante complete su parte del contrato <i class="fa fa-link"></i></a>
+                            <div>
+                            <input style="margin-top: 10px;" readonly="readonly" class="form-control text-center" id="link-adoptante" value="http{% if settings.ENV != 'LOCAL' %}s{% endif %}://{{settings.HOST}}/contrato/{{contrato.hash}}/">
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+
+                    {% else %}
+
+                    <div class="alert alert-success" role="info" style="margin-top: 15px">
+                        <i class="fa fa-id-card"></i> Por favor revisá que los datos sean correctos antes de aceptar y descargar el contrato. Una vez hecho esto lo recibirá el/la transitante del {{gato.nombre}}.
+                    </div>
+
+                    <div class="text-center">
+                        <button onclick="setSendEmail(false)" id="send-form-button" style="border-radius: 15px;" class="btn btn-primary">Aceptar y descargar contrato completo <i class="fa fa-id-badge"></i></button>
+                    </div>
+                    {% endif %}
+                </div>
+                <br>
+                {% endbuttons %}
+            </form>
+        </div>
+
+        {% if not is_persona %}
+        <div class="text-center">
+            <a id="btn-volver" class="btn btn-primary btn-volver" href="/formularios/">Volver <i class="fa fa-arrow-left"></i></a>
+        </div>
+        {% endif %}
+        <br>
+        <br>
+   </div>
+  </div>
+</div>
+
+<iframe id="download_iframe" style="display:none;"></iframe>
+{% endblock %}
+
+{% block js %}
+<script src="https://cdn.tiny.cloud/1/84qalir3z1a9cnmgj78tz6n3p4gm0wlf9jvsgis1o8zw2wrk/tinymce/5/tinymce.min.js" referrerpolicy="origin"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment-with-locales.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
+
+<script type="text/javascript">
+
+    $(document).ready(function() {
+
+        bindDateSelectorsToCheckboxes()
+
+        {% if is_persona and contrato.contrato_aceptado %}
+        updateForms(true);
+        {% endif %}
+
+        tinymce.init({
+            selector: '#id_mail_content',
+            menubar: false,
+            plugins: [
+            'advlist autolink lists link image charmap print preview anchor',
+            'searchreplace visualblocks code fullscreen',
+            'insertdatetime media table paste code help wordcount'
+            ],
+            toolbar: 'undo redo | bold italic underline strikethrough | fontselect fontsizeselect formatselect | alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist | forecolor backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons | fullscreen  preview save print | insertfile image media pageembed template link anchor codesample | a11ycheck ltr rtl | showcomments addcomment',
+        });
+
+        var perrosAttrs = [
+            "#id_perro_vacunacion_quintuple_1_dosis",
+            "#id_perro_vacunacion_quintuple_1_dosis_fecha",
+            "#id_perro_vacunacion_quintuple_1_dosis_notas",
+            "#id_perro_vacunacion_quintuple_2_dosis",
+            "#id_perro_vacunacion_quintuple_2_dosis_fecha",
+            "#id_perro_vacunacion_quintuple_2_dosis_notas",
+            "#id_perro_vacunacion_sextuple_1_dosis",
+            "#id_perro_vacunacion_sextuple_1_dosis_fecha",
+            "#id_perro_vacunacion_sextuple_1_dosis_notas"
+        ];
+
+        var gatosAttrs = [
+            "#id_gato_vacunacion_triple_1_dosis",
+            "#id_gato_vacunacion_triple_1_dosis_fecha",
+            "#id_gato_vacunacion_triple_1_dosis_notas",
+            "#id_gato_vacunacion_triple_2_dosis",
+            "#id_gato_vacunacion_triple_2_dosis_fecha",
+            "#id_gato_vacunacion_triple_2_dosis_notas"
+        ]
+
+        {% if contrato.get_tipo == "P" %}
+        var hideAttrs = gatosAttrs;
+        {% else %}
+        var hideAttrs = perrosAttrs;
+        {% endif %}
+
+        $(hideAttrs).each(function(idx, el) {
+            $(el).parent().hide();
+        });
+
+    });
+
+    function updateForms(fast) {
+
+        if (fast === true) {
+            $(".contrato-form").hide();
+            $("#response-text-error").hide();
+            $("#response-text").show();
+            $("#datos-gato-container").hide();
+        } else {
+            $(".contrato-form").slideUp();
+            $("#response-text-error").slideUp();
+            $("#response-text").slideDown();
+            $("#datos-gato-container").slideUp();
+        }
+    }
+
+    function bindDateSelectorsToCheckboxes() {
+
+        var checkboxesAttrs = [
+            "#id_gato_vacunacion_antirabica_fecha",
+            "#id_gato_vacunacion_triple_1_dosis_fecha",
+            "#id_gato_vacunacion_triple_2_dosis_fecha",
+            "#id_gato_castrado_fecha",
+            "#id_gato_desparasitado_fecha",
+            "#id_gato_desparasitado_fecha_2",
+            "#id_gato_pipeta_antipulgas_fecha",
+
+            "#id_perro_vacunacion_quintuple_1_dosis_fecha",
+            "#id_perro_vacunacion_quintuple_2_dosis_fecha",
+            "#id_perro_vacunacion_sextuple_1_dosis_fecha"
+        ]
+        for (var i = 0; i < checkboxesAttrs.length; i++) {
+
+            var attr = checkboxesAttrs[i];
+            $(attr).change(function() {
+
+                var checkbox = $(this).parent().prev().find("input")
+                checkbox[0].checked = !!$(this).val()
+            })
+        }
+    }
+
+    var sendEmail = false;
+
+    function setSendEmail(boolean) {
+
+        sendEmail = boolean;
+    }
+
+    function saveForm(form) {
+
+        if (sendEmail) {
+
+            {% if contrato.email_enviado %}
+
+            if (!confirm("El contrato ya fue enviado al adoptante anteriormente. ¿Estas seguro de enviarlo de nuevo?")) {
+                return;
+            }
+
+            {% else %}
+
+            if (!confirm("¿Estas seguro de enviar el contrato al adoptante?")) {
+                return;
+            }
+
+            {% endif %}
+        }
+
+        var data = $(form).serializeArray();
+        data.push({"name": "send_email", "value": (sendEmail) ? "1" : "0"})
+
+        if (sendEmail) {
+            data.push({"name": "content", "value": tinymce.get("id_mail_content").getContent() });
+        }
+
+        $.post(location.href, data, function(response) {
+
+            if (response.status == "success") {
+
+                {% if not is_persona %}
+
+                    if (sendEmail) {
+                        $.info("Contrato enviado al adoptante correctamente!");
+                    } else {
+                        $.info("Guardado y copiado link para el adoptante!");
+                    }
+
+                    var copyText = document.getElementById("link-adoptante");
+                    copyText.select();
+                    copyText.setSelectionRange(0, 99999);
+                    document.execCommand("copy");
+                {% else %}
+                    updateForms();
+                    if (response.contrato_url) {
+                        window.open(response.contrato_url);
+                    }
+                {% endif %}
+            } else {
+
+                $("#response-text-error").slideDown();
+                $("#response-text-error-msg").html(response.errors);
+                window.scrollTo(0, 0);
+            }
+
+        }, 'json').fail(function(jqXHR, textStatus, errorThrown) {
+
+            $("#response-text-error").slideDown();
+            $("#response-text-error-msg").html(errorThrown);
+            window.scrollTo(0, 0);
+        });
+    }
+
+    function showDatosGato(btn) {
+        $("#datos-gato").slideToggle();
+    }
+
+    function showContrato(btn) {
+        $("#contrato-vacio").slideToggle();
+    }
+</script>
+
+
+{% endblock %}
+

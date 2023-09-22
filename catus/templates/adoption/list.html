@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container main-catus">
+  <div class="row">
+    <div class="col-lg-8 col-md-10 mx-auto container-colored">
+
+        <h2 id="gatitos-en-adopcion" class="text-center">
+          Gatos {% if perros_en_adopcion %}y Perros{% endif %} en Adopción
+        </h2>
+        <hr>
+
+        {% for animal in animals %}
+        {% include "adoption/card.html" %}
+        {% endfor %}
+   </div>
+  </div>
+</div>
+
+<br>
+<div class="text-center">
+    <a class="btn btn-primary btn-volver" onclick="history.back();">Volver <i class="fa fa-arrow-left"></i></a>
+</div>
+
+{% endblock %}

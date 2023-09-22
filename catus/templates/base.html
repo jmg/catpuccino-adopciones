@@ -1,0 +1,181 @@
+{% load static %}
+{% load bootstrap4 %}
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="{% static 'favicon.png' %}" sizes="64x64">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
+  <meta name="description" content="Catpuccino Adopciones | Adopción responsable de gatos y perros">
+
+  <meta name="keywords" content="Adopción responsable, Adopción de gatitos, Adopción de gatos, Adopción de perros, Adopción de perritos, Gatos, Perros, Gatos en adopción, Perros en adopción, Adopción de animales, Adopciones, Perros y gatos, Animales, Gatos y perros, Gatos y perros en adopción, Rescate de gatos, Rescate de perros, Publicar animales en adopción, Publicar gatos en adopción, Publicar perros en adopción, Argentina, GBA, CABA">
+  <meta http-equiv="keywords" content="Adopción responsable, Adopción de gatitos, Adopción de gatos, Adopción de perros, Adopción de perritos, Gatos, Perros, Gatos en adopción, Perros en adopción, Adopción de animales, Adopciones, Perros y gatos, Animales, Gatos y perros, Gatos y perros en adopción, Rescate de gatos, Rescate de perros, Publicar animales en adopción, Publicar gatos en adopción, Publicar perros en adopción, Argentina, GBA, CABA">
+
+  {% if not is_user %}
+
+    <meta property="og:title" content="Catpuccino Adopciones | Adopción responsable de gatos y perros.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://adopciones.catpuccino.org/">
+    <meta property="og:site_name" content="adopciones.catpuccino.org">
+    <meta property="og:description" content="Catpuccino Adopciones | Adopción responsable de gatos y perros.">
+
+  {% else %}
+
+    {% if animals %}
+    <meta property="og:image" content="{{SSL_HOST}}{{animals.0.animalimage_set.all.0.image.url}}">
+    {% else %}
+    <meta property="og:image" content="{{SSL_HOST}}/{{user.logo_img}}">
+    {% endif %}
+
+    <meta property="og:url" content="{{SSL_HOST}}{{user.get_handle_url}}">
+    <meta property="og:type" content="website">
+    <meta property="og:image:width" content="1024">
+    <meta property="og:image:height" content="1024">
+    <meta property="og:image:type" content="image/png">
+
+    {% if user.description %}
+    <meta property="og:description" content="{{user.description}}">
+    {% endif %}
+    {% if user.title %}
+    <meta property="og:title" content="{{user.title}}">
+    {% endif %}
+
+  {% endif %}
+
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  <title>Catpuccino Adopciones | Adopción responsable de gatos y perros</title>
+
+  <link href="/static/css/bootstrap.min.css" rel="stylesheet" type="text/css">
+  <link href="/static/css/base.css?v=6" rel="stylesheet" type="text/css">
+
+  {% block css %}
+  {% endblock %}
+</head>
+
+<body>
+
+  <nav class="navbar navbar-expand-lg navbar-light" id="mainNav">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/"><div class="main-logo"></div> </a>
+      <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+        Menu
+        <i class="fas fa-bars"></i>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarResponsive">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{% if not is_user %}/{% else %}{{user.get_handle_url}}{% endif %}">Gatos y perros en Adopción <i class="fa fa-paw"></i></a>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Formulario de Pre-Adopción <i class="fa fa-paw"></i>
+            </a>
+            <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+              <a class="dropdown-item" href="/pre-adopcion/{% if is_user %}?user_id={{user.id}}{% endif %}">Gatos <i class="fa fa-cat"></i></a>
+              <a class="dropdown-item" href="/pre-adopcion/perros/{% if is_user %}?user_id={{user.id}}{% endif %}">Perros <i class="fa fa-dog"></i></a>
+            </div>
+          </li>
+
+          {% if not is_user %}
+
+          {% if forms_counts %}
+          <li class="nav-item">
+            <a style="color: #8ad16e" class="nav-link" href="/accounts/profile/#forms">Tenés <b>{{forms_counts}}</b> formulario{% if forms_counts > 0 %}s{% endif %} de pre-adopción <i class="fa fa-file"></i></a>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="/accounts/profile/">Cargar un Animal en Adopción <i class="fa fa-plus"></i></a>
+          </li>
+          {% endif %}
+
+          {% else %}
+
+          <li class="nav-item">
+            <a class="nav-link" href="/como-funciona/">¿Cómo funciona? <i class="fa fa-magic"></i></a>
+          </li>
+          {% endif %}
+
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <header class="masthead {% if main %}header-main-page hero{% endif %}">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          {% block header %}
+          {% endblock %}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div>
+    {% block subheader %}
+    {% endblock %}
+  </div>
+
+  <main class="container-md {% if is_user %}main-animals{% endif %}">
+  {% block content %}
+  {% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 mx-auto px-0">
+
+          <div class="foot row mx-auto">
+            <div class="col-md-6 mb-2 mb-md-0 px-0">
+            Catpuccino Adopciones <span class="copyleft">&copy;</span>.
+            Made with <i class="fa fa-heart"></i> by cat lovers
+            </div>
+            <div class="col-md-6">
+              <a target="_blank" href="https://www.instagram.com/adopciones.catpuccino/">
+                <i class="fab fa-instagram"></i> Seguinos en Instagram
+              </a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  {% if request.META.HTTP_HOST != "localhost:8000" %}
+  <script src="https://cdn.ravenjs.com/3.19.1/raven.min.js" crossorigin="anonymous"></script>
+  <script type="text/javascript">
+      Raven.config('https://bb5204a3ca694964926f773529c8967e@o4503922256510976.ingest.sentry.io/4503922267717632').install()
+  </script>
+  {% endif %}
+
+  <link href='{% static "vendor/fontawesome-free/css/all.min.css" %}' rel="stylesheet" type="text/css">
+  <link href='https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800' rel='stylesheet' type='text/css'>
+
+  <script src='{% static "vendor/jquery/jquery.min.js" %}'></script>
+  <script src='{% static "vendor/bootstrap/js/bootstrap.min.js" %}'></script>
+
+  {% block js %}{% endblock %}
+
+  <script src='/static/js/index.js?v=11'></script>
+
+  <!-- JavaScript -->
+  <script src="{% static 'alertify/alertify.min.js' %}"></script>
+  <!-- CSS -->
+  <link rel="stylesheet" href="{% static 'alertify/css/alertify.min.css' %}"/>
+  <!-- Default theme -->
+  <link rel="stylesheet" href="{% static 'alertify/css/themes/default.min.css' %}"/>
+  <!-- Semantic UI theme -->
+  <link rel="stylesheet" href="{% static 'alertify/css/themes/semantic.min.css' %}"/>
+  <!-- Bootstrap theme -->
+  <link rel="stylesheet" href="{% static 'alertify/css/themes/bootstrap.min.css' %}"/>
+
+</body>
+
+</html>

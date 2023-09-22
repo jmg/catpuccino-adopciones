@@ -1,0 +1,51 @@
+{% extends "home/index.html" %}
+{% load static %}
+
+{% block header %}
+{% endblock %}
+
+{% block content %}
+
+{% if user.banner_img %}
+<img src="/{{user.banner_img}}" class="profile-banner-img">
+{% endif %}
+
+<div class="container-md mx-md-auto row header-container px-1 py-3">
+
+  <div class="col-md col-header profile-logo-container">
+  {% if user.logo_img %}
+  <img src="/{{user.logo_img}}" class="profile-logo-img profile-logo-img-front">
+  {% endif %}
+  </div>
+
+  <div class="col-md col-title my-2">
+  <h1 class="display-4 title">{{user.title}}</h1>
+  <p class="lead">{{user.description|safe}}</p>
+
+  {% include "usuario/_socialnetworks.html" %}
+
+  </div>
+
+  <div class="text-center mx-auto my-2 mt-3 mr-md-4">
+    <div id="main-button"><a onclick="scrollToAnimals()" class="btn btn-primary btn-main">
+      <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción </a>
+    </div>
+    </div>
+
+</div>
+
+{{block.super}}
+
+{% endblock %}
+
+{% block css %}
+{{block.super}}
+<style>
+  #main-button a {
+    color: #fff;
+  }
+  #main-button {
+    margin-top: 0;
+  }
+</style>
+{% endblock %}
