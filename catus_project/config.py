@@ -50,7 +50,7 @@ def read_config(env, root_path=None, file_name=None):
             for key, value in app_config.items():
                 if isinstance(value, dict):
                     clean_config[key] = value
-                elif value:
+                else:
                     clean_config[key] = str(value)
 
         return clean_config
