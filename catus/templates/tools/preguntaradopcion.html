@@ -1,0 +1,139 @@
+{% extends "base_form.html" %}
+
+{% block content %}
+<div class="container">
+
+<h3 class="m-2 mb-4">Preguntar si siguen en adopción</h3>
+
+{% for i, user in users %}
+
+<div class="card p-3 m-2 mt-4 mb-4" style="border: 1px solid #ccc">
+
+    <div class="pb-2">
+    {{i}} - <a target="_blank" href="{{user.user.get_instagram_link}}"><b>{{user.user.get_instagram}}</b></a> - {{user.user.email}}
+    </div>
+
+    <form hx-post="/tools/sendpreguntaremail/" hx-target="#sent-email-{{user.user.id}}">
+        {% csrf_token %}
+
+        <div class="input-group pb-3">
+            <input name="content" class="form-control" style="width: 800px;" value="Hola! Te quería consultar si {{user.animals_names}} sigue{% if user.is_plural %}n{% endif %} en adopción. Muchas gracias!"/>
+            <div class="input-group-append">
+                <button type="button" style="height: 38px;" onclick="copyClipBoard(this, '{{user.user.get_instagram_link}}')" class="btn btn-primary">Copiar</button>
+            </div>
+        </div>
+
+        <div id="sent-email-{{user.user.id}}">
+            <input type="hidden" name="user_id" value="{{user.user.id}}">
+
+            {% if user.already_sent_email %}
+            {% include "tools/_already_sent_email.html" %}
+            {% else %}
+            <button type="submit" class="btn btn-primary btn-rounded btn-small submit-button" >
+                Enviar Mail <i class="fa fa-envelope"></i>
+                <span class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="mt-2">
+
+        <form hx-post="/animal/marcaradoptado/" style="display: inline-block;">
+            {% csrf_token %}
+            {% for animal in user.animals %}
+            <input type="hidden" name="animal_ids" value="{{animal.id}}">
+            {% endfor %}
+
+            <button class="btn btn-primary btn-rounded btn-small submit-button">
+                Marcar como adoptado <i class="fa fa-check"></i>
+                <span class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+        </form>
+
+        <form hx-post="/animal/marcarexpirado/" style="display: inline-block;">
+            {% csrf_token %}
+            {% for animal in user.animals %}
+            <input type="hidden" name="animal_ids" value="{{animal.id}}">
+            {% endfor %}
+
+            <button class="btn btn-primary btn-rounded btn-small submit-button">
+                Marcar como expirado <i class="fa fa-trash"></i>
+                <span class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+        </form>
+
+        <form hx-post="/animal/actualizarfechaingreso/" style="display: inline-block;">
+            {% csrf_token %}
+            {% for animal in user.animals %}
+            <input type="hidden" name="animal_ids" value="{{animal.id}}">
+            {% endfor %}
+
+            <button class="btn btn-primary btn-rounded btn-small submit-button">
+                Actualizar fecha ingreso <i class="fa fa-sync"></i>
+                <span class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+        </form>
+
+        <div class="mt-2" hx-target="#comment-{{user.user.id}}">
+
+            <a style="cursor: pointer; text-decoration: underline;" onclick="$('#agregar-commentario-{{user.user.id}}').slideToggle()">Agregar comentario</a>
+
+            <div id="comment-{{user.user.id}}">
+            {% if user.user.animales_comentario %}
+            {% include "tools/_comment.html" %}
+            {% endif %}
+            </div>
+
+            <form id="agregar-commentario-{{user.user.id}}" hx-post="/animal/addcomment/" class="mt-1" style="display: none;">
+                {% csrf_token %}
+                <input type="hidden" name="user_id" value="{{user.user.id}}">
+
+                <div class="form-group">
+                    <textarea class="form-control" name="comment">{{user.user.animales_comentario|default:'Sigue en adopcion. Contactado por IG'}}</textarea>
+                </div>
+
+                <button class="btn btn-primary btn-rounded btn-small submit-button">
+                    Guardar comentario <i class="fa fa-comment"></i>
+                    <span class="htmx-indicator"><i class="fas fa-spinner fa-spin"></i></span>
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+{% endfor %}
+</div>
+{% endblock %}
+
+{% block css %}
+<style>
+    .htmx-indicator {
+        display: none;
+    }
+    .htmx-request .htmx-indicator {
+        display: inline-block;
+    }
+    .htmx-request .submit-button {
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block js %}
+
+{{block.super}}
+
+<script src="https://unpkg.com/htmx.org@1.9.2"></script>
+<script>
+    function copyClipBoard(btn, url) {
+
+        var copyText = $(btn).parent().parent().find('input')
+
+        // Copy the text inside the text field
+        navigator.clipboard.writeText(copyText.val());
+    }
+</script>
+
+{% endblock %}

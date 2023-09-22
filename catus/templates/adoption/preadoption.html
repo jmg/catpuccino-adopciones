@@ -1,0 +1,684 @@
+{% extends "base.html" %}
+{% load forms_builder_tags %}
+{% load bootstrap4 %}
+
+{% block content %}
+<div class="container">
+  <div class="row">
+    <div class="col-lg-8 col-md-10 mx-auto container-colored small-padding-mobile">
+
+        {% if not is_post %}
+
+            {% if not is_user %}
+            <div class="alert alert-danger" role="alert">
+                <i class="fa fa-paw"></i> <b>Imporante:</b>  Los gatos y perros en adopción publicados en este sitio <b>NO PERTENECEN A CATPUCCINO ADOPCIONES</b>. Son de personas independientes que buscan una adopción responsable para ellos. <i class="fa fa-paw"></i>
+            </div>
+            {% endif %}
+
+            {% if form.intro %}
+            <div id="terms-and-conditions" class="alert alert-info" role="alert">
+                {{ form.intro|safe }}
+
+                <div class="text-center">
+                <a style="border-radius: 15px; color: #fff; cursor: pointer; margin-top: 30px; margin-bottom: 15px;" class="btn btn-primary" onclick="hideTerms(); showForm();">Aceptar y Completar el Formulario <i class="fa fa-file-alt"></i> </a>
+                </div>
+            </div>
+
+            <div id="show-terms-button" class="text-center" style="display: none">
+                <a style="border-radius: 15px; color: #fff; cursor: pointer; margin-top: 10px;" class="btn btn-primary" onclick="showTerms()">Mostrar Requisitos de {% if form_type == "preadoption" %}Adopción{% else %}Tránsito{% endif %} <i class="fa fa-cat"></i></a>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        {% if not is_post %}
+        <div id="adoption-form-container">
+            <hr>
+            <h3 class="text-center">{{ form.title }} </h3>
+            <br>
+
+            <form id="adoption-form" onsubmit="showLoader(); return true;" action="{{post_url}}" method="post" {% if form_for_form.is_multipart %}enctype="multipart/form-data"{% endif %} >
+                {% csrf_token %}
+                {% bootstrap_form form_for_form %}
+
+                <br>
+                {% if form_type == "preadoption" %}
+                <div id="terms-and-conditions" class="alert alert-info" role="alert">
+                    <div>
+                        <ul>
+                        <li>
+                        Nosotros buscamos adopciones responsables y para toda la vida. Un {{animal_type}} no se descarta, no se regala, no se maltrata y no se abandona. Es una vida a la que se la respeta, cuida y ama como un miembro más de la familia.
+                        </li>
+
+                        <li>
+                        Hasta aquí llegó el formulario de adopción. Habiendo leído los requisitos y completado el formulario, ¿Sentís que estás dispuesto a adoptar un {{animal_type}} responsablemente y darle el hogar y la vida que merece?
+                        </li>
+
+                        <li>
+                        Te agradecemos por tomarte el tiempo para completar el formulario. El/La transitante de <b>{{animal.nombre}}</b> lo va a estar revisando y en caso de proceder con la adopción se va a comunicar con vos a la brevedad.
+                        </li>
+
+                        </ul>
+
+                        Atte.<br>
+
+                        <b>Equipo Catpuccino Adopciones</b><br>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% buttons %}
+
+                <div class="text-center">
+                    <button id="send-form-button" style="border-radius: 15px;" class="btn btn-primary">{{ form.button_text|safe }}</button>
+                </div>
+
+                <div style="margin-top: 15px; text-align: center; display: none" id="wait-message" class="alert alert-info" role="alert">
+                Esto puede demorar unos minutos. Por favor espere.
+
+                <div id="paws-container" style="margin-top: 10px;">
+                    <i id="cat-icon-0" class="fa fa-paw"></i> <i id="cat-icon-1" class="fa fa-paw cat-icon"></i> <i id="cat-icon-2" class="fa fa-paw cat-icon"></i> <i id="cat-icon-3" class="fa fa-paw cat-icon"></i> <i id="cat-icon-4" class="fa fa-paw cat-icon"></i> <i id="cat-icon-5" class="fa fa-paw cat-icon"></i> <i id="cat-icon-6" class="fa fa-paw cat-icon"></i>
+                </div>
+                </div>
+
+                <br>
+                {% endbuttons %}
+            </form>
+        </div>
+
+        {% else %}
+            {% if success %}
+            <div id="response-text" class="alert alert-success" role="alert">
+                {{form.response}}
+                <br><br>
+
+                <div class="text-center">
+                    <img src="/static/logo_2.png" style="width: 250px;">
+                    <br><br>
+                    Atte. Equipo de Catpuccino Adopciones
+                </div>
+            </div>
+            {% else %}
+
+            <div id="response-text-error" class="alert alert-danger" role="alert">
+                Se ha producido un error. Por favor intentar nuevamente o comunicarse con el desarrollador del sitio: <a href="mailto:catpuccino.ok@gmail.com">Enviar Mail</a>.
+                <br><br>
+                Detalles: <span id="response-text-error-message">{{errors}}</span>
+
+                <div class="text-center">
+                    <img src="/static/logo_2.png" style="width: 250px;">
+                    <br><br>
+                    Atte. Equipo de Catpuccino Adopciones
+                </div>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        <hr>
+        <br>
+        <div class="text-center mb-5">
+            <a id="btn-volver" class="btn btn-primary btn-volver" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">Volver <i class="fa fa-arrow-left"></i></a>
+        </div>
+
+   </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block js %}
+<script type="text/javascript">
+    $(document).ready(function() {
+
+        var delay = 500;
+        var offset = 150;
+        var alertSent = false;
+
+        document.addEventListener('invalid', function(e) {
+
+            var target = $(e.target);
+            target.addClass("invalid");
+            var error = target.parent().find("label").text();
+
+            if (!alertSent) {
+
+                $.alert("Faltan datos a completar. Por favor revisa el campo: " + error);
+                alertSent = true;
+
+                setTimeout(function() {
+                    alertSent = false;
+                }, 1000);
+            }
+
+        }, true);
+
+        document.addEventListener('change', function(e) {
+
+            $(e.target).removeClass("invalid");
+
+        }, true);
+
+        {% if is_post and success %}
+            try {
+                clearForm();
+            } catch(e) {}
+            {% else %}
+            try {
+                formToLocalStorage();
+            } catch(e) {}
+        {% endif %}
+
+        {% if not is_post %}
+
+            {% if form_type == "preadoption" %}
+
+                {% if animal_type == "perro" %}
+                initCatSelect(true);
+                initFormPerros();
+                {% else %}
+                initCatSelect(false);
+                initFormGatos();
+                {% endif %}
+
+            {% else %}
+
+                {% if animal_type == "perro" %}
+                initFormTransitPerros();
+                {% else %}
+                initFormTransitGatos();
+                {% endif %}
+
+            {% endif %}
+
+        {% endif %}
+
+        if (getCookie("{{hidden_terms_cookie}}") === "1" && getCookie("{{accepted_terms_cookie}}") === "1") {
+            hideTerms(true);
+        }
+
+        if (getCookie("{{accepted_terms_cookie}}") !== "1") {
+            hideForm();
+        }
+
+        $("input[type=file]").attr("accept", "image/*");
+        $("input").not('.form-input').removeAttr('placeholder');
+        $('textarea').removeAttr('placeholder');
+        $('textarea').css({"height": "100px"});
+
+        $(".cat-icon").hide();
+    });
+
+    function animateCats() {
+
+        var catCounter = 1;
+        setInterval(function() {
+
+            if (catCounter >= 8) {
+                $(".cat-icon").hide();
+                catCounter = 1;
+            }
+            for (var i=1; i < catCounter; i++) {
+                $("#cat-icon-" + i).show();
+            }
+            catCounter += 1;
+        }, 1000);
+    }
+
+    function showForm() {
+        $("#adoption-form-container").show();
+
+        {% if not is_post and form_type == "preadoption" %}
+        var isDog = {% if animal_type == "perro" %}true{% else %}false{% endif %}
+        showAnimalPhotos(isDog, "{{animal.id}}")
+        {% endif %}
+    }
+
+    function hideForm() {
+        $("#adoption-form-container").hide();
+    }
+
+    function initQuestions(masterQuestion, slaveQuestions, alternativeQuestions) {
+
+        for (var i=0; i < slaveQuestions.length; i++) {
+            $(slaveQuestions[i]).parent().hide();
+        }
+
+        $(masterQuestion).change(function() {
+
+            value = $(this).val();
+
+            for (var i=0; i < slaveQuestions.length; i++) {
+
+                var options = slaveQuestions[i];
+
+                if (typeof(options) == "object") {
+                    var selector = options["selector"];
+                    var required = options["required"];
+                } else {
+                    var selector = options;
+                    var required = true;
+                }
+
+                var question = $(selector);
+
+                if (value == "Si") {
+                    question.parent().slideDown();
+                    if (required) {
+                        question.addClass("required");
+                        question.attr("required", "");
+                    }
+                } else {
+                    question.parent().slideUp();
+                    if (required) {
+                        question.removeClass("required");
+                        question.removeAttr("required");
+                    }
+                }
+            }
+
+            if (!!alternativeQuestions) {
+
+                for (var i=0; i < alternativeQuestions.length; i++) {
+
+                    var options = alternativeQuestions[i];
+
+                    if (typeof(options) == "object") {
+                        var selector = options["selector"];
+                        var required = options["required"];
+                    } else {
+                        var selector = options;
+                        var required = true;
+                    }
+
+                    var question = $(selector);
+
+                    if (value == "No") {
+                        question.parent().slideDown();
+                        if (required) {
+                            question.addClass("required");
+                            question.attr("required", "");
+                        }
+                    } else {
+                        question.parent().slideUp();
+                        if (required) {
+                            question.removeClass("required");
+                            question.removeAttr("required");
+                        }
+                    }
+                }
+            }
+        });
+
+        $(masterQuestion).trigger("change");
+    }
+
+    /***********************/
+    /* pre adopcion PERROS */
+    /***********************/
+
+    function initFormPerros() {
+
+        var masterQuestion = "#id_15_hay_otros_perros_en_tu_casa"
+        var slaveQuestions = [
+            "#id_161_por_favor_indica_sexos_y_edades",
+            "#id_162_estan_castrados",
+            "#id_163_estan_vacunados",
+            "#id_164_estan_desparasitados_y_sin_pulgas",
+            "#id_165_que_alimento_les_das_por_favor_menciona_nombre_y_marca"
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+
+        var masterQuestion = "#id_4_tenes_balcon_terraza_patio_o_jardin_si_no";
+        var slaveQuestions = [
+            "#id_5_la_vivienda_cuenta_con_la_proteccion_necesaria_medianeras_altas_portones_rejas_etc_para_evitar_que_el_perro_pueda_escaparse_yo_caerse",
+            "input[name=fotos_proteccion_1]",
+            {"selector": "input[name=fotos_proteccion_2]", "required": false },
+            {"selector": "input[name=fotos_proteccion_3]", "required": false }
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+
+        var masterQuestion = "#id_6_ya_tuviste_perros";
+        var slaveQuestions = [
+            "#id_7_si_tuviste_pero_ya_no_lo_tenes_que_ocurrio_con_el_perro"
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+
+        var masterQuestion = "#id_17_hay_gatoss_en_tu_casa";
+        var slaveQuestions = [
+            "#id_171_por_favor_indica_sexos_y_edades",
+            "#id_172_estan_castrados",
+            "#id_173_estan_vacunados",
+            "#id_174_estan_desparasitados_y_sin_pulgas",
+            "#id_175_que_alimento_les_das_por_favor_menciona_nombre_y_marca"
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+    }
+
+    /***************************/
+    /* pre adopcion PERROS end */
+    /***************************/
+
+    /**********************/
+    /* pre adopcion GATOS */
+    /**********************/
+
+    function initFormGatos() {
+
+        var masterQuestion = "#id_16_hay_otros_animales_en_tu_casa_indica_cuales_y_cuantos"
+        var slaveQuestions = [
+            "#id_17_si_tenes_otros_animales_que_marca_de_alimento_compras",
+            "#id_18_si_tenes_otros_animales_estan_castrados",
+            "#id_19_si_tenes_otros_animales_estan_vacunados",
+            "#id_164_estan_desparasitados_y_sin_pulgas",
+            "#id_165_que_alimento_le_das_por_favor_menciona_nombre_y_marca"
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+
+        var masterQuestion = "#id_4_tenes_balcon_patio_o_jardin_indica_las_alturas_de_las_medianeras_y_por_favor_adjunta_fotos_excluye";
+        var slaveQuestions = [
+            "#id_5_el_patiobalconjardinventanas_de_tu_hogar_tienen_la_proteccion_suficiente_como_para_que_el_gato_no_",
+            "#id_51_el_gato_tendria_acesso_al_balcon_terraza_patio_o_jardin",
+            //"input[name=fotos_proteccion_1]",
+            //{"selector": "input[name=fotos_proteccion_2]", "required": true },
+            //{"selector": "input[name=fotos_proteccion_3]", "required": false }
+        ]
+        var alternativeQuestions = [
+            "#id_51_la_vivienda_cuenta_con_la_proteccion_necesaria_en_ventanas_y_rejas_para_evitar_que_el_gato_pueda_escaparse_yo_caerse",
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions, alternativeQuestions);
+
+        var masterQuestion = "#id_6_ya_tuviste_gatos";
+        var slaveQuestions = [
+            "#id_7_si_tuviste_pero_ya_no_lo_tenes_que_ocurrio_con_el_gato"
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+
+        var masterQuestion = "#id_17_hay_perros_en_tu_casa";
+        var slaveQuestions = [
+            "#id_171_por_favor_indica_sexos_y_edades",
+            "#id_172_estan_castrados",
+            "#id_173_estan_vacunados",
+            "#id_174_estan_desparasitados_y_sin_pulgas",
+            "#id_175_que_alimento_le_das_por_favor_menciona_nombre_y_marca"
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+    }
+
+    /**************************/
+    /* pre adopcion GATOS end */
+    /**************************/
+
+    /******************/
+    /* transito GATOS */
+    /******************/
+
+    function initFormTransitGatos() {
+
+        /*
+        var masterQuestion = "#id_6_tenes_balcon_patio_o_jardin_indica_las_alturas_de_las_medianeras";
+        var slaveQuestions = [
+            "#id_7_el_patiobalconjardinventanas_de_tu_hogar_tienen_la_proteccion_suficiente_mosquitero_o_red_como_par",
+            "input[name=fotos_proteccion_1]",
+            {"selector": "input[name=fotos_proteccion_2]", "required": true },
+            {"selector": "input[name=fotos_proteccion_3]", "required": false },
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+        */
+    }
+
+    /**********************/
+    /* transito GATOS end */
+    /**********************/
+
+    /*******************/
+    /* transito PERROS */
+    /*******************/
+
+    function initFormTransitPerros() {
+
+        var masterQuestion = "#id_6_tenes_balcon_patio_o_jardin";
+        var slaveQuestions = [
+            "#id_7_la_vivienda_cuenta_con_la_proteccion_necesaria_medianeras_altas_portones_rejas_etc_para_evitar_que_el_perro_pueda_escaparse_por_favor_adjunta_fotos",
+            "input[name=fotos_proteccion_1]",
+            {"selector": "input[name=fotos_proteccion_2]", "required": false },
+            {"selector": "input[name=fotos_proteccion_3]", "required": false },
+        ]
+
+        initQuestions(masterQuestion, slaveQuestions);
+    }
+
+    /***********************/
+    /* transito PERROS end */
+    /***********************/
+
+    function initCatSelect(isDog) {
+
+        if (isDog === true) {
+            var el = $("#id_perro_a_adoptar");
+        } else {
+            var el = $("#id_gatito");
+        }
+        el.html("");
+        var select = el[0];
+        var animals = JSON.parse("{{animals|safe|escapejs}}");
+
+        for (var i=0; i < animals.length; i++) {
+
+            var option = document.createElement("option");
+            option.text = animals[i].name;
+            option.value = animals[i].id;
+
+            select.appendChild(option);
+        }
+
+        /*var option = document.createElement("option");
+        option.text = "Otro (No esta en la lista)";
+        option.value = 0;
+        select.appendChild(option);*/
+
+        {% if animal %}
+            select.value = "{{animal.id}}";
+        {% endif %}
+
+        $(select).on("change", function() {
+
+            showAnimalPhotos(isDog, $(this).val())
+        });
+
+        {% if animal %}
+            showAnimalPhotos(isDog, "{{animal.id}}");
+        {% endif %}
+    }
+
+    var slider = null;
+
+    function showAnimalPhotos(isDog, animalId) {
+
+        if (isDog === true) {
+            var el = $("#id_perro_a_adoptar");
+        } else {
+            var el = $("#id_gatito");
+        }
+
+        var data = {
+            "animal_id": animalId,
+            "csrfmiddlewaretoken": "{{ csrf_token }}"
+        }
+        $.post("/animal/photos/", data, function(response) {
+
+            if (!!slider) {
+                slider.destroy()
+            }
+
+            var container = el.parent().find("#fotos-animal")
+            if (container.length == 0) {
+                el.parent().append(response.html)
+            } else {
+                container.replaceWith(response.html)
+            }
+
+            var sliderItems = mobileCheck() ? 2 : 4
+            if (sliderItems > response.photos_count) {
+                sliderItems = response.photos_count
+            }
+
+            slider = $('#fotos-animal').lightSlider({
+                item: sliderItems,
+                auto: sliderItems > 1,
+                loop: true,
+            });
+
+            makeImageFullSize()
+
+        }, 'json');
+    }
+
+    function showOtroOption() {
+
+        /* NOT USED */
+        try {
+            if ($("#id_gatito :selected").val() == 0) {
+                $("#id_nombre_del_gato_a_adoptar").parent().show();
+            } else {
+                $("#id_nombre_del_gato_a_adoptar").parent().hide();
+            }
+        } catch (e) {}
+    }
+
+    /*function saveForm(form) {
+
+        $.post("/pre-adopcion/", $(form).serialize(), function(response) {
+
+            if (response == "ok") {
+                $("#response-text").slideDown();
+                $("#adoption-form").slideUp();
+            } else {
+                $("#response-text-error").slideDown();
+                $("#response-text-error-message").html(response);
+                $("#adoption-form").slideUp();
+            }
+        });
+    }*/
+
+    function formToLocalStorage() {
+
+        var prefix = "catpuccino-adopciones-";
+        var elements = $("#adoption-form")[0].elements;
+        $.each(elements, function(idx, el) {
+
+            {% if animal %}
+            if ($(el).attr("id") == "id_gatito") {
+                return;
+            }
+            {% endif %}
+
+            if ($(this).is(":radio")) {
+              if(localStorage.getItem(prefix+$(this).attr("name"))){
+                if (localStorage.getItem(prefix+$(this).attr("name")) == this.id) {
+                  this.checked = true;
+                }else{
+                  this.checked = false
+                }
+              }
+              $(this).change(function() {
+                localStorage.setItem(prefix+$(this).attr("name"), this.id);
+              });
+            }else if($(this).is(":checkbox")){
+              if(localStorage.getItem(prefix+this.id)){
+                this.checked = (localStorage.getItem(prefix+this.id) == "1" ? true : false);
+            }
+              $(this).change(function() {
+                localStorage.setItem(prefix+this.id, (this.checked ? "1" : "0"));
+              });
+            }else if($(this).is("input") || $(this).is("textarea")) {
+              if(localStorage.getItem(prefix+this.id)){
+                this.value = localStorage.getItem(prefix+this.id);
+              }
+              $(this).keyup(function() {
+                localStorage.setItem(prefix+this.id, this.value);
+              });
+            }else if($(this).is("select")) {
+              if ($(this).is("[multiple]")) {
+                if(localStorage.getItem(prefix+this.id)){
+                  $(this).val(localStorage.getItem(prefix+this.id).split(","));
+                }else{
+                  localStorage.setItem(prefix+this.id, $(this).val());
+                }
+                $(this).change(function() {
+                  localStorage.setItem(prefix+this.id, $(this).val());
+                });
+              }else{
+                if(localStorage.getItem(prefix+this.id)){
+                  $(this).val(localStorage.getItem(prefix+this.id));
+                }else{
+                  localStorage.setItem(prefix+this.id, $(this).val());
+                }
+                $(this).change(function() {
+                  localStorage.setItem(prefix+this.id, $(this).val());
+                });
+              }
+            }
+        });
+    }
+
+    function clearForm() {
+
+        localStorage.clear();
+    }
+
+    function hideTerms(fast) {
+
+        if (fast) {
+            $("#terms-and-conditions").hide();
+            $("#show-terms-button").show();
+        } else {
+            $("#terms-and-conditions").slideUp("slow");
+            $("#show-terms-button").slideDown("slow");
+        }
+
+        setCookie("{{hidden_terms_cookie}}", "1");
+        setCookie("{{accepted_terms_cookie}}", "1");
+    }
+
+    function showTerms() {
+
+        $("#terms-and-conditions").slideDown("slow");
+        $("#show-terms-button").slideUp("slow");
+        setCookie("{{hidden_terms_cookie}}", "0");
+    }
+
+    function showLoader(button) {
+
+        $("#send-form-button").text("Enviando los datos...");
+        $("#send-form-button").attr("disabled", "disabled");
+        $("#wait-message").show();
+        $("#btn-volver").hide();
+        animateCats();
+    }
+</script>
+
+<script src="/static/slider/js/lightslider.min.js"></script>
+{% endblock %}
+
+{% block css %}
+<style>
+    @media only screen and (max-width: 992px) {
+        main {
+            margin-top: 0 !important;
+            margin-bottom: 10px !important;
+        }
+        .container-colored {
+            border-radius: 0;
+        }
+    }
+</style>
+<link type="text/css" rel="stylesheet" href="/static/slider/css/lightslider.min.css" />
+{% endblock %}

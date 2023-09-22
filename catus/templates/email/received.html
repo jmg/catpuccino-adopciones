@@ -1,0 +1,12 @@
+¡Gracias por completar el formulario {% if tipo == 'preadoption' %}de Pre-adopción{% if animal.nombre %} para {{ animal.nombre }}{% endif %}{% else %}de Tránsito{% endif %}!
+<br><br>
+Su transitante lo va a estar revisando y en caso de proceder con la adopción se va a comunicar con vos a la brevedad.
+{% if animal.cargado_por.get_instagram %}
+<br>
+También podés contactarte con el/ella a <a href="{{animal.cargado_por.get_instagram_link}}">{{ animal.cargado_por.get_instagram }}</a>.
+{% endif %}
+<br><br>
+¡Muchas gracias!
+<br><br>
+Atte.<br>
+<b>Equipo Catpuccino Adopciones</b><br>

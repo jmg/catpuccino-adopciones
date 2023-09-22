@@ -1,0 +1,20 @@
+{% if animal.tipo == "G" %}🐱{% else %}🐶{% endif %} ¡<b>{{animal.nombre}}</b> en Adopción Responsable! {% if animal.tipo == "G" %}🐱{% else %}🐶{% endif %}
+<br><br>
+Sexo: <b>{{animal.get_sexo_display}}</b><br>
+Edad: <b>{{animal.edad}}</b><br>
+{% if animal.zona %}Zona: <b>{{animal.zona}}</b><br>{% endif %}
+{% if animal.cargado_por.instagram %}Rescatado por: <b>{{animal.cargado_por.get_instagram}}</b><br>{% endif %}
+<br>
+{% if animal.datos %}{{ animal.get_datos|safe }}{% endif %}
+<br>
+-------------------------------------------------------------------------------
+<br><br>
+Si queres adoptarl{% if animal.sexo == "H"%}a{% else %}o{% endif %} podés completar el <b>formulario de pre-adopción</b> para {% if animal.sexo == "H"%}ella{% else %}él{% endif %} en:
+<br><br>
+adopciones.catpuccino.org
+<br><br>
+{% if animal.tipo == "G" %}#adopciones #catpuccino #adopcion #gatos #gatas #gatitos #adopcionresponsable #adoptaungato #adopta #gatitas #adopcionesfelinas #felinos #felino #rescate #gatosdeinstagram #voluntarios #argentina
+#gatitosrescatadosdelacalle #gatosdebuenosaires #rescatistasbuenosaires #caba #gba
+#publicarenadopcion #darenadopcion{% else %}#adopciones #catpuccino #adopcion #perros #perras #perritos #adopcionresponsable #adoptaunperro #adopta #perritas #adopcionescaninas #caninos #canino #rescate #perrosdeinstagram #voluntarios #argentina
+#perritosrescatadosdelacalle #perrosdebuenosaires #rescatistasbuenosaires #caba #gba
+#publicarenadopcion #darenadopcion{% endif %}

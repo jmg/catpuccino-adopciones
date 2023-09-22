@@ -1,0 +1,82 @@
+<div>
+    <section class="my-0 social-networks-section">
+
+      {% if user.instagram %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #8640be;"
+         href="{{user.get_instagram_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fab fa-instagram"></i
+        ></a>
+      {% endif %}
+
+      {% if user.facebook %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #3b5998;"
+         href="{{user.get_facebook_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fab fa-facebook-f"></i
+        ></a>
+      {% endif %}
+
+      {% if user.twitter %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #55acee;"
+         href="{{user.get_twitter_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fab fa-twitter"></i
+        ></a>
+      {% endif %}
+
+      {% if user.youtube %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #dd4b39;"
+         href="{{user.get_youtube_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fab fa-youtube"></i
+        ></a>
+      {% endif %}
+
+      {% if user.twitch %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #ac2bac;"
+         href="{{user.get_twitch_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fab fa-twitch"></i
+        ></a>
+      {% endif %}
+
+      {% if user.github %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #333333;"
+         href="{{user.get_github_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fab fa-github"></i
+        ></a>
+      {% endif %}
+
+      {% if user.website %}
+      <a
+         class="btn btn-primary btn-floating m-1 social-button"
+         style="background-color: #0082ca;"
+         href="{{user.get_website_link}}"
+         role="button"
+         target="_blank"
+         ><i class="fa fa-link"></i
+        ></a>
+      {% endif %}
+
+    </section>
+  </div>

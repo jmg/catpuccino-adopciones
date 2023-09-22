@@ -1,0 +1,574 @@
+{% extends "base_form.html" %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="container px-2 my-1">
+
+    <ul class="nav nav-tabs" id="profile-tabs" role="tablist">
+
+        <li class="nav-item" role="presentation">
+            <a id="animales-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#animales-tab"><i class="fa fa-cat"></i> Animales </a>
+        </li>
+
+        <li class="nav-item" role="presentation">
+            <a id="profile-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#profile-tab"><i class="fa fa-user"></i> Perfil </a>
+        </li>
+
+        <li class="nav-item" role="presentation">
+            <a id="forms-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#forms-tab"><i class="fa fa-file"></i> Forms </a>
+        </li>
+
+        <li class="nav-item ml-auto" role="presentation">
+            <a onclick="logout()" class="nav-link a-link" data-toggle="tab"><i class="fas fa-sign-out-alt"></i></a>
+        </li>
+    </ul>
+
+    <div class="tab-content container-colored container-colored-no-rounded-top" id="profile-tabs-content">
+
+        <div class="tab-pane active" id="animales-tab" role="tabpanel">
+
+            <div class="py-3 my-1">
+
+            {% if is_new_animal %}
+                <div id="response-text" class="alert alert-success" role="alert">
+                    <div class="text-center">¡Guardado correctamente! Estamos revisando la publicación y si está todo bien aparecerá en el sitio web a la brevedad. </div>
+                </div>
+            {% elif is_new_animal_approved %}
+                <div id="response-text" class="alert alert-success" role="alert">
+                    <div class="text-center">¡Guardado correctamente! ¡Ya fue aprobado y aparece en el sitio web! </div>
+                </div>
+            {% elif success %}
+                <div id="response-text" class="alert alert-success" role="alert">
+                    <div class="text-center">¡Guardado correctamente! </div>
+                </div>
+            {% endif %}
+
+            <div class="mb-3 text-md-left text-center">
+                <a href="/animales/" class="btn btn-primary btn-rounded mb-2 mb-md-0">
+                    Cargar Animal <i class="fa fa-cat"></i>
+                </a>
+                <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-rounded link-to-animals">
+                    Link a mis Animales <i class="fas fa-external-link-alt"></i>
+                </a>
+            </div>
+
+            {% if page == "adopcion" %}
+            <div id="response-text" class="alert alert-info" role="alert">
+                <b>Importante</b>: Cuando cargues un animal lo revisaremos para comprobar que este todo bien con la publicación.
+            </div>
+            {% endif %}
+
+            {% if animals %}
+            <table id="forms-table" class="table table-striped table-bordered table-hover">
+                <thead>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Publicado</th>
+                    <th>Acciones</th>
+                </thead>
+
+                <tbody>
+                    {% for animal in animals %}
+                    <tr>
+                        <td>
+                            <div class="limited-td">
+                                <a class="a-blue" href="/animales/{{animal.id}}/">{{animal.nombre}}</a>
+                            </div>
+                        </td>
+                        <td>
+                            <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">
+                                {{animal.get_estado_display}}
+                            </span>
+                            <span id="publicado-expired-text-{{animal.id}}" class="small-text">
+                            {% if animal.estado == "E" %}
+                                (Publicado hace más de 30 días)
+                            {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En Revisión{% else %}Publicado{% endif %}</span>
+                        </td>
+
+                        <td>
+                            <div class="mb-2">
+                                <a href="/animales/{{animal.id}}/"><i class="fa fa-edit"></i> Editar</a>
+                            </div>
+                            <div class="mb-2">
+                                <i class="fa fa-copy"></i>
+                                <a onclick="copyTextToClipboard('{{settings.SSL_HOST}}{{animal.get_adoption_url}}')">
+                                    Link
+                                </a>
+                            </div>
+
+                            {% if animal.estado == "E" %}
+                            <div id="update-estado-animal-expirado-{{animal.id}}" class="mb-2">
+                                <i class="fa fa-sync"></i>
+                                <a onclick="marcarEnAdopcion('{{animal.id}}')">Re-Publicar</a>
+                            </div>
+                            {% endif %}
+
+                            {% if animal.estado != "A" %}
+                            <div id="update-estado-animal-adoptado-{{animal.id}}">
+                                <i class="fa fa-paw"></i>
+                                <a onclick="marcarAdoptado('{{animal.id}}')">Marcar como adoptado</a>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            </div>
+
+        </div>
+
+        <div class="tab-pane container" id="profile-tab" role="tabpanel">
+
+            <form id="profile-form" class="form" action="" method="post" enctype='multipart/form-data'>
+                {% csrf_token %}
+
+                <div class="row my-1 p-1">
+
+                    <div class="p-1 col-md my-1 p-md-3 border-bottom-mobile">
+                        <h3 class="text-center text-primary">Datos del Perfil</h3>
+
+                        <div id="div_id_banner_img" class="form-group">
+
+                            <label for="id_banner_img" class="">
+                                Banner
+                            </label>
+
+                            <div id="img-container-banner" class="img-container-banner">
+                                <img src="/{{form.banner_img.value}}">
+                            </div>
+
+                            <div class="hidden">
+                                <input type="file" name="banner_img" class="form-control-file" id="id_banner_img">
+                            </div>
+                        </div>
+
+
+                        <div id="div_id_banner_img" class="form-group">
+
+                            <label for="id_banner_img" class="">
+                                Logo
+                            </label>
+
+                            <div id="img-container-logo" class="img-container-logo">
+                                <img src="/{{form.logo_img.value}}" class="profile-logo-img">
+                            </div>
+
+                            <div class="hidden">
+                                <input type="file" name="logo_img" class="form-control-file" id="id_logo_img">
+                            </div>
+                        </div>
+
+                        {{ form.title|as_crispy_field }}
+
+                        <div id="div_id_handle" class="form-group">
+
+                            <label for="id_handle" class=" requiredField">
+                                {{form.handle.label}}
+                            </label>
+
+                            <div>
+
+                            <input type="text" name="handle" maxlength="150" class="textinput textInput form-control" required="" id="id_handle" value="{{form.handle.value|default_if_none:''}}">
+
+                            <small id="hint_id_handle" class="form-text text-muted">{% trans "Tu usuario de catpuccino adopciones." %} {{settings.SSL_HOST}}/<span id="hint_id_handle_user_part"></span></small>
+
+                            <p id="error_1_id_handle" class="invalid-feedback" style="display: none">
+                                <strong>{% trans "Ya existe un usuario con ese nombre." %}</strong>
+                            </p>
+
+                            <p id="error_2_id_handle" class="invalid-feedback" style="display: none">
+                                <strong>{% trans "Por favor usá solamente caracteres alfanuméricos sin espacios." %}</strong>
+                            </p>
+
+                        </div>
+
+                        </div>
+
+                        {{ form.description|as_crispy_field }}
+
+                        <div class="form-group text-md-left text-center">
+                        <button id="btn-save" type="submit" name="submit" class="btn btn-primary btn-rounded btn-md">
+                            <i class="fa fa-save"></i> Guardar
+                        </button>
+                        <button id="btn-save-loading" class="btn btn-primary btn-rounded btn-md hidden" type="button" disabled>
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            Guardando...
+                        </button>
+
+                        <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded btn-md link-to-animals"> <i class="fas fa-external-link-alt"></i> Ir a Mi perfil</a>
+
+                        </div>
+
+                    </div>
+
+                    <div class="p-1 col-md my-1 p-md-3">
+                        <h3 class="text-center text-primary">Redes Sociales</h3>
+
+                        {{ form.instagram|as_crispy_field }}
+                        {{ form.facebook|as_crispy_field }}
+                        {{ form.twitter|as_crispy_field }}
+
+                        {{form.email|as_crispy_field}}
+
+                        <div class="form-group mb-2 text-md-left text-center">
+                        <button id="btn-social-save" type="submit" name="submit" class="btn btn-primary btn-rounded btn-md"> <i class="fa fa-save"></i> Guardar</button>
+
+                        <button id="btn-social-save-loading" class="btn btn-primary btn-rounded hidden" type="button" disabled>
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            Guardando...
+                        </button>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </form>
+
+        </div>
+
+        <div class="tab-pane" id="forms-tab" role="tabpanel">
+
+            <div class="py-3 my-1">
+
+                {% if estado_forms %}
+                <table id="forms-table" class="table table-striped table-bordered table-hover">
+                    <thead>
+                        <th>Candidato</th>
+                        <th>Animal</th>
+
+                        <th>Acciones</th>
+                    </thead>
+
+                    <tbody>
+                        {% for estado_form in estado_forms %}
+                        <tr>
+                            <td>
+                                <div class="limited-td">
+                                    <a class="a-blue" target="_blank" href="/formularios/{{estado_form.hash}}/">{{estado_form.persona_nombre}}</a>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="limited-td">
+                                    {{estado_form.gato.nombre}}
+                                </div>
+                            </td>
+
+                            <td>
+                                <a target="_blank" href="/formularios/{{estado_form.hash}}/"><i class="fa fa-eye"></i> Ver</a>
+                                <hr class="hr-divider">
+                                <a target="_blank" href="/formulario/{{estado_form.id}}/contrato/"><i class="fa fa-id-badge"></i> Contrato de Adopción</a>
+                            </td>
+
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="alert alert-info no-wrap">
+                    <div class="mb-3">Todavía no hay formularios. No te preocupes, pronto llegarán!</div>
+                    <div>Recordá que podés compartir tu link en redes sociales:
+                        <a class="link-to-animals" target="_blank" href="{{SSL_HOST}}{{request.user.get_handle_url}}">{{SSL_HOST}}{{request.user.get_handle_url}}</a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block css %}
+<style>
+    .swal2-shown { display:flex; height:100vh; width: 100vw; }
+    .hidden {
+        display: none;
+    }
+    @media only screen and (max-width: 992px) {
+        main {
+            margin-top: 20px !important;
+            margin-bottom: 20px !important;
+        }
+        .limited-td {
+            max-width: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #profile-tabs .nav-link {
+            padding: 0.5rem 0.5rem !important;
+        }
+        #forms-table td {
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block js %}
+{{ block.super }}
+<script src="https://cdn.tiny.cloud/1/84qalir3z1a9cnmgj78tz6n3p4gm0wlf9jvsgis1o8zw2wrk/tinymce/5/tinymce.min.js" referrerpolicy="origin"></script>
+<script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
+
+<script type="text/javascript">
+$(document).ready(function () {
+
+    function updateTabState() {
+
+        if (!location.hash) {
+            var tab = "#animales";
+        } else {
+            var tab = location.hash;
+        }
+
+        showTab(tab);
+    }
+
+    updateTabState();
+
+    $(window).on('hashchange', function() {
+        updateTabState();
+    });
+
+    $("#profile-form").submit(function() { return saveProfile(this) });
+
+    $('.nav-tabs a').click(function() {
+        location.hash = $(this).attr("data-target").replace("-tab", "");
+    });
+
+    $("#img-container-banner").click(function() {
+        $("#id_banner_img").click();
+    })
+
+    $("#id_banner_img, #id_logo_img").change(function() {
+        saveProfile($("#profile-form")[0]);
+    });
+
+    $("#img-container-logo").click(function() {
+        $("#id_logo_img").click();
+    })
+
+
+    checkUserName();
+    $("#id_handle").trigger("keyup");
+
+    tinymce.init({
+        selector: '#id_description',
+        menubar: false,
+        plugins: [
+        'advlist autolink lists link image charmap print preview anchor',
+        'searchreplace visualblocks code ',
+        'insertdatetime table paste code help wordcount'
+        ],
+        toolbar: 'undo redo | bold italic underline strikethrough | forecolor fontselect fontsizeselect formatselect | alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist |  backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons',
+    });
+
+});
+
+function showTab(tabName) {
+
+    var el = $(tabName + '-tab-link').tab('show');
+
+    location.hash = tabName;
+}
+
+function showLoadingBtn() {
+
+    $("#btn-save").hide();
+    $("#btn-save-loading").css('display','inline-block');
+
+    $("#btn-social-save").hide();
+    $("#btn-social-save-loading").show();
+}
+
+function hideLoadingBtn() {
+
+    $("#btn-save-loading").hide();
+    $("#btn-save").show();
+
+    $("#btn-social-save").show();
+    $("#btn-social-save-loading").hide();
+}
+
+function saveProfile(form) {
+
+    showLoadingBtn();
+
+    var data = new FormData(form);
+    data.set("description", tinymce.get("id_description").getContent());
+
+    $.ajax({
+        type: "POST",
+        url: "/accounts/profile/",
+        data: data,
+        contentType: false,
+        cache: false,
+        processData: false,
+        success: function(response) {
+
+            hideLoadingBtn();
+
+            var response = JSON.parse(response);
+            if (response.status == "failure") {
+
+                for (var error in response.errors) {
+
+                    $.alert(response.errors[error][0]);
+                }
+                return;
+            }
+
+            $("#img-container-banner img").attr("src", response.banner_img);
+            $("#img-container-logo img").attr("src", response.logo_img);
+            $(".img-container-logo-bar img").attr("src", response.logo_img);
+            $(".link-to-animals").attr("href", response.profile_link)
+
+            $.info("¡Actualizado correctamente!");
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+
+            $.alert("Ocurrió un error: " + xhr.responseText);
+            hideLoadingBtn();
+        }
+    })
+
+    return false;
+}
+
+function checkUserName() {
+
+    $("#id_handle").on("keyup", function(input) {
+
+    var handle = $("#id_handle").val();
+    if (!handle) {
+        return
+    }
+
+    var regex = new RegExp("^[0-9a-zA-Z_]+$");
+    if (!regex.test(handle)) {
+        $("#error_2_id_handle").show();
+        $("#id_handle").addClass("is-invalid");
+        return;
+    } else {
+        $("#error_2_id_handle").hide();
+        $("#id_handle").removeClass("is-invalid");
+    }
+
+    $("#hint_id_handle_user_part").text(handle);
+
+    $.post("/accounts/checkhandle/", {"handle": handle, "csrfmiddlewaretoken": "{{csrf_token}}"}, function(response) {
+
+        if (response.status != "success") {
+
+            if (response.error == "handle") {
+                $("#error_1_id_handle").show();
+            } else if (response.error == "chars") {
+                $("#error_2_id_handle").show();
+            }
+
+        $("#id_handle").addClass("is-invalid");
+
+        } else {
+
+            $("#error_1_id_handle").hide();
+            $("#error_2_id_handle").hide();
+            $("#id_handle").removeClass("is-invalid");
+            $("#id_handle").addClass("is-valid");
+
+        }
+    }, 'json')
+    });
+}
+
+function debounce(func) {
+    var wait = arguments.length <= 1 || arguments[1] === undefined ? 100 : arguments[1];
+
+    var timeout = void 0;
+    return function () {
+        var _this = this;
+
+        for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+            args[_key] = arguments[_key];
+        }
+
+        clearTimeout(timeout);
+        timeout = setTimeout(function () {
+            func.apply(_this, args);
+        }, wait);
+    };
+}
+
+function logout() {
+
+    Swal.fire({
+        title: '¿Estás seguro que deseas salir?',
+        text: "",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Si',
+        cancelButtonText: 'No',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            location.href='/accounts/logout/'
+        }
+    })
+}
+
+function updateAnimal(animalId, options) {
+
+    $.post(options.url, {animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, function(response) {
+
+        $.info("¡" + response.nombre + options.successMessage)
+        $("#" + options.removeUpdateAnimalId + animalId).remove();
+        $("#publicado-expired-text-" + animalId).hide()
+
+        var estadoAdopcion = $("#estado-adopcion-" + animalId)
+        estadoAdopcion.text(options.text)
+        estadoAdopcion.removeClass()
+        estadoAdopcion.addClass("badge-" + options.badge)
+        estadoAdopcion.addClass("badge")
+
+    }, 'json')
+}
+
+function marcarAdoptado(animalId) {
+
+    updateAnimal(animalId, {
+        url: "/animal/marcaradoptado/",
+        badge: "info",
+        successMessage: " marcado como adoptado! Ya no aparecerá en la web.",
+        text: "Adoptado",
+        removeUpdateAnimalId: "update-estado-animal-adoptado-",
+    })
+}
+
+function marcarEnAdopcion(animalId) {
+
+    updateAnimal(animalId, {
+        url: "/animal/marcarenadopcion/",
+        badge: "success",
+        successMessage: " marcado como en adopción! Ahora aparece de nuevo en la web.",
+        text: "En adopción",
+        removeUpdateAnimalId: "update-estado-animal-expirado-",
+    })
+}
+
+</script>
+
+<!--<script type="text/javascript" src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js" ></script>
+<script type="text/javascript" src="https://cdn.datatables.net/1.10.20/js/dataTables.bootstrap4.min.js"></script>-->
+
+{% endblock %}

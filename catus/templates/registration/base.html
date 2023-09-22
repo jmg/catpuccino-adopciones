@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block css %}
+{{block.super}}
+<style>
+    @media only screen and (max-width: 992px) {
+        main {
+            margin-top: 10px !important;
+            margin-bottom: 30px !important;
+        }
+    }
+    a {
+        color: #007bff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-form-container">
+    <h3 class="text-center text-white pt-md-5">Login form</h3>
+    <div class="container">
+        <div id="login-row" class="row justify-content-center mx-auto">
+
+            <div id="login-box" class="col-md-8 mx-auto">
+            {% block login_content %}
+
+            {% endblock %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

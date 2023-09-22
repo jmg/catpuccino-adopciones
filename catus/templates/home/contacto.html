@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container main-catus">
+  <div class="row">
+    <div class="col-lg-8 col-md-10 mx-auto container-colored">
+
+      <h2>
+          Contacto
+      </h2>
+      <hr>
+
+      {% if is_post %}
+
+      {% if not error %}
+      <div id="response-text" class="alert alert-success" role="alert">
+          ¡Muchas gracias por contactarnos! Responderemos tu consulta a la brevedad.
+          <br><br>
+
+          <div class="text-center">
+              <img src="/static/logo.png" style="width: 250px;">
+              <br><br>
+              Atte. Equipo de Catpuccino Adopciones
+          </div>
+      </div>
+      {% else %}
+      <div id="response-text" class="alert alert-danger" role="alert">
+          {{error}}
+      </div>
+      {% endif %}
+
+      {% else %}
+
+      <form role="form" action="/contacto/" method="post">
+          {% csrf_token %}
+
+          <div class="form-group">
+            <label>Email</label>
+            <input class="form-control" type="email" name="email" placeholder="Email" required>
+          </div>
+
+          <div class="form-group">
+              <label>Mensaje</label>
+              <textarea id="message-box" name="message" class="form-control" type="text" rows="12" placeholder="Escribí aca tu mensaje o consulta" required></textarea>
+          </div>
+
+          <div style="width: 100%; margin-bottom: 10px;">
+            <div style="margin: auto;">
+              <div class="g-recaptcha" data-sitekey="6LfU260aAAAAAP82hSeAL0l-rbb1L3IbkSR6Hovn"></div>
+            </div>
+          </div>
+
+          <input type="submit" value="Enviar" class="btn btn-primary pull-right btn-submit">
+      </form>
+      {% endif %}
+
+      <hr>
+      <br>
+      <div class="text-center">
+          <a id="btn-volver" class="btn btn-primary btn-volver" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">Volver <i class="fa fa-arrow-left"></i></a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script src='https://www.google.com/recaptcha/api.js'></script>
+{% endblock %}

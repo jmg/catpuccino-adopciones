@@ -1,0 +1,99 @@
+{% extends "base_form.html" %}
+{% load forms_builder_tags %}
+{% load bootstrap4 %}
+
+{% block content %}
+
+<div class="container px-2">
+
+    <div class="col-lg-8 col-md-10 mx-auto container-colored p-3">
+
+        <h5>Formulario de {{estado_form.get_tipo_display}} de <b style="color: blue">{{persona_nombre}}</b> {% if gato_nombre %}para <b style="color: blue">{{gato_nombre}}{% endif %}</b></h5>
+        <hr>
+
+        <div id="datos-formulario" style="">
+            <h6>Datos del Formulario</h6>
+            {% for attr, value in form_attrs %}
+            <div>
+            <b>{{attr}}</b>: {{value|safe}}
+            </div>
+
+            {% endfor %}
+            <hr>
+        </div>
+
+        {% if extra_forms %}
+        <div style="margin-bottom: 10px;">
+        Hay otros formularios ({{extra_forms|length}}) para <b style="color: blue">{{gato_nombre}}</b>:
+        </div>
+
+        {% include "forms/_forms.html" with forms=extra_forms %}
+        <hr>
+        {% endif %}
+
+        <div class="text-center" style="margin-top: 25px;">
+        </div>
+        <br>
+        <br>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block js %}
+
+<script type="text/javascript">
+
+    var ocultarDatosPersonales = false;
+    var ocultarDatosForm = false;
+
+    function showDatosPersonales(btn) {
+        $("#datos-personales").slideToggle();
+        if (ocultarDatosPersonales) {
+            $(btn).find("span").text("Ver datos de la persona");
+            ocultarDatosPersonales = false;
+        } else {
+            $(btn).find("span").text("Ocultar datos de la persona");
+            ocultarDatosPersonales = true;
+        }
+    }
+
+    function showDatosFormulario(btn) {
+
+        $("#datos-formulario").slideToggle();
+        if (ocultarDatosForm) {
+            $(btn).find("span").text("Ver datos del formulario");
+            ocultarDatosForm = false;
+        } else {
+            $(btn).find("span").text("Ocultar datos del formulario");
+            ocultarDatosForm = true;
+        }
+    }
+
+</script>
+
+{% endblock %}
+
+{% block css %}
+<style type="text/css">
+    #datos-formulario div {
+        line-height: 42px;
+    }
+    #datos-personales div {
+        line-height: 42px;
+    }
+    .form-buttons {
+        margin: 3px;
+        cursor: pointer;
+        color: #000;
+    }
+    @media only screen and (max-width: 992px) {
+        main {
+            margin-top: 8px !important;
+            margin-bottom: 8px !important;
+        }
+    }
+</style>
+{% endblock %}
