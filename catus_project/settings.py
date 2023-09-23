@@ -140,6 +140,7 @@ DATABASES = {
         'PASSWORD': app_config.get("DB_PASSWORD"),
         'HOST': app_config.get("DB_HOST"),
         'PORT': app_config.get("DB_PORT"),
+        'OPTIONS': app_config.get('DB_OPTIONS', {}),
     }
 }
 
