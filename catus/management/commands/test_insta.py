@@ -46,8 +46,8 @@ class Command(BaseCommand):
                         tmpsession.headers['x-instagram-gis'] = x_instagram_gis
 
                     tmpsession.proxies = {
-                        'http':  "http://{}:{}@us-il.proxymesh.com:31280".format(settings.PROXY_MESH_USER, settings.PROXY_MESH_PASSWORD),
-                        'https': "http://{}:{}@us-il.proxymesh.com:31280".format(settings.PROXY_MESH_USER, settings.PROXY_MESH_PASSWORD),
+                        'http':  "http://{}:{}@159.65.236.228:312".format(settings.PROXY_USER, settings.PROXY_PASSWORD),
+                        'https': "http://{}:{}@159.65.236.228:312".format(settings.PROXY_USER, settings.PROXY_PASSWORD),
                     }
                     resp_json = self.get_json('graphql/query', params={'query_hash': query_hash, 'variables': variables_json}, session=tmpsession)
 
