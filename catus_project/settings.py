@@ -191,6 +191,8 @@ EMAIL_BACKEND = "sgbackend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
 
 ADMIN_URL = app_config.get("ADMIN_URL")
+PROXY_MESH_USER = app_config.get("PROXY_MESH_USER")
+PROXY_MESH_PASSWORD = app_config.get("PROXY_MESH_PASSWORD")
 
 if ENV == "LOCAL":
     """LOGGING = {
