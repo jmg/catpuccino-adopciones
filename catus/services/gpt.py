@@ -6,26 +6,61 @@ import openai
 import json
 from bs4 import BeautifulSoup
 
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait as wait
+from selenium.webdriver.common.by import By
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+
+
 
 class GPTService(BaseService):
 
     def _get_html_title_and_images(self, url):
 
-        response = requests.get(url)
+        #response = requests.get(url
+        #html_code = response.content
 
-        html = BeautifulSoup(response.content, 'html.parser')
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-gpu')
+
+        service = Service(executable_path="/usr/lib/chromium-browser/chromedriver")
+
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.get(url)
+        #wait
+        try:
+            wait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "FFVAD")))
+        except:
+            pass
+
+        scripts = driver.find_elements(By.XPATH, "//script")
+
+        html_code = driver.page_source
+        html = BeautifulSoup(html_code, 'html.parser')
         title = html.find("meta", property="og:title")
         text = title.attrs["content"]
 
-        scripts = html.findAll("script")
+        # scripts = html.findAll("script")
         images = []
+
         for script in scripts:
-            if "carousel" in str(script.contents) or "image" in str(script.contents):
+
+            content = script.get_attribute('innerHTML')
+            print (content)
+
+            if "carousel" in str(content) or "image" in str(content):
                 try:
-                    data = json.loads(str(script.contents[0]))
+                    data = json.loads(str(content))
+                    import ipdb; ipdb.set_trace()
                     for image in data["image"]:
                         images.append(image["url"])
-                except:
+                except Exception as e:
+                    print (e)
                     pass
 
         return text, images
