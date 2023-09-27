@@ -1,67 +1,47 @@
 from catus.services.base import BaseService
 from catus.models import ChatGTPResponse
 from django.conf import settings
-import requests
 import openai
 import json
+import re
+import instaloader
+import requests
 from bs4 import BeautifulSoup
-
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait as wait
-from selenium.webdriver.common.by import By
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-
+import os.path
+from pathlib2 import Path
 
 
 class GPTService(BaseService):
 
     def _get_html_title_and_images(self, url):
 
-        #response = requests.get(url
-        #html_code = response.content
-
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-gpu')
-
-        service = Service(executable_path="/usr/lib/chromium-browser/chromedriver")
-
-        driver = webdriver.Chrome(service=service, options=options)
-        driver.get(url)
-        #wait
         try:
-            wait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "FFVAD")))
+            L = instaloader.Instaloader(save_metadata=False, quiet=True, compress_json=False)
+            #get IG shortcode from url
+            regex = r"^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com.*\/p\/)([\d\w\-_]+)(?:\/)?(\?.*)?$"
+            code = re.findall(regex, url)[0][0]
+
+            post = instaloader.Post.from_shortcode(L.context, code)
+            path = Path(settings.MEDIA_ROOT)
+            media_dir = path.joinpath("gallery", "ig", code)
+
+            L.download_post(post, target=media_dir)
+
+            text = post.caption
+            images = []
+
+            for file in os.listdir(media_dir):
+                if file.endswith(".jpg") or file.endswith(".png") or file.endswith(".jpeg") or file.endswith(".gif") or file.endswith(".mp4") or file.endswith(".webp"):
+                    images.append("{}/gallery/ig/{}/{}".format(settings.SSL_HOST, code, file))
         except:
-            pass
+            response = requests.get(url)
+            html_code = response.content
 
-        scripts = driver.find_elements(By.XPATH, "//script")
+            html = BeautifulSoup(html_code, 'html.parser')
+            title = html.find("meta", property="og:title")
+            text = title.attrs["content"]
 
-        html_code = driver.page_source
-        html = BeautifulSoup(html_code, 'html.parser')
-        title = html.find("meta", property="og:title")
-        text = title.attrs["content"]
-
-        # scripts = html.findAll("script")
-        images = []
-
-        for script in scripts:
-
-            content = script.get_attribute('innerHTML')
-            print (content)
-
-            if "carousel" in str(content) or "image" in str(content):
-                try:
-                    data = json.loads(str(content))
-                    import ipdb; ipdb.set_trace()
-                    for image in data["image"]:
-                        images.append(image["url"])
-                except Exception as e:
-                    print (e)
-                    pass
+            images = []
 
         return text, images
 
