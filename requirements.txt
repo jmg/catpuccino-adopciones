@@ -84,3 +84,4 @@ xlsxwriter==1.4.3
 zipp==1.0.0
 #zope.interface==4.7.1
 django-crispy-forms==1.11.2
+instaloader==4.10
