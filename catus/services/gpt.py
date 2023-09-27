@@ -15,33 +15,33 @@ class GPTService(BaseService):
 
     def _get_html_title_and_images(self, url):
 
-        #try:
-        L = instaloader.Instaloader(save_metadata=False, quiet=True, compress_json=False)
-        #get IG shortcode from url
-        regex = r"^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com.*\/p\/)([\d\w\-_]+)(?:\/)?(\?.*)?$"
-        code = re.findall(regex, url)[0][0]
+        try:
+            L = instaloader.Instaloader(save_metadata=False, quiet=True, compress_json=False)
+            #get IG shortcode from url
+            regex = r"^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com.*\/p\/)([\d\w\-_]+)(?:\/)?(\?.*)?$"
+            code = re.findall(regex, url)[0][0]
 
-        post = instaloader.Post.from_shortcode(L.context, code)
-        path = Path(settings.MEDIA_ROOT)
-        media_dir = path.joinpath("gallery", "ig", code)
+            post = instaloader.Post.from_shortcode(L.context, code)
+            path = Path(settings.MEDIA_ROOT)
+            media_dir = path.joinpath("gallery", "ig", code)
 
-        L.download_post(post, target=media_dir)
+            L.download_post(post, target=media_dir)
 
-        text = post.caption
-        images = []
+            text = post.caption
+            images = []
 
-        for file in os.listdir(media_dir):
-            if file.endswith(".jpg") or file.endswith(".png") or file.endswith(".jpeg") or file.endswith(".gif") or file.endswith(".mp4") or file.endswith(".webp"):
-                images.append("{}/gallery/ig/{}/{}".format(settings.SSL_HOST, code, file))
-        # except:
-        #     response = requests.get(url)
-        #     html_code = response.content
+            for file in os.listdir(media_dir):
+                if file.endswith(".jpg") or file.endswith(".png") or file.endswith(".jpeg") or file.endswith(".gif") or file.endswith(".mp4") or file.endswith(".webp"):
+                    images.append("{}/gallery/ig/{}/{}".format(settings.SSL_HOST, code, file))
+        except:
+            response = requests.get(url)
+            html_code = response.content
 
-        #     html = BeautifulSoup(html_code, 'html.parser')
-        #     title = html.find("meta", property="og:title")
-        #     text = title.attrs["content"]
+            html = BeautifulSoup(html_code, 'html.parser')
+            title = html.find("meta", property="og:title")
+            text = title.attrs["content"]
 
-        #     images = []
+            images = []
 
         return text, images
 
