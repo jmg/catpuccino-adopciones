@@ -1,67 +1,48 @@
 from django.core.management.base import BaseCommand, CommandError
-import instaloader
-from pathlib2 import Path
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait as wait
+from selenium.webdriver.common.by import By
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+import requests
+import re
 import json
-import urllib
-import hashlib
-from instaloader.instaloadercontext import copy_session
-from django.conf import settings
+from bs4 import BeautifulSoup
 
 
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        L = instaloader.Instaloader(save_metadata=False, quiet=True, compress_json=False)
+        url = "https://www.instagram.com/p/Cq6AYP9rCob/?img_index={}".format(1)
 
-        class CustomContext(instaloader.InstaloaderContext):
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-gpu')
+        service = Service(executable_path="/usr/lib/chromium-browser/chromedriver")
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.get(url)
+        #wait
+        try:
+            wait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "FFVAD")))
+        except:
+            pass
+        scripts = driver.find_elements(By.XPATH, "//script")
 
-            def graphql_query(self, query_hash, variables=None, referer=None, rhx_gis=None):
-                """
-                Do a GraphQL Query.
+        open("test.html", "w").write(driver.page_source)
 
-                :param query_hash: Query identifying hash.
-                :param variables: Variables for the Query.
-                :param referer: HTTP Referer, or None.
-                :param rhx_gis: 'rhx_gis' variable as somewhere returned by Instagram, needed to 'sign' request
-                :return: The server's response dictionary.
-                """
+        for script in scripts:
 
-                with copy_session(self._session, self.request_timeout) as tmpsession:
-                    tmpsession.headers.update(self._default_http_header(empty_session_only=True))
-                    del tmpsession.headers['Connection']
-                    del tmpsession.headers['Content-Length']
-                    tmpsession.headers['authority'] = 'www.instagram.com'
-                    tmpsession.headers['scheme'] = 'https'
-                    tmpsession.headers['accept'] = '*/*'
-                    if referer is not None:
-                        tmpsession.headers['referer'] = urllib.parse.quote(referer)
+            content = script.get_attribute("innerHTML")
 
-                    variables_json = json.dumps(variables, separators=(',', ':'))
+            try:
+                print (content[0:100])
+                json_data = json.loads(str(content))
+                import ipdb; ipdb.set_trace()
+            except:
+                pass
 
-                    if rhx_gis:
-                        #self.log("rhx_gis {} query_hash {}".format(rhx_gis, query_hash))
-                        values = "{}:{}".format(rhx_gis, variables_json)
-                        x_instagram_gis = hashlib.md5(values.encode()).hexdigest()
-                        tmpsession.headers['x-instagram-gis'] = x_instagram_gis
-
-                    tmpsession.proxies = {
-                        'http':  "http://{}:{}@159.65.236.228:3128".format(settings.PROXY_USER, settings.PROXY_PASSWORD),
-                        'https': "http://{}:{}@159.65.236.228:3128".format(settings.PROXY_USER, settings.PROXY_PASSWORD),
-                    }
-                    resp_json = self.get_json('graphql/query', params={'query_hash': query_hash, 'variables': variables_json}, session=tmpsession)
-
-                    resp_json = self.get_json('graphql/query',
-                                            params={'query_hash': query_hash,
-                                                    'variables': variables_json},
-                                            session=tmpsession)
-                if 'status' not in resp_json:
-                    self.error("GraphQL response did not contain a \"status\" field.")
-
-                return resp_json
-
-        L.context = CustomContext(True, True, None, 3, 300, None, None, False)
-
-        post = instaloader.Post.from_shortcode(L.context, "Cq6AYP9rCob")
-
-        L.download_post(post, target=Path("/tmp/test"))
+        #print (images)
