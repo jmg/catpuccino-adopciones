@@ -514,6 +514,10 @@ footer .foot {
   max-height: 490px;
 }
 
+#main-button-action {
+  padding: 18px 26px !important;
+}
+
 #mainNav .navbar-nav > li.nav-item > a {
   text-align: right !important;
 }
