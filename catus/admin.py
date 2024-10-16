@@ -3,7 +3,7 @@ from django.urls import reverse, re_path
 
 from catus.models import Animal, AnimalImage, Contrato, ContratoPersona, EstadoFormulario, CatusUser, FacebookAccount, ChatGTPResponse
 from forms_builder.forms.admin import FormAdmin
-from forms_builder.forms.models import Form, FormEntry
+from forms_builder.forms.models import Form, FormEntry, Field
 from django.contrib.auth.models import Group, User
 from django.contrib.sites.models import Site
 
@@ -96,6 +96,7 @@ admin.site.unregister(Form)
 admin.site.register(Animal, AnimalAdmin)
 admin.site.register(Form, FormAdmin)
 admin.site.register(FormEntry)
+admin.site.register(Field)
 admin.site.register(EstadoFormulario, EstadoFormularioAdmin)
 admin.site.register(CatusUser, CatusUserAdmin)
 admin.site.register(AnimalImage)
