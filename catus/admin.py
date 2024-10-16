@@ -89,6 +89,11 @@ class EstadoFormularioAdmin(admin.ModelAdmin):
         return obj.gato.cargado_por.get_instagram() if obj.gato.cargado_por else ""
 
 
+class FieldEntryAdmin(admin.ModelAdmin):
+
+    list_display = ("entry", "field_id", "value")
+
+
 #admin.site.unregister(User)
 admin.site.unregister(Group)
 admin.site.unregister(Form)
@@ -96,7 +101,7 @@ admin.site.unregister(Form)
 admin.site.register(Animal, AnimalAdmin)
 admin.site.register(Form, FormAdmin)
 admin.site.register(FormEntry)
-admin.site.register(FieldEntry)
+admin.site.register(FieldEntry, FieldEntryAdmin)
 admin.site.register(EstadoFormulario, EstadoFormularioAdmin)
 admin.site.register(CatusUser, CatusUserAdmin)
 admin.site.register(AnimalImage)
