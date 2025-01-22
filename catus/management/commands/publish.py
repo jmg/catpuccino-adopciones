@@ -9,7 +9,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        MAX_PUBLICATIONS = 4
+        MAX_PUBLICATIONS = 5
 
         animals = Animal.objects.filter(
             instagram_listo_para_publicar=True,
