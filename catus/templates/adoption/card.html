@@ -1,15 +1,8 @@
 <div data-id="{{animal.id}}" data-type="{{animal.tipo}}" data-name="{{animal.nombre}}" data-zone="{{animal.zona}}" class="post-preview">
 
-    <a {% if not animal.reservado %}href="{{ animal.get_adoption_url }}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
-
-      <h3 class="post-subtitle" >
-        <b>{{animal.nombre}}</b>
-      </h3>
-    </a>
-
     {% if animal.reservado %}
-    <div class="alert alert-info" role="alert">
-      ¡Reservado! <i class="fa fa-cat"></i>
+    <div class="reservado-badge">
+      <i class="fa fa-paw"></i> ¡Reservado!
     </div>
     {% endif %}
 
@@ -41,23 +34,41 @@
     </div>
     {% endif %}
 
+    <a class="animal-title" {% if not animal.reservado %}href="{{ animal.get_adoption_url }}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
+      <h3 class="post-subtitle">
+        <b>{{animal.nombre}}</b>
+      </h3>
+    </a>
+
     <div class="post-data">
-      <div><b>Sexo:</b> {{animal.get_sexo_display|default_if_none:'Desconocido'}}</div>
-      <div><b>Edad:</b> {{animal.edad|default_if_none:'Desconocido'}}</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label"><i class="fa fa-venus-mars"></i> Sexo:</span>
+          <span class="info-value">{{animal.get_sexo_display|default_if_none:'Desconocido'}}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label"><i class="fa fa-birthday-cake"></i> Edad:</span>
+          <span class="info-value">{{animal.edad|default_if_none:'Desconocido'}}</span>
+        </div>
 
-      {% if animal.zona %}
-      <div><b>Zona:</b> {{animal.zona}}</div>
-      {% else %}
-      <div class="mobile-hide">&nbsp;<b></b></div>
-      {% endif %}
+        {% if animal.zona %}
+        <div class="info-item">
+          <span class="info-label"><i class="fa fa-map-marker-alt"></i> Zona:</span>
+          <span class="info-value">{{animal.zona}}</span>
+        </div>
+        {% endif %}
 
-      {% if animal.cargado_por.get_instagram %}
-      <div class="instagram-card"><b>Rescatado por:</b> <a title="Podes contactarte con ellos por cualquier consulta!" target="_blank" href='{{animal.cargado_por.get_instagram_link}}'>{{animal.cargado_por.get_instagram}}</a></div>
-      {% else %}
-      <div class="mobile-hide">&nbsp;<b></b></div>
-      {% endif %}
+        {% if animal.cargado_por.get_instagram %}
+        <div class="info-item instagram-card">
+          <span class="info-label"><i class="fab fa-instagram"></i> Rescatado por:</span>
+          <span class="info-value">
+            <a title="Podes contactarte con ellos por cualquier consulta!" target="_blank" href='{{animal.cargado_por.get_instagram_link}}'>{{animal.cargado_por.get_instagram}}</a>
+          </span>
+        </div>
+        {% endif %}
+      </div>
 
-      <div>
+      <div class="animal-description-container">
         <span class="animal-desciption show-more-text">{% if animal.datos %}{{animal.get_datos|safe}}{% else %}No hay descripción disponible{% endif %}</span>
         <div>
           <a class="show-more-a" href="javascript:" onclick="showMore(this)">Mostrar más...</a>
@@ -65,8 +76,8 @@
       </div>
     </div>
 
-    <div class="text-center" style="margin-bottom: 25px;">
-      <a class="btn btn-primary btn-preadopcion" {% if not animal.reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer; color: #fff" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
+    <div class="card-action text-center">
+      <a class="btn btn-primary btn-preadopcion" {% if not animal.reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
         Formulario de pre-adopción <i class="fa fa-paw"></i>
       </a>
     </div>

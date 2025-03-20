@@ -2,11 +2,9 @@
 {% load static %}
 
 {% block header %}
-<div class="site-heading">
-
+<div class="site-heading animated-heading">
   <h1><i class="fa fa-paw"></i> Catpuccino Adopciones </h1>
-
-  <span class="subheading"><b></b>¡Adoptá de forma responsable! </span>
+  <span class="subheading"><b>¡Adoptá de forma responsable!</b></span>
   <div id="main-button"><a id="main-button-action" class="btn btn-primary btn-main">
     <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción </a>
   </div>
@@ -17,31 +15,42 @@
 {% if animals %}
   <div id="gatitos-en-adopcion" class="p-3 p-md-4 search-container container-fluid">
     <form class="form">
-
       <div class="form-row">
+        <div class="col-12 col-md-4 mb-2">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"><i class="fa fa-search"></i></span>
+            </div>
+            <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="text" name="zone" placeholder="Buscar por zona o nombre">
+          </div>
+        </div>
 
-      <div class="col-12 col-md-4  mb-2">
-        <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="text" name="zone" placeholder="🔎 Buscar por zona o nombre">
+        <div class="col-6 col-md-4">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"><i class="fa fa-paw"></i></span>
+            </div>
+            <select id="filter-type" class="form-control" name="type">
+              <option value="all">Todos</option>
+              <option value="G">Gatos</option>
+              <option value="P">Perros</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-4">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"><i class="fa fa-sort"></i></span>
+            </div>
+            <select id="filter-sort" class="form-control" name="type">
+              <option value="">Ordenar</option>
+              <option value="desc">Más Recientes</option>
+              <option value="asc">Más Antiguos</option>
+            </select>
+          </div>
+        </div>
       </div>
-
-      <div class="col-6 col-md-4">
-        <select id="filter-type" class="form-control" name="type">
-          <option value="all">🐱🐶 Todos</option>
-          <option value="G">🐱 Gatos</option>
-          <option value="P">🐶 Perros</option>
-        </select>
-      </div>
-
-      <div class="col-6 col-md-4">
-        <select id="filter-sort" class="form-control" name="type">
-          <option value="">↑↓ Ordenar </option>
-          <option value="desc">Más Recientes</option>
-          <option value="asc">Más Antiguos</option>
-        </select>
-      </div>
-
-      </div>
-
     </form>
   </div>
 {% endif %}
@@ -49,11 +58,13 @@
 
 {% block content %}
 <div class="row mx-1 mx-md-4 text-center">
-
     {% if animals %}
+      <div class="col-12 mb-4">
+        <h2 class="section-title"><i class="fa fa-heart"></i> Animales en adopción</h2>
+        <p class="section-description">Encuentra a tu compañero perfecto. ¡Todos merecen un hogar!</p>
+      </div>
 
-      <div id="animal-list" class="row w-100 mx-auto mt-4">
-
+      <div id="animal-list" class="row w-100 mx-auto mt-2">
       {% for animal in animals %}
       <div data-id="{{animal.id}}" class="animal-card col-md-{{cols}}">
         {% include "adoption/card.html" %}
@@ -62,8 +73,7 @@
       </div>
 
     {% else %}
-
-    <div class="mx-auto alert alert-info w-100" id="gatitos-en-adopcion">
+    <div class="mx-auto alert alert-info w-100 no-animals-message" id="gatitos-en-adopcion">
       <div class="mx-auto text-md-justify">
         <i class="fa fa-paw"></i>
         {% if main %}
@@ -72,34 +82,82 @@
         Todavía no cargaste ningún animal en adopción. <br>
         <i class="fa fa-paw"></i> O los que cargaste aún están en <b>revisión</b>. Si es así en un momento serán publicados!
         {% endif %}
-
       </div>
       <div class="mx-auto">
         <img class="cat-image" src="/static/500.png">
       </div>
     </div>
-
     {% endif %}
-
-    </div>
-
 </div>
 {% endblock %}
 
 {% block css %}
 <style>
-  .search-container {
-    background: #e3e3e3
+  .animated-heading h1,
+  .animated-heading .subheading,
+  .animated-heading #main-button {
+    animation: fadeInUp 1s ease forwards;
+    opacity: 0;
   }
+
+  .animated-heading .subheading {
+    animation-delay: 0.3s;
+  }
+
+  .animated-heading #main-button {
+    animation-delay: 0.6s;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .section-title {
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+
+  .section-description {
+    color: #777;
+    margin-bottom: 2rem;
+  }
+
+  .input-group-text {
+    background-color: var(--light-bg);
+    border-color: #e3e3e3;
+  }
+
+  .no-animals-message {
+    background: white;
+    border-radius: 15px;
+    box-shadow: var(--card-shadow);
+    border: none;
+    padding: 2rem;
+  }
+
+  .cat-image {
+    max-width: 200px;
+    margin-top: 1rem;
+  }
+
   main {
     margin-top: 0;
   }
-  .autocomplete-suggestions { border: 1px solid #999; background: #FFF; overflow: auto; }
-  .autocomplete-suggestion { padding: 2px 5px; white-space: nowrap; overflow: hidden; }
-  .autocomplete-selected { background: #F0F0F0; }
-  .autocomplete-suggestions strong { font-weight: normal; color: #3b33cc; }
-  .autocomplete-group { padding: 2px 5px; }
-  .autocomplete-group strong { display: block; border-bottom: 1px solid #000; }
+
+  .autocomplete-suggestions { border: 1px solid #e3e3e3; background: #FFF; overflow: auto; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+  .autocomplete-suggestion { padding: 8px 12px; white-space: nowrap; overflow: hidden; transition: background-color 0.2s; }
+  .autocomplete-selected { background: #f7f7f7; }
+  .autocomplete-suggestions strong { font-weight: 600; color: var(--primary-color); }
+  .autocomplete-group { padding: 8px 12px; font-weight: 600; }
+  .autocomplete-group strong { display: block; border-bottom: 1px solid #e3e3e3; }
 
   {% if main %}
   #gatitos-en-adopcion {
