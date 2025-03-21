@@ -60,9 +60,10 @@
 
   <nav class="navbar navbar-expand-lg navbar-light" id="mainNav">
     <div class="container-fluid">
-      <a class="navbar-brand" href="/"><div class="main-logo"></div> </a>
+      <a class="navbar-brand" href="/">
+        <img src="{% static 'logo_2.png' %}" alt="Catpuccino Adopciones" class="main-logo">
+      </a>
       <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
-        Menu
         <i class="fas fa-bars"></i>
       </button>
       <div class="collapse navbar-collapse" id="navbarResponsive">
@@ -73,7 +74,7 @@
 
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-              Formulario de Pre-Adopción <i class="fa fa-paw"></i>
+              Formulario de Pre-Adopción <i class="fa fa-file-alt"></i>
             </a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdown">
               <a class="dropdown-item" href="/pre-adopcion/{% if is_user %}?user_id={{user.id}}{% endif %}">Gatos <i class="fa fa-cat"></i></a>
@@ -85,18 +86,18 @@
 
           {% if forms_counts %}
           <li class="nav-item">
-            <a style="color: #8ad16e" class="nav-link" href="/accounts/profile/#forms">Tenés <b>{{forms_counts}}</b> formulario{% if forms_counts > 0 %}s{% endif %} de pre-adopción <i class="fa fa-file"></i></a>
+            <a class="nav-link highlight" href="/accounts/profile/#forms">Tenés <b>{{forms_counts}}</b> formulario{% if forms_counts > 0 %}s{% endif %} de pre-adopción <i class="fa fa-file"></i></a>
           </li>
           {% else %}
           <li class="nav-item">
-            <a class="nav-link" href="/accounts/profile/">Cargar un Animal en Adopción <i class="fa fa-plus"></i></a>
+            <a class="nav-link" href="/accounts/profile/">Cargar un Animal en Adopción <i class="fa fa-plus-circle"></i></a>
           </li>
           {% endif %}
 
           {% else %}
 
           <li class="nav-item">
-            <a class="nav-link" href="/como-funciona/">¿Cómo funciona? <i class="fa fa-magic"></i></a>
+            <a class="nav-link" href="/como-funciona/">¿Cómo funciona? <i class="fa fa-question-circle"></i></a>
           </li>
           {% endif %}
 
@@ -128,21 +129,68 @@
 
   <footer class="footer">
     <div class="container">
-      <div class="row">
-        <div class="col-lg-8 mx-auto px-0">
-
-          <div class="foot row mx-auto">
-            <div class="col-md-6 mb-2 mb-md-0 px-0">
-            Catpuccino Adopciones <span class="copyleft">&copy;</span>.
-            Made with <i class="fa fa-heart"></i> by cat lovers
-            </div>
-            <div class="col-md-6">
-              <a target="_blank" href="https://www.instagram.com/adopciones.catpuccino/">
-                <i class="fab fa-instagram"></i> Seguinos en Instagram
-              </a>
-            </div>
+      <div class="footer-container">
+        <!-- Brand Section -->
+        <div class="footer-brand">
+          <img src="{% static 'logo_2.png' %}" alt="Catpuccino Adopciones" class="footer-logo">
+          <div class="footer-tagline">
+            Ayudamos a encontrar hogares responsables y amorosos para gatos y perros que necesitan una segunda oportunidad.
           </div>
+          <div class="social-links">
+            <a href="https://www.instagram.com/adopciones.catpuccino/" target="_blank" class="social-link instagram" title="Instagram">
+              <i class="fab fa-instagram"></i>
+            </a>
+            <a href="#" class="social-link facebook" title="Facebook">
+              <i class="fab fa-facebook-f"></i>
+            </a>
+            <a href="#" class="social-link twitter" title="Twitter">
+              <i class="fab fa-twitter"></i>
+            </a>
+          </div>
+        </div>
 
+        <!-- Adoptar Section -->
+        <div class="footer-section">
+          <h3 class="footer-title">Adoptar</h3>
+          <ul class="footer-links">
+            <li><a href="/"><i class="fa fa-paw"></i> Gatos y perros en adopción</a></li>
+            <li><a href="/pre-adopcion/"><i class="fa fa-clipboard-list"></i> Formulario pre-adopción gatos</a></li>
+            <li><a href="/pre-adopcion/perros/"><i class="fa fa-clipboard-list"></i> Formulario pre-adopción perros</a></li>
+            <li><a href="/como-funciona/"><i class="fa fa-question-circle"></i> ¿Cómo funciona?</a></li>
+          </ul>
+        </div>
+
+        <!-- Ayudar Section -->
+        <div class="footer-section">
+          <h3 class="footer-title">Ayudar</h3>
+          <ul class="footer-links">
+            <li><a href="/accounts/profile/"><i class="fa fa-plus-circle"></i> Publicar animal en adopción</a></li>
+            <li><a href="/accounts/register/"><i class="fa fa-user-plus"></i> Registrarse</a></li>
+            <li><a href="/accounts/login/"><i class="fa fa-sign-in-alt"></i> Iniciar sesión</a></li>
+          </ul>
+        </div>
+
+        <!-- Info Section -->
+        <div class="footer-section">
+          <h3 class="footer-title">Información</h3>
+          <ul class="footer-links">
+            <li><a href="/policy/"><i class="fa fa-shield-alt"></i> Políticas de privacidad</a></li>
+            <li><a href="/contacto/"><i class="fa fa-envelope"></i> Contacto</a></li>
+            <li><a href="/faq/"><i class="fa fa-question"></i> Preguntas frecuentes</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Footer Bottom -->
+      <div class="footer-bottom">
+        <div class="footer-copyright">
+          Catpuccino Adopciones <span class="copyleft">&copy;</span> {{ current_year|default:2023 }}.
+          Made with <i class="fa fa-heart"></i> by cat lovers
+        </div>
+        <div class="footer-nav">
+          <a href="/contacto/">Contacto</a>
+          <a href="/policy/">Privacidad</a>
+          <a href="/faq/">FAQ</a>
         </div>
       </div>
     </div>

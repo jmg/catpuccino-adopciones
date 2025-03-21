@@ -13,19 +13,22 @@
 
 {% block subheader %}
 {% if animals %}
-  <div id="gatitos-en-adopcion" class="p-3 p-md-4 search-container container-fluid">
+  <div id="gatitos-en-adopcion" class="p-4 p-md-5 search-container container-fluid">
+    <h3 class="mb-4 text-center d-md-none">Filtrar búsqueda</h3>
     <form class="form">
       <div class="form-row">
-        <div class="col-12 col-md-4 mb-2">
+        <div class="col-12 col-md-4 mb-3 mb-md-0">
+          <span class="filter-label">Buscar</span>
           <div class="input-group">
             <div class="input-group-prepend">
               <span class="input-group-text"><i class="fa fa-search"></i></span>
             </div>
-            <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="text" name="zone" placeholder="Buscar por zona o nombre">
+            <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="text" name="zone" placeholder="Por zona o nombre">
           </div>
         </div>
 
-        <div class="col-6 col-md-4">
+        <div class="col-6 col-md-4 mb-3 mb-md-0">
+          <span class="filter-label">Tipo de mascota</span>
           <div class="input-group">
             <div class="input-group-prepend">
               <span class="input-group-text"><i class="fa fa-paw"></i></span>
@@ -38,18 +41,25 @@
           </div>
         </div>
 
-        <div class="col-6 col-md-4">
+        <div class="col-6 col-md-4 mb-3 mb-md-0">
+          <span class="filter-label">Ordenar por</span>
           <div class="input-group">
             <div class="input-group-prepend">
               <span class="input-group-text"><i class="fa fa-sort"></i></span>
             </div>
             <select id="filter-sort" class="form-control" name="type">
-              <option value="">Ordenar</option>
+              <option value="">Elige una opción</option>
               <option value="desc">Más Recientes</option>
               <option value="asc">Más Antiguos</option>
             </select>
           </div>
         </div>
+      </div>
+
+      <div class="text-center mt-3">
+        <a href="#" class="filter-reset" id="reset-filters">
+          <i class="fa fa-undo"></i> Limpiar filtros
+        </a>
       </div>
     </form>
   </div>
@@ -126,17 +136,12 @@
   }
 
   .section-description {
-    color: #777;
+    color: var(--text-light);
     margin-bottom: 2rem;
   }
 
-  .input-group-text {
-    background-color: var(--light-bg);
-    border-color: #e3e3e3;
-  }
-
   .no-animals-message {
-    background: white;
+    background: var(--white);
     border-radius: 15px;
     box-shadow: var(--card-shadow);
     border: none;
@@ -152,12 +157,41 @@
     margin-top: 0;
   }
 
-  .autocomplete-suggestions { border: 1px solid #e3e3e3; background: #FFF; overflow: auto; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-  .autocomplete-suggestion { padding: 8px 12px; white-space: nowrap; overflow: hidden; transition: background-color 0.2s; }
-  .autocomplete-selected { background: #f7f7f7; }
-  .autocomplete-suggestions strong { font-weight: 600; color: var(--primary-color); }
-  .autocomplete-group { padding: 8px 12px; font-weight: 600; }
-  .autocomplete-group strong { display: block; border-bottom: 1px solid #e3e3e3; }
+  .autocomplete-suggestions {
+    border: 1px solid rgba(0,0,0,0.05);
+    background: var(--white);
+    overflow: auto;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+  }
+
+  .autocomplete-suggestion {
+    padding: 12px 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: background-color 0.2s;
+    cursor: pointer;
+  }
+
+  .autocomplete-selected {
+    background: var(--light-bg);
+  }
+
+  .autocomplete-suggestions strong {
+    font-weight: 600;
+    color: var(--primary-color);
+  }
+
+  .autocomplete-group {
+    padding: 12px 18px;
+    font-weight: 600;
+  }
+
+  .autocomplete-group strong {
+    display: block;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding-bottom: 8px;
+  }
 
   {% if main %}
   #gatitos-en-adopcion {
@@ -169,4 +203,24 @@
 
 {% block js %}
 <script src='{% static "js/jquery.autocomplete.min.js" %}'></script>
+<script>
+  $(document).ready(function() {
+    // Reset filters
+    $('#reset-filters').click(function(e) {
+      e.preventDefault();
+      $('#filter-zone').val('');
+      $('#filter-type').val('all');
+      $('#filter-sort').val('');
+
+      // Trigger filter update
+      $('#filter-zone').trigger('change');
+
+      // Visual feedback
+      $(this).html('<i class="fa fa-check"></i> Filtros restablecidos');
+      setTimeout(function() {
+        $('#reset-filters').html('<i class="fa fa-undo"></i> Limpiar filtros');
+      }, 2000);
+    });
+  });
+</script>
 {% endblock %}
