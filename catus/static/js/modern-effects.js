@@ -17,6 +17,62 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
+  // Efecto de la navbar al hacer scroll
+  const navbar = document.getElementById('mainNav');
+  const logoElement = document.querySelector('.main-logo');
+
+  // Función para actualizar la navegación basada en el scroll
+  function updateNavigation() {
+    // Añadir clase scrolled al hacer scroll
+    if (window.scrollY > 30) {
+      navbar.classList.add('scrolled');
+    } else {
+      navbar.classList.remove('scrolled');
+    }
+
+    // Detectar qué sección está activa basada en el scroll
+    const scrollPosition = window.scrollY + 100;
+
+    // Obtener todos los enlaces de navegación
+    const navLinks = document.querySelectorAll('.nav-link:not(.dropdown-toggle):not(.highlight)');
+
+    // Verificar si algún enlace debe estar activo
+    let activeFound = false;
+
+    navLinks.forEach(link => {
+      // Solo procesar enlaces que apuntan a secciones en la misma página
+      const href = link.getAttribute('href');
+      if (href && href.startsWith('#')) {
+        const section = document.querySelector(href);
+        if (section) {
+          const sectionTop = section.offsetTop;
+          const sectionHeight = section.offsetHeight;
+
+          if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
+            link.classList.add('active');
+            activeFound = true;
+          } else {
+            link.classList.remove('active');
+          }
+        }
+      }
+    });
+
+    // Si no se encontró sección activa, activar el enlace de inicio
+    if (!activeFound && navLinks.length > 0) {
+      // Si estamos en la página principal, activar el primer enlace
+      if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+        navLinks[0].classList.add('active');
+      }
+    }
+  }
+
+  // Añadir el event listener para scroll
+  window.addEventListener('scroll', updateNavigation);
+
+  // Ejecutar una vez al cargar para establecer el estado inicial
+  updateNavigation();
+
   // Efectos para las tarjetas de animales
   const animalCards = document.querySelectorAll('.animal-card');
 
@@ -27,38 +83,18 @@ document.addEventListener('DOMContentLoaded', function() {
       card.style.opacity = '1';
     }, 100);
 
-    // Efecto de inclinación 3D al mover el mouse (Tilt effect)
-    card.addEventListener('mousemove', function(e) {
-      const cardRect = this.getBoundingClientRect();
-      const cardWidth = cardRect.width;
-      const cardHeight = cardRect.height;
-
-      // Calcular posición relativa del mouse dentro de la tarjeta
-      const mouseX = e.clientX - cardRect.left;
-      const mouseY = e.clientY - cardRect.top;
-
-      // Calcular rotación basada en la posición del mouse
-      const rotateY = ((mouseX / cardWidth) - 0.5) * 8; // Máximo 8 grados de rotación
-      const rotateX = ((mouseY / cardHeight) - 0.5) * -8;
-
-      // Aplicar transformación
-      this.querySelector('.post-preview').style.transform =
-        `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-5px)`;
-
-      // Efecto de iluminación (shine effect)
-      const shine = this.querySelector('.post-preview');
-      const shineLeftPos = (mouseX / cardWidth) * 100;
-      const shineTopPos = (mouseY / cardHeight) * 100;
-      shine.style.background =
-        `radial-gradient(circle at ${shineLeftPos}% ${shineTopPos}%, rgba(255,255,255,0.03), transparent 40%),
-         white`;
+    // Efecto de elevación suave al hacer hover
+    card.addEventListener('mouseenter', function() {
+      const previewCard = this.querySelector('.post-preview');
+      previewCard.style.transform = 'translateY(-5px)';
+      previewCard.style.boxShadow = '0 12px 20px rgba(0,0,0,0.1)';
     });
 
     // Restaurar estado original al salir del elemento
     card.addEventListener('mouseleave', function() {
       const previewCard = this.querySelector('.post-preview');
-      previewCard.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
-      previewCard.style.background = 'white';
+      previewCard.style.transform = 'translateY(0)';
+      previewCard.style.boxShadow = '0 10px 20px rgba(0,0,0,0.1)';
     });
   });
 
@@ -68,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
     imageContainer.addEventListener('mouseenter', function() {
       const image = this.querySelector('img');
       if (image) {
-        image.style.transform = 'scale(1.05)';
+        image.style.transform = 'scale(1.03)';
       }
     });
 
