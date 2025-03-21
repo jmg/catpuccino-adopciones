@@ -54,6 +54,48 @@
 
   {% block css %}
   {% endblock %}
+
+  <!-- Sobrescribir cualquier efecto brillante -->
+  <style>
+    .post-image,
+    .carousel-image img,
+    .post-preview img {
+      filter: none !important;
+      -webkit-filter: none !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .carousel-image::before,
+    .carousel-image::after,
+    .post-image::before,
+    .post-image::after,
+    .post-preview::before,
+    .post-preview::after,
+    .post-preview *::before,
+    .post-preview *::after {
+      display: none !important;
+      content: none !important;
+      background: none !important;
+      background-image: none !important;
+      filter: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+
+    .post-title-bar {
+      background: white !important;
+      background-image: none !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    .post-data {
+      background: white !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -134,7 +176,7 @@
         <div class="footer-brand">
           <img src="{% static 'logo_2.png' %}" alt="Catpuccino Adopciones" class="footer-logo">
           <div class="footer-tagline">
-            Ayudamos a encontrar hogares responsables y amorosos para gatos y perros que necesitan una segunda oportunidad.
+            Ayudamos a encontrar hogares responsables para gatos y perros que necesitan una segunda oportunidad.
           </div>
           <div class="social-links">
             <a href="https://www.instagram.com/adopciones.catpuccino/" target="_blank" class="social-link instagram" title="Instagram">
