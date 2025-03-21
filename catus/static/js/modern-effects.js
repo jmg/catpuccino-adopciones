@@ -83,7 +83,8 @@ document.addEventListener('DOMContentLoaded', function() {
       card.style.opacity = '1';
     }, 100);
 
-    // Efecto de elevación suave al hacer hover
+    // Efecto de elevación suave al hacer hover - DESHABILITADO
+    /*
     card.addEventListener('mouseenter', function() {
       const previewCard = this.querySelector('.post-preview');
       previewCard.style.transform = 'translateY(-5px)';
@@ -96,9 +97,11 @@ document.addEventListener('DOMContentLoaded', function() {
       previewCard.style.transform = 'translateY(0)';
       previewCard.style.boxShadow = '0 10px 20px rgba(0,0,0,0.1)';
     });
+    */
   });
 
-  // Efecto de zoom al hacer hover en las imágenes
+  // Efecto de zoom al hacer hover en las imágenes - DESHABILITADO
+  /*
   const carouselImages = document.querySelectorAll('.carousel-image');
   carouselImages.forEach(imageContainer => {
     imageContainer.addEventListener('mouseenter', function() {
@@ -114,6 +117,16 @@ document.addEventListener('DOMContentLoaded', function() {
         image.style.transform = 'scale(1)';
       }
     });
+  });
+  */
+
+  // Eliminar cualquier efecto brillante que pueda estar causando problemas
+  document.querySelectorAll('.carousel-image img, .post-image').forEach(img => {
+    img.style.filter = 'none';
+    img.style.webkitFilter = 'none';
+    img.style.transform = 'none';
+    img.style.boxShadow = 'none';
+    img.style.transition = 'none';
   });
 
   // Añadir botón flotante "Volver arriba"
@@ -131,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Acción de volver arriba
+  // Acción del botón "Volver arriba"
   backToTopButton.addEventListener('click', function() {
     window.scrollTo({
       top: 0,
