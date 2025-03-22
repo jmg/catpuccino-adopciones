@@ -5,8 +5,13 @@
 <div class="site-heading animated-heading">
   <h1><i class="fa fa-paw"></i> Catpuccino Adopciones </h1>
   <span class="subheading"><b>¡Adoptá de forma responsable!</b></span>
-  <div id="main-button"><a id="main-button-action" class="btn btn-primary btn-main">
-    <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción </a>
+  <div id="main-button" class="button-container">
+    <a id="main-button-action" class="btn btn-primary btn-main">
+      <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción
+    </a>
+    <a href="/como-funciona/" class="btn btn-secondary btn-main">
+      <i class="fa fa-question-circle"></i> ¿Cómo funciona?
+    </a>
   </div>
 </div>
 {% endblock %}
@@ -112,6 +117,48 @@
     z-index: 1;
   }
 
+  /* Contenedor de botones */
+  .button-container {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 25px;
+  }
+
+  /* Botones principales en el banner */
+  .btn-main {
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 50px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    min-width: 230px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-main i {
+    margin-right: 8px;
+    font-size: 1.1rem;
+  }
+
+  .btn-main:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-secondary.btn-main {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    color: white;
+  }
+
+  .btn-secondary.btn-main:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
   /* Mejorar visibilidad del texto con sombras pronunciadas */
   .site-heading {
     position: relative;
@@ -119,9 +166,17 @@
     text-shadow: 0 4px 8px rgba(0, 0, 0, 0.6) !important;
   }
 
-  /* Eliminar el cuadrado violeta anterior */
-  .site-heading:before {
-    display: none;
+  /* Responsive para botones */
+  @media (max-width: 576px) {
+    .button-container {
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn-main {
+      width: 100%;
+      min-width: unset;
+    }
   }
 
   .animated-heading h1,
