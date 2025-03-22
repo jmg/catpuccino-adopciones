@@ -211,7 +211,7 @@ img::-moz-selection {
 
 /* admin logo */
 .main-logo-admin {
-    background-image: url(/static/logo.png);
+
     background-position-y: 0px;
     height: 60px;
     width: 60px;
@@ -221,7 +221,7 @@ img::-moz-selection {
 
 /* celphone screen */
 .main-logo {
-  background-image: url('/static/logo.png');
+
   background-position-y: 0px;
   height: 60px;
   width: 60px;
@@ -899,7 +899,7 @@ footer .foot {
     color: #0085A1;
   }
   .main-logo {
-    background-image: url('/static/logo.png');
+
     background-position-y: 0px;
     height: 60px;
     width: 60px;
@@ -907,7 +907,6 @@ footer .foot {
     background-size: 60px;
   }
   #mainNav.is-fixed .main-logo {
-    background-image: url("/static/logo.png") !important;
     background-position-y: 0px;
     height: 60px;
     width: 60px;
