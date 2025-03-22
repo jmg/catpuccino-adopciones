@@ -2,167 +2,407 @@
 {% load bootstrap4 %}
 {% load crispy_forms_tags %}
 
-{% block content %}
-
-<div class="container px-2">
-
-    <div class="col-lg-8 col-md-10 mx-auto container-colored">
-
-        <div id="adoption-form-container">
-
-            {% if animal %}
-            <h2 class="text-center mt-3">{{ animal.nombre }} </h2>
-            <hr>
-            {% else %}
-            <div style="margin-top: 10px;"></div>
-            {% endif %}
-
-            {% if is_post %}
-                {% if not success %}
-                <div id="response-text-error" class="alert alert-danger" role="alert">
-                    <span id="response-text-error-message">{{errors}}</span>
-                </div>
-                {% endif %}
-            {% endif %}
-
-            <form id="adoption-form" class="needs-validation" action="{{post_url}}" method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-
-                <div class="text-center">
-                    <button id="send-form-button" class="btn btn-primary btn-rounded">Guardar <i class="fa fa-save"></i></button>
-                </div>
-                <br>
-
-                <div class="mb-3 mb-md-2">
-                    <input type="checkbox" id="ig-publicado-checkbox" onclick="$('#ig-pull-data-contatiner').slideToggle();">
-                    <a style="color: #007bff" onclick="$('#ig-pull-data-contatiner').slideToggle(); $('#ig-publicado-checkbox')[0].checked = !$('#ig-publicado-checkbox')[0].checked;">
-                        ¿Está publicado en Instagram?
-                    </a>
-                </div>
-
-                <div id="ig-pull-data-contatiner" class="mb-4" style="display: none;">
-                    <div class="alert alert-success">
-                        Si está publicado en Instagram podés copiar el link del post y automáticamente se completarán los datos y fotos del animal en adopción.
-                        Un link de ejemplo es: <a href="https://www.instagram.com/p/Cq6AYP9rCob/" target="_blank">https://www.instagram.com/p/Cq6AYP9rCob/</a>
-                    </div>
-
-                    <input type="hidden" name="chatgpt_response" id="chatgpt-response-input">
-
-                    <input name="ig_url_for_chatgpt" class="form-control form-input" id="ig-url-input" placeholder="Copiar aquí el link del post en Instagram">
-                    <div class="d-flex justify-content-center">
-                        <button type="button" class="mx-auto btn btn-primary mb-1 mt-2 btn-rounded" onclick="getDataFromIG(this, '{{animal.id}}'); return false;">
-                            Obtener datos desde Instagram <i class="fab fa-instagram"></i>
-                        </button>
-                    </div>
-                </div>
-
-                {% crispy animal_form %}
-
-                <div class="mt-4 mb-4" style="display: none;" id="images-container-div">
-                    <h3>Fotos de Instagram</h3>
-                    <div id="images-container" class="row">
-                    </div>
-                </div>
-
-                <div id="show-photos-button" class="text-center" {% if not animal or animal.animalimage_set.count == 0 %}style="display: none"{% endif %}>
-                    <a style="margin-top: 10px;" class="btn btn-primary fotos-btn" onclick="$('#form-set-container').slideDown(); $(this).hide()"> Ver Fotos ({{animal.animalimage_set.count}}) <i class="fa fa-camera"></i> </a>
-                <hr>
-                </div>
-
-                <div id="form-set-container" {% if animal and animal.animalimage_set.count > 0 %}style="display: none"{% endif %}>
-
-                    <div id="form-set" class="row">
-                    {{ images_form.management_form }}
-                    {% for form in images_form %}
-                        <div class="col-md-6">
-                        {% bootstrap_form form %}
-                        </div>
-                    {% endfor %}
-                    </div>
-                </div>
-
-                <div class="text-center">
-                    <a id="add_more" class="btn btn-primary fotos-btn"> Agregar Foto <i class="fa fa-plus-circle"></i> </a>
-                    </div>
-                    <hr>
-                    <div id="empty_form" style="display:none">
-                        <div class="col-md-12">
-                            <table class='no_error'>
-                                {% bootstrap_form images_form.empty_form %}
-                            </table>
-                        </div>
-                    </div>
-
-                {% buttons %}
-                <br>
-
-                <div class="text-center">
-                    <button id="send-form-button" style="border-radius: 15px;" class="btn btn-primary">Guardar <i class="fa fa-save"></i></button>
-                </div>
-                <br>
-                {% endbuttons %}
-            </form>
-        </div>
-
-        <hr>
-        <br>
-        <div class="text-center">
-            <a id="btn-volver" class="btn btn-primary btn-volver" href="/accounts/profile/">Volver <i class="fa fa-arrow-left"></i></a>
-        </div>
-        <br>
-        <br>
-   </div>
-</div>
-
-{% endblock %}
-
 {% block css %}
-<style type="text/css">
-    textarea {
-        height: 100px !important;
+{{ block.super }}
+<style>
+    .edit-animal-container {
+        background-color: var(--white);
+        border-radius: 15px;
+        box-shadow: var(--card-shadow);
+        padding: 30px;
+        margin-top: 20px;
+        margin-bottom: 30px;
+        transition: var(--transition);
     }
-    label {
-        display: block;
+
+    .edit-animal-container:hover {
+        box-shadow: var(--hover-shadow);
     }
-    .fotos-btn {
-        border-radius: 15px; padding: 10px; color: white !important;
-    }
-    #id_datos {
-        height: 300px !important;
-    }
-    .transito-field {
-        background: white;
-    }
-    fieldset legend {
-        font-size: 1rem;
+
+    .animal-title {
+        color: var(--primary-color);
+        font-weight: 600;
+        margin-bottom: 25px;
+        font-size: 1.8rem;
         text-align: center;
-        font-weight: bold;
-        width: auto;
-        padding-left: 10px;
-        padding-right: 10px;
+        position: relative;
     }
+
+    .animal-title::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: var(--gradient-primary);
+        border-radius: 3px;
+    }
+
+    .section-divider {
+        height: 1px;
+        background: linear-gradient(90deg, rgba(138, 43, 226, 0.1), rgba(138, 43, 226, 0.5), rgba(138, 43, 226, 0.1));
+        margin: 25px 0;
+    }
+
+    .form-control {
+        border: 2px solid rgba(138, 43, 226, 0.15);
+        border-radius: 10px;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        background-color: #fff;
+    }
+
+    .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+        outline: none;
+    }
+
+    label {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--text-color);
+        font-size: 0.95rem;
+    }
+
+    .btn-primary {
+        background: var(--gradient-primary);
+        border: none;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 500;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+    }
+
+    .ig-option {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 15px;
+        border-radius: 10px;
+        background-color: rgba(138, 43, 226, 0.05);
+        transition: var(--transition);
+    }
+
+    .ig-option:hover {
+        background-color: rgba(138, 43, 226, 0.08);
+    }
+
+    .ig-option-checkbox {
+        margin-right: 10px;
+        width: 18px;
+        height: 18px;
+    }
+
+    .ig-option-label {
+        color: var(--primary-color);
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .ig-form {
+        background-color: rgba(138, 43, 226, 0.05);
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        border: 1px solid rgba(138, 43, 226, 0.1);
+    }
+
+    .ig-alert {
+        background-color: rgba(40, 167, 69, 0.1);
+        border: 1px solid rgba(40, 167, 69, 0.2);
+        color: #155724;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .ig-button {
+        background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 50px;
+        font-weight: 500;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(131, 58, 180, 0.3);
+        margin-top: 10px;
+    }
+
+    .ig-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(131, 58, 180, 0.4);
+    }
+
+    .alert-danger {
+        background-color: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.2);
+        color: #721c24;
+        border-radius: 10px;
+        padding: 20px;
+    }
+
     fieldset {
-        border: 1px solid #c9c9c9;
-        padding-left: 10px;
-        padding-right: 10px;
-        padding-top: 10px;
-        margin-bottom: 10px;
+        border: 1px solid rgba(138, 43, 226, 0.15);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 25px;
+        background-color: rgba(138, 43, 226, 0.02);
     }
-    main {
-        margin-top: 8px !important;
-        margin-bottom: 8px !important;
+
+    fieldset legend {
+        font-size: 1.2rem;
+        font-weight: 600;
+        width: auto;
+        padding: 0 15px;
+        color: var(--primary-color);
+        background-color: white;
+        border-radius: 20px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+
+    .photo-container {
+        background-color: var(--white);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+        transition: var(--transition);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .photo-container:hover {
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        transform: translateY(-3px);
+    }
+
+    .add-photo-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .add-photo-btn i {
+        font-size: 1.2rem;
+    }
+
+    .show-photos-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .show-photos-btn i {
+        font-size: 1.2rem;
+    }
+
+    #id_datos {
+        min-height: 200px;
+    }
+
+    .error-message-name {
+        color: #dc3545;
+        font-size: 0.9rem;
+        margin-top: 5px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+
+    .error-message {
+        font-weight: 500;
+        margin-bottom: 5px;
+    }
+
+    .images-preview {
+        margin-top: 20px;
+    }
+
+    .image-preview-item {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        transition: var(--transition);
+    }
+
+    .image-preview-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+    }
+
+    .image-preview-item img {
+        width: 100%;
+        height: auto;
+        object-fit: cover;
+        border-radius: 10px 10px 0 0;
+    }
+
+    @media only screen and (max-width: 992px) {
+        .edit-animal-container {
+            padding: 20px 15px;
+        }
+
+        fieldset {
+            padding: 15px;
+        }
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, #6c757d, #495057);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 600;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-secondary:hover {
+        background: linear-gradient(135deg, #5a6268, #343a40);
+        color: white;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
     }
 </style>
 {% endblock %}
 
-{% block js %}
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-10 col-md-12 mx-auto edit-animal-container">
+            <div id="adoption-form-container">
+                {% if animal %}
+                <h2 class="animal-title">{{ animal.nombre }}</h2>
+                {% else %}
+                <h2 class="animal-title">Nuevo Animal</h2>
+                {% endif %}
 
+                {% if is_post and not success %}
+                <div id="response-text-error" class="alert alert-danger" role="alert">
+                    <span id="response-text-error-message">{{errors}}</span>
+                </div>
+                {% endif %}
+
+                <form id="adoption-form" class="needs-validation" action="{{post_url}}" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="text-center mb-4">
+                        <button id="send-form-button" class="btn btn-primary">
+                            <i class="fa fa-save mr-2"></i> Guardar Cambios
+                        </button>
+                    </div>
+
+                    <div class="section-divider"></div>
+
+                    <div class="ig-option">
+                        <input type="checkbox" id="ig-publicado-checkbox" class="ig-option-checkbox" onclick="$('#ig-pull-data-contatiner').slideToggle();">
+                        <span class="ig-option-label" onclick="$('#ig-pull-data-contatiner').slideToggle(); $('#ig-publicado-checkbox')[0].checked = !$('#ig-publicado-checkbox')[0].checked;">
+                            ¿Está publicado en Instagram?
+                        </span>
+                    </div>
+
+                    <div id="ig-pull-data-contatiner" class="ig-form" style="display: none;">
+                        <div class="ig-alert">
+                            Si está publicado en Instagram podés copiar el link del post y automáticamente se completarán los datos y fotos del animal en adopción.
+                            Un link de ejemplo es: <a href="https://www.instagram.com/p/Cq6AYP9rCob/" target="_blank">https://www.instagram.com/p/Cq6AYP9rCob/</a>
+                        </div>
+
+                        <input type="hidden" name="chatgpt_response" id="chatgpt-response-input">
+
+                        <div class="form-group">
+                            <input name="ig_url_for_chatgpt" class="form-control" id="ig-url-input" placeholder="Copiar aquí el link del post en Instagram">
+                        </div>
+
+                        <div class="text-center">
+                            <button type="button" class="ig-button" onclick="getDataFromIG(this, '{{animal.id}}'); return false;">
+                                <i class="fab fa-instagram mr-2"></i> Obtener datos desde Instagram
+                            </button>
+                        </div>
+                    </div>
+
+                    {% crispy animal_form %}
+
+                    <div class="mt-4 mb-4 images-preview" style="display: none;" id="images-container-div">
+                        <h3 class="animal-title">Fotos de Instagram</h3>
+                        <div id="images-container" class="row">
+                        </div>
+                    </div>
+
+                    <div id="show-photos-button" class="text-center" {% if not animal or animal.animalimage_set.count == 0 %}style="display: none"{% endif %}>
+                        <button type="button" class="btn btn-primary show-photos-btn" onclick="$('#form-set-container').slideDown(); $(this).hide()">
+                            <i class="fa fa-camera"></i> Ver Fotos ({{animal.animalimage_set.count}})
+                        </button>
+                        <div class="section-divider"></div>
+                    </div>
+
+                    <div id="form-set-container" {% if animal and animal.animalimage_set.count > 0 %}style="display: none"{% endif %}>
+                        <h3 class="animal-title">Fotografías</h3>
+                        <div id="form-set" class="row">
+                            {{ images_form.management_form }}
+                            {% for form in images_form %}
+                                <div class="col-md-6 photo-container">
+                                    {% bootstrap_form form %}
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="text-center">
+                            <button type="button" id="add_more" class="btn btn-primary add-photo-btn">
+                                <i class="fa fa-plus-circle"></i> Agregar Foto
+                            </button>
+                        </div>
+
+                        <div class="section-divider"></div>
+
+                        <div id="empty_form" style="display:none">
+                            <div class="col-md-12">
+                                <table class='no_error'>
+                                    {% bootstrap_form images_form.empty_form %}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4 mb-3">
+                        <button id="send-form-button-bottom" class="btn btn-primary btn-lg">
+                            <i class="fa fa-save mr-2"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="text-center mb-3">
+                <a id="btn-volver" class="btn btn-secondary" href="/accounts/profile/">
+                    <i class="fa fa-arrow-left mr-2"></i> Volver al Panel
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+{{ block.super }}
 <script src="https://cdn.tiny.cloud/1/84qalir3z1a9cnmgj78tz6n3p4gm0wlf9jvsgis1o8zw2wrk/tinymce/5/tinymce.min.js" referrerpolicy="origin"></script>
 
 <script>
-
     function enableForm(btn, oldHtml) {
-
         $(btn).attr('disabled', false);
         $(btn).html(oldHtml);
 
@@ -174,10 +414,9 @@
     }
 
     function disableForm(btn) {
-
         $(btn).attr('disabled', true);
         var oldHtml = $(btn).html();
-        $(btn).html('Cargando datos... <i class="fa fa-spinner fa-spin"></i>');
+        $(btn).html('<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span> Cargando datos...');
 
         $("#id_nombre").attr('disabled', true);
         $("#id_sexo").attr('disabled', true);
@@ -189,7 +428,6 @@
     }
 
     function getDataFromIG(btn, animalId) {
-
         var url = $("#ig-url-input").val();
         if (!url) {
             $.alert("Debe ingresar un link de Instagram");
@@ -199,7 +437,6 @@
         var oldHtml = disableForm(btn)
 
         $.get("/animal/pulldatafromig/", {"id": animalId, "url": url }, function(response) {
-
             enableForm(btn, oldHtml)
 
             //console.log(response["response"])
@@ -211,7 +448,7 @@
             if (response["images"].length > 0) {
                 $("#images-container-div").show();
                 for (var i=0; i < response["images"].length; i++) {
-                    imgContainer.append("<div class='col-md-6 mb-4'><img src='" + response["images"][i] + "' style='width: 100%;'><input name='instagram_image' type='hidden' value='" + response["images"][i] + "'></div>")
+                    imgContainer.append("<div class='col-md-6 image-preview-item'><img src='" + response["images"][i] + "' class='img-fluid'><input name='instagram_image' type='hidden' value='" + response["images"][i] + "'></div>")
                 }
             }
 
@@ -234,21 +471,17 @@
             if (!!response["Descripcion"]) {
                 tinyMCE.get('id_datos').setContent(response["Descripcion"])
             }
-
         }, 'json').fail(function() {
-
             $.alert("Error al obtener datos de Instagram");
             enableForm(btn, oldHtml)
         });
     }
 
     $(document).ready(function() {
-
         var forms = document.querySelectorAll('.needs-validation')
 
-            Array.prototype.slice.call(forms).forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-
+        Array.prototype.slice.call(forms).forEach(function (form) {
+            form.addEventListener('submit', function (event) {
                 if (!form.checkValidity()) {
                     event.preventDefault()
                     event.stopPropagation()
@@ -270,13 +503,11 @@
         });
 
         $("#id_nombre").change(function() {
-
             var name = $("#id_nombre").val();
             var data = {name: name, csrfmiddlewaretoken: "{{ csrf_token }}"}
             var that = this;
 
             $.post("/animal/validatename/", data, function(response) {
-
                 $(".error-message-name").remove();
 
                 if (!response.valid) {
@@ -290,12 +521,10 @@
                     $("#id_nombre").addClass("is-valid")
                     that.setCustomValidity('');
                 }
-
             }, 'json');
         });
 
         $('#add_more').click(function() {
-
             $("#form-set-container").show();
             $("#show-photos-button").hide();
 
@@ -304,7 +533,6 @@
             $('#id_animalimage_set-TOTAL_FORMS').val(parseInt(form_idx) + 1);
 
             $("#id_animalimage_set-" + form_idx + "-DELETE").click(function() {
-
                 updateRemoveAdded(this);
             });
 
@@ -315,19 +543,16 @@
 
         for (var i=0; i < $('#id_animalimage_set-TOTAL_FORMS').val(); i++) {
             $("#id_animalimage_set-" + i + "-DELETE").click(function() {
-
                 updateRemove(this);
             })
         }
 
         function updateRemoveAdded(el) {
-
             $(el).parent().parent().prev().remove();
             $(el).parent().parent().remove();
         }
 
         function updateRemove(el) {
-
             if ($(el)[0].checked) {
                 $.info("Por favor clickear en GUARDAR para confirmar eliminar la foto.");
             }

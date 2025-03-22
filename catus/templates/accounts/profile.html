@@ -2,144 +2,599 @@
 {% load crispy_forms_tags %}
 {% load i18n %}
 
+{% block css %}
+{{ block.super }}
+<style>
+    .dashboard-container {
+        background-color: var(--white);
+        border-radius: 15px;
+        box-shadow: var(--card-shadow);
+        padding: 20px;
+        margin-top: 20px;
+        margin-bottom: 30px;
+        transition: var(--transition);
+    }
+
+    .dashboard-container:hover {
+        box-shadow: var(--hover-shadow);
+    }
+
+    .dashboard-tabs {
+        border-bottom: none;
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 20px;
+    }
+
+    .dashboard-tabs .nav-item {
+        margin-right: 10px;
+    }
+
+    .dashboard-tabs .nav-link {
+        color: var(--text-color);
+        font-weight: 500;
+        padding: 10px 20px;
+        border-radius: 10px;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        border: 2px solid transparent;
+    }
+
+    .dashboard-tabs .nav-link:hover,
+    .dashboard-tabs .nav-link.active {
+        color: var(--primary-color);
+        background-color: rgba(138, 43, 226, 0.08);
+        border-color: rgba(138, 43, 226, 0.15);
+        transform: translateY(-2px);
+    }
+
+    .dashboard-tabs .nav-link i {
+        margin-right: 8px;
+        font-size: 1.1rem;
+    }
+
+    .logout-link {
+        margin-left: auto;
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #dc3545 !important;
+    }
+
+    .logout-link:hover {
+        background-color: rgba(220, 53, 69, 0.15) !important;
+        color: #dc3545 !important;
+    }
+
+    .dashboard-tab-content {
+        background-color: var(--white);
+        border-radius: 15px;
+        padding: 25px;
+        min-height: 400px;
+    }
+
+    .section-title {
+        color: var(--primary-color);
+        font-weight: 600;
+        margin-bottom: 20px;
+        font-size: 1.5rem;
+        text-align: center;
+        position: relative;
+    }
+
+    .section-title::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: var(--gradient-primary);
+        border-radius: 3px;
+    }
+
+    .btn-primary {
+        background: var(--gradient-primary);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 50px;
+        font-weight: 500;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, #8a2be2, #7020a0);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 50px;
+        font-weight: 600;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-secondary:hover {
+        background: linear-gradient(135deg, #9945e5, #8a2be2);
+        color: white;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-rounded {
+        border-radius: 50px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-rounded i {
+        margin-left: 8px;
+    }
+
+    .link-to-animals {
+        background-color: rgba(0, 201, 167, 0.1);
+        color: var(--secondary-color);
+    }
+
+    .link-to-animals:hover {
+        background-color: rgba(0, 201, 167, 0.2);
+        color: var(--secondary-dark);
+    }
+
+    .profile-table {
+        border-radius: 10px;
+        overflow: hidden;
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .profile-table thead th {
+        background-color: rgba(138, 43, 226, 0.08);
+        color: var(--primary-dark);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        padding: 15px;
+        border: none;
+    }
+
+    .profile-table td {
+        padding: 15px;
+        vertical-align: middle;
+        border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .profile-table tr:hover {
+        background-color: rgba(247, 250, 252, 0.5);
+    }
+
+    .badge {
+        padding: 6px 12px;
+        border-radius: 50px;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+
+    .badge-primary {
+        background-color: rgba(138, 43, 226, 0.1);
+        color: var(--primary-color);
+    }
+
+    .badge-secondary {
+        background-color: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+    }
+
+    .badge-success {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+
+    .badge-info {
+        background-color: rgba(23, 162, 184, 0.1);
+        color: #17a2b8;
+    }
+
+    .badge-warning {
+        background-color: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+
+    .badge-danger {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .table-action-link {
+        color: var(--primary-color);
+        text-decoration: none;
+        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        margin-right: 10px;
+    }
+
+    .table-action-link:hover {
+        color: var(--primary-dark);
+        transform: translateY(-2px);
+    }
+
+    .table-action-link i {
+        margin-right: 5px;
+        font-size: 0.9rem;
+    }
+
+    .img-container-banner, .img-container-logo {
+        cursor: pointer;
+        border-radius: 10px;
+        transition: var(--transition);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .img-container-banner:hover, .img-container-logo:hover {
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .img-container-banner::after, .img-container-logo::after {
+        content: '\f030';
+        font-family: 'Font Awesome 5 Free';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 1.5rem;
+        opacity: 0;
+        transition: var(--transition);
+        background-color: rgba(0, 0, 0, 0.5);
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .img-container-banner:hover::after, .img-container-logo:hover::after {
+        opacity: 1;
+    }
+
+    .img-container-banner {
+        height: 150px;
+        margin-bottom: 20px;
+    }
+
+    .img-container-banner img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 10px;
+    }
+
+    .img-container-logo {
+        width: 100px;
+        height: 100px;
+        margin-bottom: 20px;
+        border-radius: 50%;
+    }
+
+    .img-container-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+    }
+
+    .alert-info {
+        background-color: rgba(138, 43, 226, 0.1);
+        border: 1px solid rgba(138, 43, 226, 0.2);
+        color: var(--primary-dark);
+        border-radius: 10px;
+        padding: 20px;
+    }
+
+    .form-control {
+        border: 2px solid rgba(138, 43, 226, 0.15);
+        border-radius: 10px;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        background-color: #fff;
+    }
+
+    .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+        outline: none;
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+
+    .form-control.is-valid {
+        border-color: #28a745;
+    }
+
+    .small-text {
+        font-size: 0.85rem;
+        color: var(--text-light);
+    }
+
+    @media only screen and (max-width: 992px) {
+        .dashboard-tabs {
+            flex-wrap: wrap;
+        }
+
+        .dashboard-tabs .nav-item {
+            margin-bottom: 10px;
+        }
+
+        .logout-link {
+            margin-left: 0;
+        }
+
+        .limited-td {
+            max-width: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    /* Estilos para los botones de acción */
+    .action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background-color: #f5f5f7;
+        color: #5d5d67;
+        transition: var(--transition);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+        background-color: white;
+    }
+
+    .action-btn i {
+        font-size: 1rem;
+    }
+
+    /* Estilos específicos para cada tipo de botón con colores sutiles */
+    .action-btn:nth-child(1) {
+        background-color: rgba(138, 43, 226, 0.08);
+        color: var(--primary-color);
+    }
+
+    .action-btn:nth-child(1):hover {
+        background-color: rgba(138, 43, 226, 0.15);
+        color: var(--primary-dark);
+    }
+
+    .action-btn:nth-child(2) {
+        background-color: rgba(0, 168, 139, 0.08);
+        color: #00a88b;
+    }
+
+    .action-btn:nth-child(2):hover {
+        background-color: rgba(0, 168, 139, 0.15);
+        color: #007d68;
+    }
+
+    .action-btn:nth-child(3) {
+        background-color: rgba(255, 193, 7, 0.08);
+        color: #ffc107;
+    }
+
+    .action-btn:nth-child(3):hover {
+        background-color: rgba(255, 193, 7, 0.15);
+        color: #e0a800;
+    }
+
+    .action-btn:nth-child(4) {
+        background-color: rgba(255, 126, 95, 0.08);
+        color: #ff7e5f;
+    }
+
+    .action-btn:nth-child(4):hover {
+        background-color: rgba(255, 126, 95, 0.15);
+        color: #ff5c33;
+    }
+
+    /* Tippy personalización */
+    .tippy-box {
+        border-radius: 8px;
+        font-weight: 500;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        background-color: rgba(40, 45, 50, 0.96);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .tippy-arrow {
+        color: rgba(40, 45, 50, 0.96);
+    }
+
+    /* Tema success para Tippy */
+    .tippy-box[data-theme='success'] {
+        background-color: rgba(40, 167, 69, 0.95);
+        color: white;
+        font-weight: 600;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .tippy-box[data-theme='success'] .tippy-arrow {
+        color: rgba(40, 167, 69, 0.95);
+    }
+
+    /* Estilo para filas clickables */
+    .clickable-row {
+        transition: all 0.2s ease;
+    }
+
+    .clickable-row:hover {
+        background-color: rgba(138, 43, 226, 0.05) !important;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 
-<div class="container px-2 my-1">
+<div class="container dashboard-container">
 
-    <ul class="nav nav-tabs" id="profile-tabs" role="tablist">
-
+    <ul class="nav nav-tabs dashboard-tabs" id="profile-tabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <a id="animales-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#animales-tab"><i class="fa fa-cat"></i> Animales </a>
+            <a id="animales-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#animales-tab"><i class="fa fa-cat"></i> Animales</a>
         </li>
 
         <li class="nav-item" role="presentation">
-            <a id="profile-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#profile-tab"><i class="fa fa-user"></i> Perfil </a>
+            <a id="profile-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#profile-tab"><i class="fa fa-user"></i> Perfil</a>
         </li>
 
         <li class="nav-item" role="presentation">
-            <a id="forms-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#forms-tab"><i class="fa fa-file"></i> Forms </a>
+            <a id="forms-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#forms-tab"><i class="fa fa-file"></i> Formularios</a>
         </li>
 
-        <li class="nav-item ml-auto" role="presentation">
-            <a onclick="logout()" class="nav-link a-link" data-toggle="tab"><i class="fas fa-sign-out-alt"></i></a>
+        <li class="nav-item" role="presentation">
+            <a onclick="logout()" class="nav-link a-link logout-link" data-toggle="tab"><i class="fas fa-sign-out-alt"></i> Salir</a>
         </li>
     </ul>
 
-    <div class="tab-content container-colored container-colored-no-rounded-top" id="profile-tabs-content">
+    <div class="tab-content dashboard-tab-content" id="profile-tabs-content">
 
         <div class="tab-pane active" id="animales-tab" role="tabpanel">
+            <div class="py-3">
+                {% if is_new_animal %}
+                    <div id="response-text" class="alert alert-success" role="alert">
+                        <div class="text-center">¡Guardado correctamente! Estamos revisando la publicación y si está todo bien aparecerá en el sitio web a la brevedad.</div>
+                    </div>
+                {% elif is_new_animal_approved %}
+                    <div id="response-text" class="alert alert-success" role="alert">
+                        <div class="text-center">¡Guardado correctamente! ¡Ya fue aprobado y aparece en el sitio web!</div>
+                    </div>
+                {% elif success %}
+                    <div id="response-text" class="alert alert-success" role="alert">
+                        <div class="text-center">¡Guardado correctamente!</div>
+                    </div>
+                {% endif %}
 
-            <div class="py-3 my-1">
-
-            {% if is_new_animal %}
-                <div id="response-text" class="alert alert-success" role="alert">
-                    <div class="text-center">¡Guardado correctamente! Estamos revisando la publicación y si está todo bien aparecerá en el sitio web a la brevedad. </div>
+                <div class="mb-4 text-md-left text-center">
+                    <a href="/animales/" class="btn btn-primary btn-rounded mb-2 mb-md-0">
+                        <i class="fa fa-plus-circle mr-2"></i> Cargar Animal
+                    </a>
+                    <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded link-to-animals">
+                        <i class="fas fa-external-link-alt mr-2"></i> Link a mis Animales
+                    </a>
                 </div>
-            {% elif is_new_animal_approved %}
-                <div id="response-text" class="alert alert-success" role="alert">
-                    <div class="text-center">¡Guardado correctamente! ¡Ya fue aprobado y aparece en el sitio web! </div>
+
+                {% if page == "adopcion" %}
+                <div id="response-text" class="alert alert-info" role="alert">
+                    <b>Importante</b>: Cuando cargues un animal lo revisaremos para comprobar que este todo bien con la publicación.
                 </div>
-            {% elif success %}
-                <div id="response-text" class="alert alert-success" role="alert">
-                    <div class="text-center">¡Guardado correctamente! </div>
+                {% endif %}
+
+                {% if animals %}
+                <table id="forms-table" class="table profile-table">
+                    <thead>
+                        <th>Nombre</th>
+                        <th>Estado</th>
+                        <th>Publicado</th>
+                        <th>Acciones</th>
+                    </thead>
+
+                    <tbody>
+                        {% for animal in animals %}
+                        <tr class="clickable-row" data-href="/animales/{{animal.id}}/" style="cursor: pointer;">
+                            <td>
+                                <div class="limited-td">
+                                    <a class="table-action-link" href="/animales/{{animal.id}}/">{{animal.nombre}}</a>
+                                </div>
+                            </td>
+                            <td>
+                                <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">
+                                    {{animal.get_estado_display}}
+                                </span>
+                                <span id="publicado-expired-text-{{animal.id}}" class="small-text">
+                                {% if animal.estado == "E" %}
+                                    (Publicado hace más de 30 días)
+                                {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En Revisión{% else %}Publicado{% endif %}</span>
+                            </td>
+
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="/animales/{{animal.id}}/" class="action-btn" data-tippy-content="Editar">
+                                        <i class="fa fa-edit"></i>
+                                    </a>
+
+                                    <a onclick="copyTextToClipboard('{{settings.SSL_HOST}}{{animal.get_adoption_url}}')" class="action-btn" data-tippy-content="Copiar Link">
+                                        <i class="fa fa-copy"></i>
+                                    </a>
+
+                                    {% if animal.estado == "E" %}
+                                    <a id="update-estado-animal-expirado-{{animal.id}}" onclick="marcarEnAdopcion('{{animal.id}}')" class="action-btn" data-tippy-content="Re-Publicar">
+                                        <i class="fa fa-sync"></i>
+                                    </a>
+                                    {% endif %}
+
+                                    {% if animal.estado != "A" %}
+                                    <a id="update-estado-animal-adoptado-{{animal.id}}" onclick="marcarAdoptado('{{animal.id}}')" class="action-btn" data-tippy-content="Marcar como adoptado">
+                                        <i class="fa fa-paw"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="alert alert-info">
+                    <div class="text-center">No tienes animales cargados todavía. Haz clic en "Cargar Animal" para comenzar.</div>
                 </div>
-            {% endif %}
-
-            <div class="mb-3 text-md-left text-center">
-                <a href="/animales/" class="btn btn-primary btn-rounded mb-2 mb-md-0">
-                    Cargar Animal <i class="fa fa-cat"></i>
-                </a>
-                <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-rounded link-to-animals">
-                    Link a mis Animales <i class="fas fa-external-link-alt"></i>
-                </a>
+                {% endif %}
             </div>
-
-            {% if page == "adopcion" %}
-            <div id="response-text" class="alert alert-info" role="alert">
-                <b>Importante</b>: Cuando cargues un animal lo revisaremos para comprobar que este todo bien con la publicación.
-            </div>
-            {% endif %}
-
-            {% if animals %}
-            <table id="forms-table" class="table table-striped table-bordered table-hover">
-                <thead>
-                    <th>Nombre</th>
-                    <th>Estado</th>
-                    <th>Publicado</th>
-                    <th>Acciones</th>
-                </thead>
-
-                <tbody>
-                    {% for animal in animals %}
-                    <tr>
-                        <td>
-                            <div class="limited-td">
-                                <a class="a-blue" href="/animales/{{animal.id}}/">{{animal.nombre}}</a>
-                            </div>
-                        </td>
-                        <td>
-                            <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">
-                                {{animal.get_estado_display}}
-                            </span>
-                            <span id="publicado-expired-text-{{animal.id}}" class="small-text">
-                            {% if animal.estado == "E" %}
-                                (Publicado hace más de 30 días)
-                            {% endif %}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En Revisión{% else %}Publicado{% endif %}</span>
-                        </td>
-
-                        <td>
-                            <div class="mb-2">
-                                <a href="/animales/{{animal.id}}/"><i class="fa fa-edit"></i> Editar</a>
-                            </div>
-                            <div class="mb-2">
-                                <i class="fa fa-copy"></i>
-                                <a onclick="copyTextToClipboard('{{settings.SSL_HOST}}{{animal.get_adoption_url}}')">
-                                    Link
-                                </a>
-                            </div>
-
-                            {% if animal.estado == "E" %}
-                            <div id="update-estado-animal-expirado-{{animal.id}}" class="mb-2">
-                                <i class="fa fa-sync"></i>
-                                <a onclick="marcarEnAdopcion('{{animal.id}}')">Re-Publicar</a>
-                            </div>
-                            {% endif %}
-
-                            {% if animal.estado != "A" %}
-                            <div id="update-estado-animal-adoptado-{{animal.id}}">
-                                <i class="fa fa-paw"></i>
-                                <a onclick="marcarAdoptado('{{animal.id}}')">Marcar como adoptado</a>
-                            </div>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% endif %}
-            </div>
-
         </div>
 
-        <div class="tab-pane container" id="profile-tab" role="tabpanel">
-
+        <div class="tab-pane" id="profile-tab" role="tabpanel">
             <form id="profile-form" class="form" action="" method="post" enctype='multipart/form-data'>
                 {% csrf_token %}
 
-                <div class="row my-1 p-1">
-
-                    <div class="p-1 col-md my-1 p-md-3 border-bottom-mobile">
-                        <h3 class="text-center text-primary">Datos del Perfil</h3>
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <h3 class="section-title">Datos del Perfil</h3>
 
                         <div id="div_id_banner_img" class="form-group">
-
-                            <label for="id_banner_img" class="">
-                                Banner
-                            </label>
+                            <label for="id_banner_img" class="">Banner</label>
 
                             <div id="img-container-banner" class="img-container-banner">
                                 <img src="/{{form.banner_img.value}}">
@@ -150,14 +605,10 @@
                             </div>
                         </div>
 
+                        <div id="div_id_logo_img" class="form-group">
+                            <label for="id_logo_img" class="">Logo</label>
 
-                        <div id="div_id_banner_img" class="form-group">
-
-                            <label for="id_banner_img" class="">
-                                Logo
-                            </label>
-
-                            <div id="img-container-logo" class="img-container-logo">
+                            <div id="img-container-logo" class="img-container-logo mx-auto">
                                 <img src="/{{form.logo_img.value}}" class="profile-logo-img">
                             </div>
 
@@ -169,82 +620,72 @@
                         {{ form.title|as_crispy_field }}
 
                         <div id="div_id_handle" class="form-group">
-
-                            <label for="id_handle" class=" requiredField">
+                            <label for="id_handle" class="requiredField">
                                 {{form.handle.label}}
                             </label>
 
                             <div>
+                                <input type="text" name="handle" maxlength="150" class="textinput textInput form-control" required="" id="id_handle" value="{{form.handle.value|default_if_none:''}}">
 
-                            <input type="text" name="handle" maxlength="150" class="textinput textInput form-control" required="" id="id_handle" value="{{form.handle.value|default_if_none:''}}">
+                                <small id="hint_id_handle" class="form-text text-muted">{% trans "Tu usuario de catpuccino adopciones." %} {{settings.SSL_HOST}}/<span id="hint_id_handle_user_part"></span></small>
 
-                            <small id="hint_id_handle" class="form-text text-muted">{% trans "Tu usuario de catpuccino adopciones." %} {{settings.SSL_HOST}}/<span id="hint_id_handle_user_part"></span></small>
+                                <p id="error_1_id_handle" class="invalid-feedback" style="display: none">
+                                    <strong>{% trans "Ya existe un usuario con ese nombre." %}</strong>
+                                </p>
 
-                            <p id="error_1_id_handle" class="invalid-feedback" style="display: none">
-                                <strong>{% trans "Ya existe un usuario con ese nombre." %}</strong>
-                            </p>
-
-                            <p id="error_2_id_handle" class="invalid-feedback" style="display: none">
-                                <strong>{% trans "Por favor usá solamente caracteres alfanuméricos sin espacios." %}</strong>
-                            </p>
-
-                        </div>
-
+                                <p id="error_2_id_handle" class="invalid-feedback" style="display: none">
+                                    <strong>{% trans "Por favor usá solamente caracteres alfanuméricos sin espacios." %}</strong>
+                                </p>
+                            </div>
                         </div>
 
                         {{ form.description|as_crispy_field }}
 
-                        <div class="form-group text-md-left text-center">
-                        <button id="btn-save" type="submit" name="submit" class="btn btn-primary btn-rounded btn-md">
-                            <i class="fa fa-save"></i> Guardar
-                        </button>
-                        <button id="btn-save-loading" class="btn btn-primary btn-rounded btn-md hidden" type="button" disabled>
-                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            Guardando...
-                        </button>
+                        <div class="form-group text-center">
+                            <button id="btn-save" type="submit" name="submit" class="btn btn-primary btn-rounded">
+                                <i class="fa fa-save mr-2"></i> Guardar
+                            </button>
+                            <button id="btn-save-loading" class="btn btn-primary btn-rounded d-none" type="button" disabled>
+                                <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                                Guardando...
+                            </button>
 
-                        <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded btn-md link-to-animals"> <i class="fas fa-external-link-alt"></i> Ir a Mi perfil</a>
-
+                            <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded link-to-animals">
+                                <i class="fas fa-external-link-alt mr-2"></i> Ir a Mi perfil
+                            </a>
                         </div>
-
                     </div>
 
-                    <div class="p-1 col-md my-1 p-md-3">
-                        <h3 class="text-center text-primary">Redes Sociales</h3>
+                    <div class="col-md-6 mb-4">
+                        <h3 class="section-title">Redes Sociales</h3>
 
                         {{ form.instagram|as_crispy_field }}
                         {{ form.facebook|as_crispy_field }}
                         {{ form.twitter|as_crispy_field }}
+                        {{ form.email|as_crispy_field }}
 
-                        {{form.email|as_crispy_field}}
-
-                        <div class="form-group mb-2 text-md-left text-center">
-                        <button id="btn-social-save" type="submit" name="submit" class="btn btn-primary btn-rounded btn-md"> <i class="fa fa-save"></i> Guardar</button>
-
-                        <button id="btn-social-save-loading" class="btn btn-primary btn-rounded hidden" type="button" disabled>
-                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            Guardando...
-                        </button>
+                        <div class="form-group text-center">
+                            <button id="btn-social-save" type="submit" name="submit" class="btn btn-primary btn-rounded">
+                                <i class="fa fa-save mr-2"></i> Guardar
+                            </button>
+                            <button id="btn-social-save-loading" class="btn btn-primary btn-rounded d-none" type="button" disabled>
+                                <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                                Guardando...
+                            </button>
                         </div>
-
                     </div>
-
                 </div>
-
             </form>
-
         </div>
 
         <div class="tab-pane" id="forms-tab" role="tabpanel">
-
-            <div class="py-3 my-1">
-
+            <div class="py-3">
                 {% if estado_forms %}
-                <table id="forms-table" class="table table-striped table-bordered table-hover">
+                <h3 class="section-title">Formularios de Pre-adopción</h3>
+                <table id="forms-table" class="table profile-table">
                     <thead>
                         <th>Candidato</th>
                         <th>Animal</th>
-
                         <th>Acciones</th>
                     </thead>
 
@@ -253,7 +694,7 @@
                         <tr>
                             <td>
                                 <div class="limited-td">
-                                    <a class="a-blue" target="_blank" href="/formularios/{{estado_form.hash}}/">{{estado_form.persona_nombre}}</a>
+                                    <a class="table-action-link" target="_blank" href="/formularios/{{estado_form.hash}}/">{{estado_form.persona_nombre}}</a>
                                 </div>
                             </td>
                             <td>
@@ -263,69 +704,44 @@
                             </td>
 
                             <td>
-                                <a target="_blank" href="/formularios/{{estado_form.hash}}/"><i class="fa fa-eye"></i> Ver</a>
-                                <hr class="hr-divider">
-                                <a target="_blank" href="/formulario/{{estado_form.id}}/contrato/"><i class="fa fa-id-badge"></i> Contrato de Adopción</a>
+                                <a target="_blank" href="/formularios/{{estado_form.hash}}/" class="table-action-link">
+                                    <i class="fa fa-eye"></i> Ver
+                                </a>
+                                <a target="_blank" href="/formulario/{{estado_form.id}}/contrato/" class="table-action-link">
+                                    <i class="fa fa-id-badge"></i> Contrato de Adopción
+                                </a>
                             </td>
-
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
                 {% else %}
-                <div class="alert alert-info no-wrap">
-                    <div class="mb-3">Todavía no hay formularios. No te preocupes, pronto llegarán!</div>
-                    <div>Recordá que podés compartir tu link en redes sociales:
-                        <a class="link-to-animals" target="_blank" href="{{SSL_HOST}}{{request.user.get_handle_url}}">{{SSL_HOST}}{{request.user.get_handle_url}}</a>
+                <div class="alert alert-info">
+                    <div class="mb-3 text-center">Todavía no hay formularios. No te preocupes, pronto llegarán!</div>
+                    <div class="text-center">Recordá que podés compartir tu link en redes sociales:
+                        <a class="table-action-link" target="_blank" href="{{SSL_HOST}}{{request.user.get_handle_url}}">{{SSL_HOST}}{{request.user.get_handle_url}}</a>
                     </div>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
-
 </div>
 
-{% endblock %}
-
-{% block css %}
-<style>
-    .swal2-shown { display:flex; height:100vh; width: 100vw; }
-    .hidden {
-        display: none;
-    }
-    @media only screen and (max-width: 992px) {
-        main {
-            margin-top: 20px !important;
-            margin-bottom: 20px !important;
-        }
-        .limited-td {
-            max-width: 80px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        #profile-tabs .nav-link {
-            padding: 0.5rem 0.5rem !important;
-        }
-        #forms-table td {
-            padding-top: 8px !important;
-            padding-bottom: 8px !important;
-        }
-    }
-</style>
 {% endblock %}
 
 {% block js %}
 {{ block.super }}
 <script src="https://cdn.tiny.cloud/1/84qalir3z1a9cnmgj78tz6n3p4gm0wlf9jvsgis1o8zw2wrk/tinymce/5/tinymce.min.js" referrerpolicy="origin"></script>
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
+<!-- Agregar la librería Tippy.js -->
+<script src="https://unpkg.com/@popperjs/core@2"></script>
+<script src="https://unpkg.com/tippy.js@6"></script>
 
 <script type="text/javascript">
 $(document).ready(function () {
 
     function updateTabState() {
-
         if (!location.hash) {
             var tab = "#animales";
         } else {
@@ -359,7 +775,6 @@ $(document).ready(function () {
         $("#id_logo_img").click();
     })
 
-
     checkUserName();
     $("#id_handle").trigger("keyup");
 
@@ -374,35 +789,47 @@ $(document).ready(function () {
         toolbar: 'undo redo | bold italic underline strikethrough | forecolor fontselect fontsizeselect formatselect | alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist |  backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons',
     });
 
+    // Inicializar tooltips con Tippy.js
+    tippy('[data-tippy-content]', {
+        placement: 'top',
+        animation: 'scale',
+        duration: [200, 100],
+        arrow: true,
+        theme: 'custom'
+    });
+
+    // Hacer que las filas sean clickables
+    $(".clickable-row").click(function(e) {
+        // Solo navegar si el clic no fue en un botón o enlace
+        if (!$(e.target).closest('a, button').length) {
+            window.location = $(this).data("href");
+        }
+    });
+
 });
 
 function showTab(tabName) {
-
     var el = $(tabName + '-tab-link').tab('show');
-
     location.hash = tabName;
 }
 
 function showLoadingBtn() {
+    $("#btn-save").addClass('d-none');
+    $("#btn-save-loading").removeClass('d-none').addClass('d-inline-block');
 
-    $("#btn-save").hide();
-    $("#btn-save-loading").css('display','inline-block');
-
-    $("#btn-social-save").hide();
-    $("#btn-social-save-loading").show();
+    $("#btn-social-save").addClass('d-none');
+    $("#btn-social-save-loading").removeClass('d-none').addClass('d-inline-block');
 }
 
 function hideLoadingBtn() {
+    $("#btn-save-loading").addClass('d-none').removeClass('d-inline-block');
+    $("#btn-save").removeClass('d-none');
 
-    $("#btn-save-loading").hide();
-    $("#btn-save").show();
-
-    $("#btn-social-save").show();
-    $("#btn-social-save-loading").hide();
+    $("#btn-social-save-loading").addClass('d-none').removeClass('d-inline-block');
+    $("#btn-social-save").removeClass('d-none');
 }
 
 function saveProfile(form) {
-
     showLoadingBtn();
 
     var data = new FormData(form);
@@ -416,14 +843,11 @@ function saveProfile(form) {
         cache: false,
         processData: false,
         success: function(response) {
-
             hideLoadingBtn();
 
             var response = JSON.parse(response);
             if (response.status == "failure") {
-
                 for (var error in response.errors) {
-
                     $.alert(response.errors[error][0]);
                 }
                 return;
@@ -437,7 +861,6 @@ function saveProfile(form) {
             $.info("¡Actualizado correctamente!");
         },
         error: function(xhr, ajaxOptions, thrownError) {
-
             $.alert("Ocurrió un error: " + xhr.responseText);
             hideLoadingBtn();
         }
@@ -447,47 +870,40 @@ function saveProfile(form) {
 }
 
 function checkUserName() {
-
     $("#id_handle").on("keyup", function(input) {
+        var handle = $("#id_handle").val();
+        if (!handle) {
+            return
+        }
 
-    var handle = $("#id_handle").val();
-    if (!handle) {
-        return
-    }
-
-    var regex = new RegExp("^[0-9a-zA-Z_]+$");
-    if (!regex.test(handle)) {
-        $("#error_2_id_handle").show();
-        $("#id_handle").addClass("is-invalid");
-        return;
-    } else {
-        $("#error_2_id_handle").hide();
-        $("#id_handle").removeClass("is-invalid");
-    }
-
-    $("#hint_id_handle_user_part").text(handle);
-
-    $.post("/accounts/checkhandle/", {"handle": handle, "csrfmiddlewaretoken": "{{csrf_token}}"}, function(response) {
-
-        if (response.status != "success") {
-
-            if (response.error == "handle") {
-                $("#error_1_id_handle").show();
-            } else if (response.error == "chars") {
-                $("#error_2_id_handle").show();
-            }
-
-        $("#id_handle").addClass("is-invalid");
-
+        var regex = new RegExp("^[0-9a-zA-Z_]+$");
+        if (!regex.test(handle)) {
+            $("#error_2_id_handle").show();
+            $("#id_handle").addClass("is-invalid");
+            return;
         } else {
-
-            $("#error_1_id_handle").hide();
             $("#error_2_id_handle").hide();
             $("#id_handle").removeClass("is-invalid");
-            $("#id_handle").addClass("is-valid");
-
         }
-    }, 'json')
+
+        $("#hint_id_handle_user_part").text(handle);
+
+        $.post("/accounts/checkhandle/", {"handle": handle, "csrfmiddlewaretoken": "{{csrf_token}}"}, function(response) {
+            if (response.status != "success") {
+                if (response.error == "handle") {
+                    $("#error_1_id_handle").show();
+                } else if (response.error == "chars") {
+                    $("#error_2_id_handle").show();
+                }
+
+                $("#id_handle").addClass("is-invalid");
+            } else {
+                $("#error_1_id_handle").hide();
+                $("#error_2_id_handle").hide();
+                $("#id_handle").removeClass("is-invalid");
+                $("#id_handle").addClass("is-valid");
+            }
+        }, 'json')
     });
 }
 
@@ -510,7 +926,6 @@ function debounce(func) {
 }
 
 function logout() {
-
     Swal.fire({
         title: '¿Estás seguro que deseas salir?',
         text: "",
@@ -528,9 +943,7 @@ function logout() {
 }
 
 function updateAnimal(animalId, options) {
-
     $.post(options.url, {animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, function(response) {
-
         $.info("¡" + response.nombre + options.successMessage)
         $("#" + options.removeUpdateAnimalId + animalId).remove();
         $("#publicado-expired-text-" + animalId).hide()
@@ -540,12 +953,10 @@ function updateAnimal(animalId, options) {
         estadoAdopcion.removeClass()
         estadoAdopcion.addClass("badge-" + options.badge)
         estadoAdopcion.addClass("badge")
-
     }, 'json')
 }
 
 function marcarAdoptado(animalId) {
-
     updateAnimal(animalId, {
         url: "/animal/marcaradoptado/",
         badge: "info",
@@ -556,7 +967,6 @@ function marcarAdoptado(animalId) {
 }
 
 function marcarEnAdopcion(animalId) {
-
     updateAnimal(animalId, {
         url: "/animal/marcarenadopcion/",
         badge: "success",
@@ -566,9 +976,41 @@ function marcarEnAdopcion(animalId) {
     })
 }
 
+function copyTextToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Usar Tippy.js para mostrar un mensaje de éxito
+        tippy.hideAll(); // Ocultar cualquier tooltip visible
+
+        // Crear un tooltip temporal para mostrar el mensaje
+        const tempTippy = tippy(document.createElement('div'), {
+            content: '¡Link copiado al portapapeles!',
+            placement: 'top',
+            theme: 'success',
+            showOnCreate: true,
+            onShow(instance) {
+                setTimeout(() => {
+                    instance.hide();
+                }, 2000);
+            },
+            onHidden(instance) {
+                instance.destroy();
+            }
+        });
+
+        // Posicionar en el centro de la pantalla
+        tempTippy[0].setProps({
+            getReferenceClientRect: () => ({
+                width: 0,
+                height: 0,
+                top: window.innerHeight / 2,
+                left: window.innerWidth / 2,
+                right: window.innerWidth / 2,
+                bottom: window.innerHeight / 2
+            })
+        });
+    }, function(err) {
+        console.error('No se pudo copiar el texto: ', err);
+    });
+}
 </script>
-
-<!--<script type="text/javascript" src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js" ></script>
-<script type="text/javascript" src="https://cdn.datatables.net/1.10.20/js/dataTables.bootstrap4.min.js"></script>-->
-
 {% endblock %}

@@ -31,7 +31,7 @@ footer {
 
 main {
   margin-top: 50px;
-  margin-bottom: 50px;
+  margin-bottom: 0px;
 }
 
 p {
@@ -240,10 +240,8 @@ img::-moz-selection {
 }
 
 header.masthead {
-  background: no-repeat center center;
   position: relative;
   background-attachment: scroll;
-  background-size: cover;
 }
 
 .navbar {
@@ -291,7 +289,7 @@ header.masthead .overlay {
   left: 0;
   height: 100%;
   width: 100%;
-  background-color: #292128;
+  background-color: #212529;
   opacity: 0.5;
 }
 
@@ -560,8 +558,6 @@ footer .foot {
 }
 
 .post-data {
-  margin-top: 15px !important;
-  margin-bottom: 15px !important;
   text-align: left;
 }
 

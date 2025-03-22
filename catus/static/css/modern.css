@@ -297,9 +297,7 @@ body {
 .masthead {
   background-image: url('/static/banner_bg.jpeg') !important;
   background-attachment: fixed !important;
-  background-position: center !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
+
   position: relative;
 }
 
@@ -310,7 +308,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.8), rgba(78, 205, 196, 0.7));
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.92), rgba(110, 40, 180, 0.9));
   z-index: 1;
 }
 
@@ -538,146 +536,22 @@ body {
 }
 
 .carousel-image {
-  position: relative;
+  height: 380px;
   overflow: hidden;
-  border-radius: 10px;
-  margin-bottom: 15px;
-  background: transparent !important;
+  position: relative;
 }
 
-.carousel-image::before,
-.carousel-image::after {
-  content: none !important;
-  display: none !important;
-}
-
-.carousel-image img.post-image {
-  display: block;
+.post-image {
   width: 100%;
-  height: 300px;
+  height: 100%;
   object-fit: cover;
-  transition: transform 0.5s ease;
-  filter: none !important;
-  -webkit-filter: none !important;
-  box-shadow: none !important;
+  transition: transform 0.8s ease, filter 0.5s ease;
+  filter: brightness(1.05) contrast(1.08);
 }
 
 .post-preview:hover .post-image {
   transform: scale(1.05);
-  filter: none !important;
-  -webkit-filter: none !important;
-}
-
-.post-data {
-  padding: 15px;
-  background: white !important;
-  background-image: none !important;
-  border-top: none !important;
-  box-shadow: none !important;
-}
-
-/* Eliminar completamente cualquier efecto tras hover */
-.post-preview::before,
-.post-preview::after,
-.post-preview *::before,
-.post-preview *::after {
-  content: none !important;
-  display: none !important;
-  background-image: none !important;
-  background: none !important;
-  filter: none !important;
-  opacity: 0 !important;
-}
-
-/* Asegurarse de que no hay gradientes */
-.animalCarrousel,
-.carousel-inner,
-.carousel-item,
-.carousel-image,
-.post-image,
-.post-data,
-.post-title-bar,
-.post-subtitle {
-  background-image: none !important;
-  background: transparent !important;
-}
-
-/* Reiniciar todos los estilos potencialmente problemáticos */
-.carousel-image img.post-image,
-.carousel-image img {
-  filter: none !important;
-  -webkit-filter: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  mix-blend-mode: normal !important;
-  mask-image: none !important;
-}
-
-/* Remover cualquier overlay o gradiente en hover */
-.post-preview:hover .carousel-image::after,
-.post-preview:hover .carousel-image::before,
-.post-preview:hover .carousel-inner::after,
-.post-preview:hover .carousel-inner::before,
-.post-preview:hover .carousel-item::after,
-.post-preview:hover .carousel-item::before,
-.post-preview:hover .post-image::after,
-.post-preview:hover .post-image::before {
-  content: none !important;
-  display: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  background: none !important;
-  background-image: none !important;
-}
-
-.post-title-bar,
-.post-data,
-.post-preview:hover .post-data,
-.post-preview:hover .post-title-bar {
-  background: white !important;
-  background-image: none !important;
-  background-color: white !important;
-  filter: none !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-/* Asegurarse de que no hay ningún pseudo-elemento creando el efecto brillante */
-.carousel-image::after,
-.carousel-image::before,
-.post-image::after,
-.post-image::before,
-.post-preview::after,
-.post-preview::before,
-.post-data::after,
-.post-data::before,
-.post-preview:hover::after,
-.post-preview:hover::before {
-  display: none !important;
-  content: none !important;
-  background: none !important;
-  filter: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-}
-
-/* También añadir esta regla para cualquier elemento interno */
-.carousel-image *::after,
-.carousel-image *::before,
-.post-image *::after,
-.post-image *::before,
-.post-preview *::after,
-.post-preview *::before,
-.post-data *::after,
-.post-data *::before {
-  display: none !important;
-  content: none !important;
-  background: none !important;
-  filter: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
+  filter: brightness(1.08) contrast(1.1);
 }
 
 .post-data {
@@ -685,18 +559,14 @@ body {
   flex-grow: 1;
   position: relative;
   z-index: 2;
-  background: white !important;
 }
 
 .post-title-bar {
-  margin-top: 0 !important;
-  background-color: white !important;
-  background-image: none !important;
-  background: none !important;
+  margin-top: -40px;
+  background: linear-gradient(0deg, white, white 70%, transparent);
+  border-radius: 25px 25px 0 0;
   position: relative;
   padding-top: 10px;
-  border-top: none !important;
-  box-shadow: none !important;
 }
 
 .info-grid {
@@ -750,6 +620,18 @@ body {
   box-shadow: 0 8px 20px rgba(138, 43, 226, 0.3);
 }
 
+.carousel-image::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 70%, rgba(255,255,255,0.8) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* Estilos responsive */
 @media (max-width: 768px) {
   .site-heading h1 {
@@ -765,7 +647,7 @@ body {
   }
 
   .post-title-bar {
-    margin-top: 0;
+    margin-top: -40px;
   }
 
   .post-preview h3 {
@@ -1100,63 +982,4 @@ body {
 
 .post-image {
   animation: imageFadeIn 0.5s ease forwards;
-}
-
-/* Estilos para tema oscuro en formularios */
-.dark-mode .form-control,
-.dark-theme .form-control,
-[data-theme="dark"] .form-control {
-  background-color: #2d3748;
-  color: #f0f0f0;
-  border: 1px solid #4a5568;
-}
-
-.dark-mode .form-control:focus,
-.dark-theme .form-control:focus,
-[data-theme="dark"] .form-control:focus {
-  background-color: #2d3748;
-  border-color: var(--primary-light);
-  box-shadow: 0 0 0 0.2rem rgba(138, 43, 226, 0.25);
-  color: white;
-}
-
-.dark-mode .form-control::placeholder,
-.dark-theme .form-control::placeholder,
-[data-theme="dark"] .form-control::placeholder {
-  color: #a0aec0;
-}
-
-.dark-mode select.form-control,
-.dark-theme select.form-control,
-[data-theme="dark"] select.form-control {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a0aec0'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-  color: #f0f0f0;
-}
-
-.dark-mode label,
-.dark-theme label,
-[data-theme="dark"] label {
-  color: #e2e8f0;
-}
-
-.dark-mode .input-group-text,
-.dark-theme .input-group-text,
-[data-theme="dark"] .input-group-text {
-  background-color: #4a5568;
-  color: #e2e8f0;
-  border: 1px solid #4a5568;
-}
-
-.dark-mode .form-check-input,
-.dark-theme .form-check-input,
-[data-theme="dark"] .form-check-input {
-  background-color: #2d3748;
-  border: 1px solid #4a5568;
-}
-
-.dark-mode .form-check-input:checked,
-.dark-theme .form-check-input:checked,
-[data-theme="dark"] .form-check-input:checked {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
 }
