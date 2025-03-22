@@ -224,6 +224,37 @@
     margin-bottom: 15px;
   }
   {% endif %}
+
+  /* Mejoras para las tarjetas de animales */
+  .post-preview {
+    border: none !important;
+    border-radius: 20px !important;
+    box-shadow: 0 12px 28px rgba(138, 43, 226, 0.15), 0 0 0 1px rgba(138, 43, 226, 0.12) !important;
+    overflow: hidden !important;
+    transition: all 0.4s ease !important;
+  }
+
+  .post-preview:hover {
+    transform: translateY(-8px) !important;
+    box-shadow: 0 20px 40px rgba(138, 43, 226, 0.25), 0 0 0 1px rgba(138, 43, 226, 0.15) !important;
+  }
+
+  .post-preview::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(to right, var(--primary-color), var(--primary-light));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+  }
+
+  .post-preview:hover::after {
+    transform: scaleX(1);
+  }
 </style>
 {% endblock %}
 

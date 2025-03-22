@@ -129,6 +129,22 @@
         background: linear-gradient(90deg, rgba(138, 43, 226, 0.1), rgba(138, 43, 226, 0.5), rgba(138, 43, 226, 0.1));
         margin: 30px 0;
     }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: white;
+        border-radius: 10px;
+        padding: 12px 25px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5a6268;
+        border-color: #545b62;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
 </style>
 {% endblock %}
 
@@ -241,7 +257,7 @@
 
         <div class="section-divider"></div>
         <div class="text-center mb-4">
-            <a id="btn-volver" class="btn btn-primary" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">
+            <a id="btn-volver" class="btn btn-secondary" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">
                 <i class="fa fa-arrow-left mr-2"></i> Volver
             </a>
         </div>
