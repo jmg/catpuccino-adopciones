@@ -9,7 +9,7 @@
         background-color: var(--white);
         border-radius: 15px;
         box-shadow: var(--card-shadow);
-        padding: 20px;
+        padding: 16px;
         margin-top: 20px;
         margin-bottom: 30px;
         transition: var(--transition);
@@ -20,25 +20,31 @@
     }
 
     .dashboard-tabs {
-        border-bottom: none;
+        border-bottom: none !important;
         display: flex;
         justify-content: flex-start;
-        margin-bottom: 20px;
+        height: auto;
     }
 
     .dashboard-tabs .nav-item {
-        margin-right: 10px;
+        margin-right: 8px;
+        margin-bottom: 8px;
+        height: auto;
     }
 
     .dashboard-tabs .nav-link {
-        color: var(--text-color);
+        color: var(--text-color) !important;
         font-weight: 500;
-        padding: 10px 20px;
+        padding: 10px 20px !important;
         border-radius: 10px;
         transition: var(--transition);
         display: flex;
         align-items: center;
-        border: 2px solid transparent;
+        border: 1px solid transparent !important;
+        font-size: 1rem;
+        line-height: 1.5 !important;
+        height: 42px;
+        box-shadow: none !important;
     }
 
     .dashboard-tabs .nav-link:hover,
@@ -46,12 +52,12 @@
         color: var(--primary-color);
         background-color: rgba(138, 43, 226, 0.08);
         border-color: rgba(138, 43, 226, 0.15);
-        transform: translateY(-2px);
+        transform: translateY(-1px);
     }
 
     .dashboard-tabs .nav-link i {
-        margin-right: 8px;
-        font-size: 1.1rem;
+        margin-right: 10px;
+        font-size: 1rem;
     }
 
     .logout-link {
@@ -68,15 +74,15 @@
     .dashboard-tab-content {
         background-color: var(--white);
         border-radius: 15px;
-        padding: 25px;
+        padding: 10px;
         min-height: 400px;
     }
 
     .section-title {
         color: var(--primary-color);
         font-weight: 600;
-        margin-bottom: 20px;
-        font-size: 1.5rem;
+        margin-bottom: 18px;
+        font-size: 1.4rem;
         text-align: center;
         position: relative;
     }
@@ -337,7 +343,7 @@
         }
 
         .dashboard-tabs .nav-item {
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
 
         .logout-link {
@@ -350,6 +356,17 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+    }
+
+    /* Sobrescritura de estilos Bootstrap */
+    .dashboard-tabs.compact-tabs a.nav-link,
+    .dashboard-tabs.compact-tabs a.nav-link:hover,
+    .dashboard-tabs.compact-tabs a.nav-link:focus,
+    .dashboard-tabs.compact-tabs a.nav-link:active,
+    .dashboard-tabs.compact-tabs a.nav-link.active {
+        padding: 10px 20px !important;
+        height: 42px !important;
+        line-height: 1.5 !important;
     }
 
     /* Estilos para los botones de acción */
@@ -461,6 +478,12 @@
         transform: translateY(-1px);
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
     }
+
+    .form-action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
 </style>
 {% endblock %}
 
@@ -468,7 +491,7 @@
 
 <div class="container dashboard-container">
 
-    <ul class="nav nav-tabs dashboard-tabs" id="profile-tabs" role="tablist">
+    <ul class="nav nav-tabs dashboard-tabs compact-tabs" id="profile-tabs" role="tablist">
         <li class="nav-item" role="presentation">
             <a id="animales-tab-link" class="nav-link a-link" data-toggle="tab" data-target="#animales-tab"><i class="fa fa-cat"></i> Animales</a>
         </li>
@@ -704,12 +727,14 @@
                             </td>
 
                             <td>
-                                <a target="_blank" href="/formularios/{{estado_form.hash}}/" class="table-action-link">
-                                    <i class="fa fa-eye"></i> Ver
-                                </a>
-                                <a target="_blank" href="/formulario/{{estado_form.id}}/contrato/" class="table-action-link">
-                                    <i class="fa fa-id-badge"></i> Contrato de Adopción
-                                </a>
+                                <div class="action-buttons">
+                                    <a target="_blank" href="/formularios/{{estado_form.hash}}/" class="action-btn" data-tippy-content="Ver formulario">
+                                        <i class="fa fa-eye"></i>
+                                    </a>
+                                    <a target="_blank" href="/formulario/{{estado_form.id}}/contrato/" class="action-btn" data-tippy-content="Contrato de Adopción">
+                                        <i class="fa fa-id-badge"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -796,6 +821,17 @@ $(document).ready(function () {
         duration: [200, 100],
         arrow: true,
         theme: 'custom'
+    });
+
+    // Tooltips específicos para los botones de acción en formularios
+    tippy('.action-buttons .action-btn', {
+        placement: 'top',
+        animation: 'scale',
+        duration: [200, 100],
+        arrow: true,
+        theme: 'custom',
+        delay: [50, 0],
+        size: 'large'
     });
 
     // Hacer que las filas sean clickables

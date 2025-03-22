@@ -5,94 +5,276 @@
 {% block content %}
 
 <div class="container px-2">
+    <div class="form-view-container">
+        <div class="form-header">
+            <h2>
+                <i class="fa fa-file-alt mr-2"></i>
+                Formulario de <span class="highlight-text">{{estado_form.get_tipo_display}}</span>
+            </h2>
+            <div class="form-meta">
+                <div class="meta-item">
+                    <i class="fa fa-user mr-2"></i>
+                    <span><b>Postulante:</b> {{persona_nombre}}</span>
+                </div>
+                {% if gato_nombre %}
+                <div class="meta-item">
+                    <i class="fa fa-paw mr-2"></i>
+                    <span><b>Animal:</b> {{gato_nombre}}</span>
+                </div>
+                {% endif %}
+                <div class="meta-item">
+                    <i class="fa fa-calendar-alt mr-2"></i>
+                    <span><b>Enviado:</b> {{estado_form.form_entry.entry_time|date:"d/m/Y H:i"}}</span>
+                </div>
+            </div>
+        </div>
 
-    <div class="col-lg-8 col-md-10 mx-auto container-colored p-3">
+        <div class="form-content-wrapper">
+            {% if extra_forms %}
+            <div class="related-forms-section">
+                <div class="section-header">
+                    <h3><i class="fa fa-link mr-2"></i> Formularios relacionados</h3>
+                    <span class="badge badge-info">{{extra_forms|length}}</span>
+                </div>
+                <div class="related-forms-list">
+                    {% include "forms/_forms.html" with forms=extra_forms %}
+                </div>
+            </div>
+            {% endif %}
 
-        <h5>Formulario de {{estado_form.get_tipo_display}} de <b style="color: blue">{{persona_nombre}}</b> {% if gato_nombre %}para <b style="color: blue">{{gato_nombre}}{% endif %}</b></h5>
-        <hr>
-
-        <div id="datos-formulario" style="">
-            <h6>Datos del Formulario</h6>
-            {% for attr, value in form_attrs %}
-            <div>
-            <b>{{attr}}</b>: {{value|safe}}
+            <div class="form-data-section">
+                <div class="section-header">
+                    <h3><i class="fa fa-list-alt mr-2"></i> Datos del formulario</h3>
+                    <button class="btn-toggle" onclick="showDatosFormulario(this)">
+                        <i class="fa fa-chevron-up"></i>
+                    </button>
+                </div>
+                <div id="datos-formulario" class="form-data-content">
+                    {% for attr, value in form_attrs %}
+                    <div class="form-data-item">
+                        <div class="data-label">{{attr}}</div>
+                        <div class="data-value">{{value|safe}}</div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
 
-            {% endfor %}
-            <hr>
+            <div class="form-actions">
+                <a href="javascript:history.back()" class="btn btn-secondary">
+                    <i class="fa fa-arrow-left mr-2"></i> Volver
+                </a>
+                {% if estado_form.gato %}
+                <a href="/formulario/{{estado_form.id}}/contrato/" class="btn btn-primary">
+                    <i class="fa fa-id-badge mr-2"></i> Generar Contrato
+                </a>
+                {% endif %}
+            </div>
         </div>
-
-        {% if extra_forms %}
-        <div style="margin-bottom: 10px;">
-        Hay otros formularios ({{extra_forms|length}}) para <b style="color: blue">{{gato_nombre}}</b>:
-        </div>
-
-        {% include "forms/_forms.html" with forms=extra_forms %}
-        <hr>
-        {% endif %}
-
-        <div class="text-center" style="margin-top: 25px;">
-        </div>
-        <br>
-        <br>
-
     </div>
-
 </div>
 
 {% endblock %}
 
 {% block js %}
-
 <script type="text/javascript">
-
-    var ocultarDatosPersonales = false;
     var ocultarDatosForm = false;
 
-    function showDatosPersonales(btn) {
-        $("#datos-personales").slideToggle();
-        if (ocultarDatosPersonales) {
-            $(btn).find("span").text("Ver datos de la persona");
-            ocultarDatosPersonales = false;
-        } else {
-            $(btn).find("span").text("Ocultar datos de la persona");
-            ocultarDatosPersonales = true;
-        }
-    }
-
     function showDatosFormulario(btn) {
-
         $("#datos-formulario").slideToggle();
-        if (ocultarDatosForm) {
-            $(btn).find("span").text("Ver datos del formulario");
-            ocultarDatosForm = false;
-        } else {
-            $(btn).find("span").text("Ocultar datos del formulario");
-            ocultarDatosForm = true;
-        }
+        $(btn).find("i").toggleClass("fa-chevron-up fa-chevron-down");
     }
-
 </script>
-
 {% endblock %}
 
 {% block css %}
 <style type="text/css">
-    #datos-formulario div {
-        line-height: 42px;
+    .form-view-container {
+        background-color: var(--white);
+        border-radius: 15px;
+        box-shadow: var(--card-shadow);
+        padding: 25px;
+        margin: 20px 0;
+        transition: var(--transition);
     }
-    #datos-personales div {
-        line-height: 42px;
+
+    .form-view-container:hover {
+        box-shadow: var(--hover-shadow);
     }
-    .form-buttons {
-        margin: 3px;
+
+    .form-header {
+        margin-bottom: 25px;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        padding-bottom: 20px;
+    }
+
+    .form-header h2 {
+        color: var(--primary-color);
+        font-weight: 600;
+        font-size: 1.6rem;
+        margin-bottom: 15px;
+    }
+
+    .highlight-text {
+        color: var(--primary-dark);
+        font-weight: 700;
+    }
+
+    .form-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .meta-item {
+        background-color: rgba(138, 43, 226, 0.05);
+        padding: 8px 15px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .form-content-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .section-header h3 {
+        font-size: 1.2rem;
+        color: var(--text-color);
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .related-forms-section, .form-data-section {
+        background-color: rgba(250, 250, 252, 0.7);
+        border-radius: 10px;
+        padding: 20px;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .related-forms-list {
+        margin-top: 10px;
+    }
+
+    .btn-toggle {
+        background: none;
+        border: none;
+        color: var(--text-color);
         cursor: pointer;
-        color: #000;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: var(--transition);
     }
-    @media only screen and (max-width: 992px) {
-        main {
-            margin-top: 8px !important;
-            margin-bottom: 8px !important;
+
+    .btn-toggle:hover {
+        background-color: rgba(138, 43, 226, 0.1);
+        color: var(--primary-color);
+    }
+
+    .form-data-content {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
+
+    .form-data-item {
+        padding: 12px;
+        background-color: white;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.05);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        transition: var(--transition);
+    }
+
+    .form-data-item:hover {
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        transform: translateY(-2px);
+    }
+
+    .data-label {
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+    }
+
+    .data-value {
+        color: var(--text-color);
+        word-break: break-word;
+    }
+
+    .data-value img {
+        max-width: 100%;
+        border-radius: 6px;
+        margin-top: 10px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
+
+    .btn {
+        padding: 8px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        transition: var(--transition);
+    }
+
+    .btn-primary {
+        background: var(--gradient-primary);
+        border: none;
+        color: white;
+        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5a6268;
+        border-color: #545b62;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    @media only screen and (max-width: 768px) {
+        .form-view-container {
+            padding: 15px;
+        }
+
+        .form-meta {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-data-content {
+            grid-template-columns: 1fr;
         }
     }
 </style>
