@@ -7,31 +7,36 @@
 {% block content %}
 
 {% if user.banner_img %}
-<img src="/{{user.banner_img}}" class="profile-banner-img">
+<div class="profile-banner-container">
+  <img src="/{{user.banner_img}}" class="profile-banner-img">
+  <div class="profile-banner-overlay"></div>
+</div>
 {% endif %}
 
-<div class="container-md mx-md-auto row header-container px-1 py-3">
-
-  <div class="col-md col-header profile-logo-container">
-  {% if user.logo_img %}
-  <img src="/{{user.logo_img}}" class="profile-logo-img profile-logo-img-front">
-  {% endif %}
-  </div>
-
-  <div class="col-md col-title my-2">
-  <h1 class="display-4 title">{{user.title}}</h1>
-  <p class="lead">{{user.description|safe}}</p>
-
-  {% include "usuario/_socialnetworks.html" %}
-
-  </div>
-
-  <div class="text-center mx-auto my-2 mt-3 mr-md-4">
-    <div id="main-button"><a onclick="scrollToAnimals()" class="btn btn-primary btn-main">
-      <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción </a>
-    </div>
+<div class="container-md mx-md-auto profile-header">
+  <div class="profile-header-inner">
+    <div class="profile-logo-wrapper">
+      {% if user.logo_img %}
+      <div class="profile-logo-container">
+        <img src="/{{user.logo_img}}" class="profile-logo-img">
+      </div>
+      {% endif %}
     </div>
 
+    <div class="profile-info">
+      <h1 class="profile-title">{{user.title}}</h1>
+      <div class="profile-description">{{user.description|safe}}</div>
+
+      {% include "usuario/_socialnetworks.html" %}
+    </div>
+
+    <div class="profile-action">
+      <button onclick="scrollToAnimals()" class="btn-view-animals">
+        <i class="fa fa-paw"></i> Ver animales en adopción
+        {% if perros_en_adopcion %}<span class="subtitle">Gatos y Perros</span>{% endif %}
+      </button>
+    </div>
+  </div>
 </div>
 
 {{block.super}}
@@ -41,11 +46,151 @@
 {% block css %}
 {{block.super}}
 <style>
-  #main-button a {
-    color: #fff;
+  /* Estilos modernos para el perfil de usuario */
+  .profile-banner-container {
+    position: relative;
+    width: 100%;
+    height: 300px;
+    overflow: hidden;
+    margin-bottom: -50px;
   }
-  #main-button {
-    margin-top: 0;
+
+  .profile-banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+  }
+
+  .profile-banner-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 100px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+  }
+
+  .profile-header {
+    position: relative;
+    z-index: 10;
+    padding: 0;
+  }
+
+  .profile-header-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 20px;
+    background-color: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    margin-bottom: 30px;
+  }
+
+  .profile-logo-wrapper {
+    margin-top: -70px;
+    margin-right: 30px;
+    flex-shrink: 0;
+  }
+
+  .profile-logo-container {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 4px solid white;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+
+  .profile-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-info {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 0;
+  }
+
+  .profile-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+  }
+
+  .profile-description {
+    color: var(--text-color);
+    margin-bottom: 15px;
+    line-height: 1.6;
+  }
+
+  .profile-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  .btn-view-animals {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 15px rgba(138, 43, 226, 0.2);
+    cursor: pointer;
+  }
+
+  .btn-view-animals:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(138, 43, 226, 0.3);
+  }
+
+  .btn-view-animals i {
+    margin-right: 8px;
+    font-size: 1.1rem;
+  }
+
+  .btn-view-animals .subtitle {
+    font-size: 0.8rem;
+    opacity: 0.9;
+    font-weight: 400;
+    margin-top: 4px;
+  }
+
+  /* Estilos responsive */
+  @media (max-width: 768px) {
+    .profile-header-inner {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .profile-logo-wrapper {
+      margin-right: 0;
+      margin-bottom: 20px;
+    }
+
+    .profile-action {
+      margin-top: 20px;
+      width: 100%;
+    }
+
+    .profile-banner-container {
+      height: 200px;
+    }
   }
 </style>
 {% endblock %}

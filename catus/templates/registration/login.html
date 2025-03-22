@@ -7,27 +7,31 @@
 <form id="login-form" class="form" action="" method="post">
     {% csrf_token %}
 
-    <h3 class="text-center text-primary">{% trans "Ingresá a tu cuenta para cargar un animal" %}</h3>
-    
-    <hr>
-    <div class="alert alert-info">Si no tenés cuenta <a style="font-weight: bold" href="/accounts/register/">creá una acá</a>. Es super fácil!</div>
-    <hr>
+    <h3 class="text-center">{% trans "Ingresá a tu cuenta" %}</h3>
+    <p class="text-center text-muted mb-4">Para cargar un animal en adopción</p>
+
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle mr-2"></i> Si no tenés cuenta <a href="/accounts/register/">creá una acá</a>. Es super fácil!
+    </div>
 
     {{ form|crispy }}
 
-    <div class="form-group">
-        <input type="submit" name="submit" class="btn btn-primary btn-md" value="{% trans 'Ingresar' %}">
+    <div class="form-group mt-4 mb-3">
+        <button type="submit" name="submit" class="btn btn-primary btn-block">
+            <i class="fas fa-sign-in-alt mr-2"></i> {% trans 'Ingresar' %}
+        </button>
     </div>
 
     <div class="form-group">
-    <hr>
-    <div id="register-link" class="text-right">
-        <div class="my-2"> {% trans "¿No tenés cuenta?" %} <a href="/accounts/register/" class="text-primary">{% trans "Crea tu cuenta aquí" %}</a>
+        <hr>
+        <div class="d-flex flex-column align-items-center mt-3">
+            <div class="mb-2">
+                {% trans "¿No tenés cuenta?" %} <a href="/accounts/register/">{% trans "Creá tu cuenta aquí" %}</a>
+            </div>
+            <div>
+                {% trans "¿Olvidaste tu contraseña?" %} <a href="{% url 'password_reset' %}">{% trans "Reseteá tu contraseña" %}</a>
+            </div>
         </div>
-        <div>
-        {% trans "¿Olvidaste tu contraseña?" %} <a class="text-primary" href="{% url 'password_reset' %}">{% trans "Reseteá tu contraseña aquí" %}</a>
-        </div>
-    </div>
     </div>
 </form>
 

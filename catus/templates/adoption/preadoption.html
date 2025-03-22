@@ -2,16 +2,146 @@
 {% load forms_builder_tags %}
 {% load bootstrap4 %}
 
+{% block css %}
+{{ block.super }}
+<style>
+    .preadoption-container {
+        background-color: var(--white);
+        border-radius: 15px;
+        box-shadow: var(--card-shadow);
+        padding: 30px;
+        transition: var(--transition);
+        margin-top: 20px;
+        margin-bottom: 30px;
+    }
+
+    .preadoption-container:hover {
+        box-shadow: var(--hover-shadow);
+    }
+
+    .preadoption-title {
+        color: var(--primary-color);
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 1.5rem;
+        font-size: 1.8rem;
+    }
+
+    .form-control {
+        border: 2px solid rgba(138, 43, 226, 0.15);
+        border-radius: 10px;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        background-color: #fff;
+    }
+
+    .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+        outline: none;
+    }
+
+    .form-control::placeholder {
+        color: rgba(74, 85, 104, 0.6);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    label {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--text-color);
+        font-size: 0.95rem;
+    }
+
+    .alert-info {
+        background-color: rgba(138, 43, 226, 0.1);
+        border: 1px solid rgba(138, 43, 226, 0.2);
+        color: var(--primary-dark);
+        border-radius: 10px;
+        padding: 20px;
+    }
+
+    .alert-danger {
+        background-color: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.2);
+        color: #721c24;
+        border-radius: 10px;
+        padding: 20px;
+    }
+
+    .alert-success {
+        background-color: rgba(40, 167, 69, 0.1);
+        border: 1px solid rgba(40, 167, 69, 0.2);
+        color: #155724;
+        border-radius: 10px;
+        padding: 20px;
+    }
+
+    #terms-and-conditions ul {
+        padding-left: 20px;
+    }
+
+    #terms-and-conditions li {
+        margin-bottom: 10px;
+        position: relative;
+        padding-left: 10px;
+    }
+
+    .btn-primary {
+        background: var(--gradient-primary);
+        border: none;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 500;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+    }
+
+    #wait-message {
+        background-color: rgba(138, 43, 226, 0.15);
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        color: var(--primary-dark);
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+
+    .cat-icon {
+        margin: 0 5px;
+        color: var(--primary-color);
+    }
+
+    .invalid {
+        border-color: #dc3545 !important;
+    }
+
+    .section-divider {
+        height: 1px;
+        background: linear-gradient(90deg, rgba(138, 43, 226, 0.1), rgba(138, 43, 226, 0.5), rgba(138, 43, 226, 0.1));
+        margin: 30px 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
   <div class="row">
-    <div class="col-lg-8 col-md-10 mx-auto container-colored small-padding-mobile">
+    <div class="col-lg-8 col-md-10 mx-auto preadoption-container">
 
         {% if not is_post %}
 
             {% if not is_user %}
             <div class="alert alert-danger" role="alert">
-                <i class="fa fa-paw"></i> <b>Imporante:</b>  Los gatos y perros en adopción publicados en este sitio <b>NO PERTENECEN A CATPUCCINO ADOPCIONES</b>. Son de personas independientes que buscan una adopción responsable para ellos. <i class="fa fa-paw"></i>
+                <i class="fa fa-paw mr-2"></i> <b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>NO PERTENECEN A CATPUCCINO ADOPCIONES</b>. Son de personas independientes que buscan una adopción responsable para ellos. <i class="fa fa-paw ml-2"></i>
             </div>
             {% endif %}
 
@@ -20,28 +150,27 @@
                 {{ form.intro|safe }}
 
                 <div class="text-center">
-                <a style="border-radius: 15px; color: #fff; cursor: pointer; margin-top: 30px; margin-bottom: 15px;" class="btn btn-primary" onclick="hideTerms(); showForm();">Aceptar y Completar el Formulario <i class="fa fa-file-alt"></i> </a>
+                <button style="margin-top: 30px; margin-bottom: 15px;" class="btn btn-primary" onclick="hideTerms(); showForm();">Aceptar y Completar el Formulario <i class="fa fa-file-alt ml-2"></i></button>
                 </div>
             </div>
 
             <div id="show-terms-button" class="text-center" style="display: none">
-                <a style="border-radius: 15px; color: #fff; cursor: pointer; margin-top: 10px;" class="btn btn-primary" onclick="showTerms()">Mostrar Requisitos de {% if form_type == "preadoption" %}Adopción{% else %}Tránsito{% endif %} <i class="fa fa-cat"></i></a>
+                <button style="margin-top: 10px;" class="btn btn-primary" onclick="showTerms()">Mostrar Requisitos de {% if form_type == "preadoption" %}Adopción{% else %}Tránsito{% endif %} <i class="fa fa-cat ml-2"></i></button>
             </div>
             {% endif %}
         {% endif %}
 
         {% if not is_post %}
         <div id="adoption-form-container">
-            <hr>
-            <h3 class="text-center">{{ form.title }} </h3>
-            <br>
+            <div class="section-divider"></div>
+            <h3 class="preadoption-title">{{ form.title }}</h3>
 
             <form id="adoption-form" onsubmit="showLoader(); return true;" action="{{post_url}}" method="post" {% if form_for_form.is_multipart %}enctype="multipart/form-data"{% endif %} >
                 {% csrf_token %}
                 {% bootstrap_form form_for_form %}
 
-                <br>
                 {% if form_type == "preadoption" %}
+                <div class="section-divider"></div>
                 <div id="terms-and-conditions" class="alert alert-info" role="alert">
                     <div>
                         <ul>
@@ -66,10 +195,10 @@
                 </div>
                 {% endif %}
 
-                {% buttons %}
-
-                <div class="text-center">
-                    <button id="send-form-button" style="border-radius: 15px;" class="btn btn-primary">{{ form.button_text|safe }}</button>
+                <div class="form-group text-center mt-4">
+                    <button id="send-form-button" class="btn btn-primary btn-lg">
+                        {{ form.button_text|safe }} <i class="fa fa-paper-plane ml-2"></i>
+                    </button>
                 </div>
 
                 <div style="margin-top: 15px; text-align: center; display: none" id="wait-message" class="alert alert-info" role="alert">
@@ -79,9 +208,6 @@
                     <i id="cat-icon-0" class="fa fa-paw"></i> <i id="cat-icon-1" class="fa fa-paw cat-icon"></i> <i id="cat-icon-2" class="fa fa-paw cat-icon"></i> <i id="cat-icon-3" class="fa fa-paw cat-icon"></i> <i id="cat-icon-4" class="fa fa-paw cat-icon"></i> <i id="cat-icon-5" class="fa fa-paw cat-icon"></i> <i id="cat-icon-6" class="fa fa-paw cat-icon"></i>
                 </div>
                 </div>
-
-                <br>
-                {% endbuttons %}
             </form>
         </div>
 
@@ -113,17 +239,17 @@
             {% endif %}
         {% endif %}
 
-        <hr>
-        <br>
-        <div class="text-center mb-5">
-            <a id="btn-volver" class="btn btn-primary btn-volver" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">Volver <i class="fa fa-arrow-left"></i></a>
+        <div class="section-divider"></div>
+        <div class="text-center mb-4">
+            <a id="btn-volver" class="btn btn-primary" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">
+                <i class="fa fa-arrow-left mr-2"></i> Volver
+            </a>
         </div>
 
    </div>
   </div>
 </div>
 {% endblock %}
-
 
 {% block js %}
 <script type="text/javascript">
@@ -666,19 +792,5 @@
 </script>
 
 <script src="/static/slider/js/lightslider.min.js"></script>
-{% endblock %}
-
-{% block css %}
-<style>
-    @media only screen and (max-width: 992px) {
-        main {
-            margin-top: 0 !important;
-            margin-bottom: 10px !important;
-        }
-        .container-colored {
-            border-radius: 0;
-        }
-    }
-</style>
 <link type="text/css" rel="stylesheet" href="/static/slider/css/lightslider.min.css" />
 {% endblock %}

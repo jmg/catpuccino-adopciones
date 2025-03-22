@@ -3,31 +3,115 @@
 {% block css %}
 {{block.super}}
 <style>
-    @media only screen and (max-width: 992px) {
-        main {
-            margin-top: 10px !important;
-            margin-bottom: 30px !important;
-        }
+    .login-form-container {
+        padding: 40px 0;
+        margin-top: 30px;
     }
-    a {
-        color: #007bff;
+
+    #login-box {
+        background-color: var(--white);
+        border-radius: 15px;
+        box-shadow: var(--card-shadow);
+        padding: 30px;
+        transition: var(--transition);
+    }
+
+    #login-box:hover {
+        box-shadow: var(--hover-shadow);
+    }
+
+    #login-form h3 {
+        color: var(--primary-color);
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
+
+    /* Estilos mejorados para los inputs */
+    #login-form .form-control {
+        border: 2px solid rgba(138, 43, 226, 0.15);
+        border-radius: 10px;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        background-color: #fff;
+    }
+
+    #login-form .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+        outline: none;
+    }
+
+    #login-form .form-control::placeholder {
+        color: rgba(74, 85, 104, 0.6);
+    }
+
+    #login-form .form-group {
+        margin-bottom: 20px;
+    }
+
+    #login-form label {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--text-color);
+        font-size: 0.95rem;
+    }
+
+    #login-form .btn-primary {
+        background: var(--gradient-primary);
+        border: none;
+        padding: 10px 25px;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+    }
+
+    #login-form .btn-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+    }
+
+    #login-form a {
+        color: var(--primary-color);
+        font-weight: 500;
+        transition: var(--transition);
+    }
+
+    #login-form a:hover {
+        color: var(--primary-dark);
+        text-decoration: none;
+    }
+
+    .alert-info {
+        background-color: rgba(138, 43, 226, 0.1);
+        border: 1px solid rgba(138, 43, 226, 0.2);
+        color: var(--primary-dark);
+        border-radius: 8px;
+    }
+
+    @media only screen and (max-width: 992px) {
+        .login-form-container {
+            margin-top: 10px;
+            margin-bottom: 30px;
+        }
+
+        #login-box {
+            padding: 20px;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="login-form-container">
-    <h3 class="text-center text-white pt-md-5">Login form</h3>
     <div class="container">
         <div id="login-row" class="row justify-content-center mx-auto">
-
-            <div id="login-box" class="col-md-8 mx-auto">
+            <div id="login-box" class="col-md-8 col-lg-6 mx-auto">
             {% block login_content %}
-
             {% endblock %}
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}

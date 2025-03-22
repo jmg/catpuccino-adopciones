@@ -74,14 +74,13 @@ function initializeImages() {
 }
 
 function showMore(el) {
-
   var link = $(el)
   link.parent().prev().toggleClass("show-more-text")
 
-  if (link.text() == "Mostrar más...") {
-    link.text("Mostrar menos...")
+  if (link.text() == "Mostrar más") {
+    link.text("Mostrar menos")
   } else {
-    link.text("Mostrar más...")
+    link.text("Mostrar más")
   }
 }
 

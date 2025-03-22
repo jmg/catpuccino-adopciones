@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const textElement = element.parentElement.previousElementSibling;
     if (textElement.classList.contains('expanded')) {
       textElement.classList.remove('expanded');
-      element.textContent = 'Mostrar más...';
+      element.textContent = 'Mostrar más';
 
       // Scroll hacia arriba hasta la tarjeta
       const card = element.closest('.post-preview');
@@ -16,6 +16,21 @@ document.addEventListener('DOMContentLoaded', function() {
       element.textContent = 'Mostrar menos';
     }
   };
+
+  // Verificar qué elementos de texto necesitan el botón "Mostrar más"
+  document.querySelectorAll('.show-more-text').forEach(textElement => {
+    const showMoreLink = textElement.nextElementSibling.querySelector('.show-more-a');
+
+    // Comprobar si el texto está truncado (si el contenido desborda)
+    const isOverflowing = textElement.scrollHeight > textElement.clientHeight;
+
+    if (!isOverflowing) {
+      // Si no hay desbordamiento, ocultar el enlace "Mostrar más"
+      if (showMoreLink) {
+        showMoreLink.parentElement.style.display = 'none';
+      }
+    }
+  });
 
   // Efecto de la navbar al hacer scroll
   const navbar = document.getElementById('mainNav');
