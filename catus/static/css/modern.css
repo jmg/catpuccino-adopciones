@@ -924,7 +924,7 @@ body {
   padding-top: 1.5rem;
   border-top: 1px solid rgba(138, 43, 226, 0.1);
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   flex-wrap: wrap;
   gap: 1rem;
@@ -933,6 +933,8 @@ body {
 .footer-copyright {
   font-size: 0.9rem;
   color: var(--text-light);
+  width: 100%;
+  text-align: center;
 }
 
 .footer-copyright .fa-heart {

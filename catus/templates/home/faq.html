@@ -1,77 +1,292 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="col-lg-10 col-md-10 mx-auto small-padding-mobile">
+<div class="col-lg-10 col-md-10 mx-auto small-padding-mobile py-4">
+    <h2 class="text-center mb-5 como-funciona-title">¿Cómo funciona Catpuccino Adopciones?</h2>
 
-    <div class="alert alert-success text-center col-md-11 mx-auto px-md-4" >
-        <b>¡En todos los casos la plataforma es completamente gratuita!</b>
+    <div class="alert alert-primary text-center col-md-11 mx-auto px-md-4 mb-5 shadow-sm">
+        <div class="py-2">
+            <i class="fa fa-heart text-danger mr-2"></i>
+            <b>¡En todos los casos la plataforma es completamente gratuita!</b>
+            <i class="fa fa-heart text-danger ml-2"></i>
+        </div>
     </div>
 
     <div class="row mx-auto">
-        <div class="col-md-5 p-3 container-colored mx-auto p-md-4 mb-4 text-justify faq-text">
-            <h3>Quiero Adoptar <i class="fa fa-cat"></i> </h3>
-            <hr>
-            <ul>
-                <li>
-                    Si quieres adoptar un gato o perro simplemente tenés que completar el formulario de pre-adopción para el animal que hayas elegido:
-                    <ul class="sub-ul">
-                        <li class="li-cat"><a href="/pre-adopcion/" target="_blank">Formulario para gatos</a></li>
-                        <li class="li-dog"><a href="/pre-adopcion/perros/" target="_blank">Formulario para perros</a></li>
-                    </ul>
-                </li>
-                <li>
-                    Una vez que completes el formulario lo recibirá el/la transitante del animal para revisarlo.
-                </li>
-                <li>
-                    En caso de proceder, el/la transitante se va a contactar con vos para concretar la adopción.
-                </li>
-                <li>
-                    Recordá que buscamos adopciones de por vida y que los animales deben ser tratados con amor y respeto. ¡Fomentemos las adopciones responsables!
-                </li>
-            </ul>
+        <!-- SECCIÓN ADOPTAR -->
+        <div class="col-md-6 p-3 mb-4">
+            <div class="como-funciona-card h-100 shadow-sm">
+                <div class="como-funciona-card-header">
+                    <i class="fa fa-home"></i>
+                    <h3>Quiero Adoptar</h3>
+                </div>
+                <div class="como-funciona-card-body">
+                    <div class="como-funciona-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h5>Elige a tu compañero</h5>
+                            <p>Navega por nuestro catálogo de animales en adopción y encuentra el que más se ajuste a tu familia y estilo de vida.</p>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h5>Completa el formulario</h5>
+                            <p>Cada animal tiene un botón de "Formulario de pre-adopción". Complétalo con toda la información solicitada:</p>
+                            <div class="ml-3 mb-3">
+                                <a href="/pre-adopcion/" class="btn btn-sm btn-outline-primary mr-2" target="_blank">
+                                    <i class="fa fa-cat mr-1"></i> Para gatos
+                                </a>
+                                <a href="/pre-adopcion/perros/" class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="fa fa-dog mr-1"></i> Para perros
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h5>Revisión del formulario</h5>
+                            <p>El/la transitante del animal revisará tu solicitud y se pondrá en contacto contigo si cumples con los requisitos.</p>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h5>Proceso de adopción</h5>
+                            <p>Si todo está en orden, coordinarán la entrega del animal y la firma del contrato de adopción responsable.</p>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-nota">
+                        <i class="fa fa-info-circle mr-2"></i>
+                        <p>Recordá que buscamos adopciones de por vida y que los animales deben ser tratados con amor y respeto. ¡Fomentemos las adopciones responsables!</p>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="col-md-5 p-3 container-colored mx-auto p-md-4 mb-4 text-justify faq-text">
-            <h3>Quiero Publicar en Adopción <i class="fa fa-paw"></i> </h3>
-            <hr>
-            <ul>
-                <li>
-                    Para publicar un animal en adopción hace <b><a href="/accounts/profile/" target="_blank">click acá</a></b>.
-                </li>
-                <li>
-                    Primero vas a tener que crear una cuenta con email y contraseña. Esto sirve para poder volver a ingresar y modificar los datos del animal que cargaste.
-                </li>
-                <li>
-                    Además el email que ingreses es a donde te van a llegar los formularios de pre-adopción que completen los candidatos.
-                </li>
-                <li>
-                    Una vez creada la cuenta vas a poder cargar al animal en adopción. Los datos que te pediremos son: Nombre, edad, sexo, una breve descripción y al menos una foto. Mientras más fotos subas mejor!
-                </li>
-                <li>
-                    Cuando termines de cargar los datos, los creadores de este sitio vamos a revisar la publicación y, si está todo bien, se publicará en la página principal de esta web.
-                </li>
-                <li>
-                    Una vez publicado los interesados en adoptar podrán completar el formulario de pre-adopción para tu rescatado. Cuando esto suceda recibirás un mail con los datos del formulario.
-                </li>
-                <li>
-                    Finalmente, si está todo bien con el formulario. ¡Podrás contactar al adoptante para concretar la adopción!
-                </li>
-            </ul>
+
+        <!-- SECCIÓN PUBLICAR -->
+        <div class="col-md-6 p-3 mb-4">
+            <div class="como-funciona-card h-100 shadow-sm">
+                <div class="como-funciona-card-header">
+                    <i class="fa fa-bullhorn"></i>
+                    <h3>Quiero Publicar</h3>
+                </div>
+                <div class="como-funciona-card-body">
+                    <div class="como-funciona-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h5>Crea tu cuenta</h5>
+                            <p>Regístrate en nuestra plataforma con un email válido y una contraseña. Esto te permitirá gestionar tus publicaciones.</p>
+                            <div class="ml-3 mb-3">
+                                <a href="/accounts/profile/" class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="fa fa-user-plus mr-1"></i> Crear cuenta
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h5>Carga los datos del animal</h5>
+                            <p>Completa toda la información del animal: nombre, edad, sexo, características y al menos una foto (¡mientras más, mejor!).</p>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h5>Revisión y publicación</h5>
+                            <p>Nuestro equipo revisará la publicación y, una vez aprobada, aparecerá en la página principal para que todos puedan verla.</p>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h5>Recepción de solicitudes</h5>
+                            <p>Cuando alguien complete el formulario de pre-adopción para tu animal, recibirás un correo con todos los detalles.</p>
+                        </div>
+                    </div>
+
+                    <div class="como-funciona-step">
+                        <div class="step-number">5</div>
+                        <div class="step-content">
+                            <h5>Concretar la adopción</h5>
+                            <p>Si estás de acuerdo con el perfil del adoptante, podrás contactarlo para coordinar la entrega del animal.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-
 </div>
 {% endblock %}
 
 {% block css %}
 <style>
+    main {
+        margin-top: 20px !important;
+    }
+
+    .como-funciona-title {
+        color: var(--primary-color);
+        font-weight: 700;
+        position: relative;
+        padding-bottom: 15px;
+    }
+
+    .como-funciona-title:after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 4px;
+        background: var(--gradient-primary);
+        border-radius: 2px;
+    }
+
+    .como-funciona-card {
+        background-color: #fff;
+        border-radius: 20px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .como-funciona-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(138, 43, 226, 0.1) !important;
+    }
+
+    .como-funciona-card-header {
+        background: var(--gradient-primary);
+        color: white;
+        padding: 20px;
+        text-align: center;
+        position: relative;
+    }
+
+    .como-funciona-card-header i {
+        font-size: 2rem;
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .como-funciona-card-header h3 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .como-funciona-card-body {
+        padding: 25px 20px;
+    }
+
+    .como-funciona-step {
+        display: flex;
+        margin-bottom: 25px;
+        position: relative;
+    }
+
+    .como-funciona-step:not(:last-child):after {
+        content: '';
+        position: absolute;
+        left: 20px;
+        top: 45px;
+        bottom: -15px;
+        width: 2px;
+        background-color: rgba(138, 43, 226, 0.2);
+    }
+
+    .step-number {
+        background-color: var(--primary-color);
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-right: 15px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .step-content {
+        flex-grow: 1;
+    }
+
+    .step-content h5 {
+        color: var(--primary-color);
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .step-content p {
+        margin: 0 0 10px;
+        line-height: 1.5;
+        color: var(--text-color);
+    }
+
+    .como-funciona-nota {
+        background-color: rgba(138, 43, 226, 0.08);
+        border-left: 4px solid var(--primary-color);
+        padding: 15px;
+        border-radius: 0 8px 8px 0;
+        display: flex;
+        margin-top: 20px;
+    }
+
+    .como-funciona-nota i {
+        color: var(--primary-color);
+        font-size: 1.2rem;
+        margin-top: 3px;
+    }
+
+    .como-funciona-nota p {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .btn-outline-primary {
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        border-radius: 50px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-outline-primary:hover {
+        background-color: var(--primary-color);
+        color: white;
+        transform: translateY(-2px);
+    }
+
     @media only screen and (max-width: 992px) {
         main {
             margin-top: 10px !important;
             margin-bottom: 20px !important;
         }
-    }
-    a {
-        color: #007bff;
+
+        .como-funciona-step {
+            flex-direction: column;
+        }
+
+        .step-number {
+            margin-bottom: 10px;
+        }
+
+        .como-funciona-step:not(:last-child):after {
+            display: none;
+        }
     }
 </style>
 {% endblock %}
