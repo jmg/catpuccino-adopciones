@@ -78,7 +78,7 @@
 
     <div class="card-action text-center">
       <a class="btn btn-primary btn-preadopcion" {% if not animal.reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
-        <span>Formulario de pre-adopción</span> <i class="fa fa-paw"></i>
+        <span style="text-transform: none;">Formulario de Pre-Adopción</span> <i class="fa fa-paw"></i>
       </a>
     </div>
 </div>
