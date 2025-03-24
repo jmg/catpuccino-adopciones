@@ -225,7 +225,20 @@
     /* Ajustes para mostrar solo iconos en los tabs en móvil */
     .dashboard-tabs {
       flex-wrap: wrap;
-      justify-content: center;
+      justify-content: space-between;
+    }
+
+    /* Grupo de los 3 primeros botones */
+    .dashboard-tabs::before {
+      content: "";
+      display: flex;
+      width: 0;
+      order: 1;
+    }
+
+    /* Botón de logout a la derecha */
+    .logout-link {
+      margin-left: auto;
     }
 
     .dashboard-tabs .nav-link {
@@ -244,8 +257,11 @@
       font-size: 1.3rem;
     }
 
-    .dashboard-tabs .nav-item {
+    .dashboard-tabs .nav-item:not(:last-child) {
       margin-right: 5px;
+    }
+
+    .dashboard-tabs .nav-item {
       margin-bottom: 6px;
     }
   }
