@@ -1005,6 +1005,16 @@ footer .foot {
       border-radius: 4px; */
   }
 
+  main {
+    margin-top: 10px;
+  }
+
+  .dropdown {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+
   #forms-table_wrapper {
     font-size: 12px;
   }

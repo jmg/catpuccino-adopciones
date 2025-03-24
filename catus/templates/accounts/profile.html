@@ -340,15 +340,24 @@
     @media only screen and (max-width: 992px) {
         .dashboard-tabs {
             flex-wrap: wrap;
-            justify-content: center;
+            justify-content: space-between;
         }
 
-        .dashboard-tabs .nav-item {
-            margin-bottom: 6px;
+        .dashboard-tabs .nav-item:not(:last-child) {
+            margin-right: 5px;
         }
 
+        /* Grupo de los 3 primeros botones */
+        .dashboard-tabs::before {
+            content: "";
+            display: flex;
+            width: 0;
+            order: 1;
+        }
+
+        /* Botón de logout a la derecha */
         .logout-link {
-            margin-left: 0;
+            margin-left: auto;
         }
 
         .limited-td {
@@ -358,8 +367,9 @@
             white-space: nowrap;
         }
 
+        /* Ajustes para mostrar solo iconos en los tabs en móvil */
         .dashboard-tabs .nav-link {
-            font-size: 0;
+            font-size: 0; /* Hide text */
             padding: 0 !important;
             width: 46px;
             height: 46px !important;
@@ -375,9 +385,10 @@
         }
 
         .dashboard-tabs .nav-item {
-            margin-right: 5px;
+            margin-bottom: 6px;
         }
 
+        /* Ajustes adicionales para móviles */
         .dashboard-container {
             padding: 12px;
             margin-top: 10px;
@@ -576,98 +587,98 @@
 
         <div class="tab-pane active" id="animales-tab" role="tabpanel">
             <div class="py-3">
-                {% if is_new_animal %}
-                    <div id="response-text" class="alert alert-success" role="alert">
+            {% if is_new_animal %}
+                <div id="response-text" class="alert alert-success" role="alert">
                         <div class="text-center">¡Guardado correctamente! Estamos revisando la publicación y si está todo bien aparecerá en el sitio web a la brevedad.</div>
-                    </div>
-                {% elif is_new_animal_approved %}
-                    <div id="response-text" class="alert alert-success" role="alert">
+                </div>
+            {% elif is_new_animal_approved %}
+                <div id="response-text" class="alert alert-success" role="alert">
                         <div class="text-center">¡Guardado correctamente! ¡Ya fue aprobado y aparece en el sitio web!</div>
-                    </div>
-                {% elif success %}
-                    <div id="response-text" class="alert alert-success" role="alert">
+                </div>
+            {% elif success %}
+                <div id="response-text" class="alert alert-success" role="alert">
                         <div class="text-center">¡Guardado correctamente!</div>
-                    </div>
-                {% endif %}
+                </div>
+            {% endif %}
 
                 <div class="mb-4 text-md-left text-center">
-                    <a href="/animales/" class="btn btn-primary btn-rounded mb-2 mb-md-0">
+                <a href="/animales/" class="btn btn-primary btn-rounded mb-2 mb-md-0">
                         <i class="fa fa-plus-circle mr-2"></i> Cargar Animal
-                    </a>
+                </a>
                     <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded link-to-animals">
                         <i class="fas fa-external-link-alt mr-2"></i> Link a mis Animales
-                    </a>
-                </div>
+                </a>
+            </div>
 
-                {% if page == "adopcion" %}
-                <div id="response-text" class="alert alert-info" role="alert">
-                    <b>Importante</b>: Cuando cargues un animal lo revisaremos para comprobar que este todo bien con la publicación.
-                </div>
-                {% endif %}
+            {% if page == "adopcion" %}
+            <div id="response-text" class="alert alert-info" role="alert">
+                <b>Importante</b>: Cuando cargues un animal lo revisaremos para comprobar que este todo bien con la publicación.
+            </div>
+            {% endif %}
 
-                {% if animals %}
+            {% if animals %}
                 <table id="forms-table" class="table profile-table">
-                    <thead>
-                        <th>Nombre</th>
-                        <th>Estado</th>
-                        <th>Publicado</th>
-                        <th>Acciones</th>
-                    </thead>
+                <thead>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Publicado</th>
+                    <th>Acciones</th>
+                </thead>
 
-                    <tbody>
-                        {% for animal in animals %}
+                <tbody>
+                    {% for animal in animals %}
                         <tr class="clickable-row" data-href="/animales/{{animal.id}}/" style="cursor: pointer;">
-                            <td>
-                                <div class="limited-td">
+                        <td>
+                            <div class="limited-td">
                                     <a class="table-action-link" href="/animales/{{animal.id}}/">{{animal.nombre}}</a>
-                                </div>
-                            </td>
-                            <td>
-                                <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">
-                                    {{animal.get_estado_display}}
-                                </span>
-                                <span id="publicado-expired-text-{{animal.id}}" class="small-text">
-                                {% if animal.estado == "E" %}
-                                    (Publicado hace más de 30 días)
-                                {% endif %}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En Revisión{% else %}Publicado{% endif %}</span>
-                            </td>
+                            </div>
+                        </td>
+                        <td>
+                            <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">
+                                {{animal.get_estado_display}}
+                            </span>
+                            <span id="publicado-expired-text-{{animal.id}}" class="small-text">
+                            {% if animal.estado == "E" %}
+                                (Publicado hace más de 30 días)
+                            {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En Revisión{% else %}Publicado{% endif %}</span>
+                        </td>
 
-                            <td>
+                        <td>
                                 <div class="action-buttons">
                                     <a href="/animales/{{animal.id}}/" class="action-btn" data-tippy-content="Editar">
                                         <i class="fa fa-edit"></i>
                                     </a>
 
                                     <a onclick="copyTextToClipboard('{{settings.SSL_HOST}}{{animal.get_adoption_url}}')" class="action-btn" data-tippy-content="Copiar Link">
-                                        <i class="fa fa-copy"></i>
-                                    </a>
+                                <i class="fa fa-copy"></i>
+                                </a>
 
-                                    {% if animal.estado == "E" %}
+                            {% if animal.estado == "E" %}
                                     <a id="update-estado-animal-expirado-{{animal.id}}" onclick="marcarEnAdopcion('{{animal.id}}')" class="action-btn" data-tippy-content="Re-Publicar">
-                                        <i class="fa fa-sync"></i>
+                                <i class="fa fa-sync"></i>
                                     </a>
-                                    {% endif %}
+                            {% endif %}
 
-                                    {% if animal.estado != "A" %}
+                            {% if animal.estado != "A" %}
                                     <a id="update-estado-animal-adoptado-{{animal.id}}" onclick="marcarAdoptado('{{animal.id}}')" class="action-btn" data-tippy-content="Marcar como adoptado">
-                                        <i class="fa fa-paw"></i>
+                                <i class="fa fa-paw"></i>
                                     </a>
-                                    {% endif %}
+                            {% endif %}
                                 </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
                 {% else %}
                 <div class="alert alert-info">
                     <div class="text-center">No tienes animales cargados todavía. Haz clic en "Cargar Animal" para comenzar.</div>
                 </div>
-                {% endif %}
+            {% endif %}
             </div>
         </div>
 
@@ -711,18 +722,18 @@
                             </label>
 
                             <div>
-                                <input type="text" name="handle" maxlength="150" class="textinput textInput form-control" required="" id="id_handle" value="{{form.handle.value|default_if_none:''}}">
+                            <input type="text" name="handle" maxlength="150" class="textinput textInput form-control" required="" id="id_handle" value="{{form.handle.value|default_if_none:''}}">
 
-                                <small id="hint_id_handle" class="form-text text-muted">{% trans "Tu usuario de catpuccino adopciones." %} {{settings.SSL_HOST}}/<span id="hint_id_handle_user_part"></span></small>
+                            <small id="hint_id_handle" class="form-text text-muted">{% trans "Tu usuario de catpuccino adopciones." %} {{settings.SSL_HOST}}/<span id="hint_id_handle_user_part"></span></small>
 
-                                <p id="error_1_id_handle" class="invalid-feedback" style="display: none">
-                                    <strong>{% trans "Ya existe un usuario con ese nombre." %}</strong>
-                                </p>
+                            <p id="error_1_id_handle" class="invalid-feedback" style="display: none">
+                                <strong>{% trans "Ya existe un usuario con ese nombre." %}</strong>
+                            </p>
 
-                                <p id="error_2_id_handle" class="invalid-feedback" style="display: none">
-                                    <strong>{% trans "Por favor usá solamente caracteres alfanuméricos sin espacios." %}</strong>
-                                </p>
-                            </div>
+                            <p id="error_2_id_handle" class="invalid-feedback" style="display: none">
+                                <strong>{% trans "Por favor usá solamente caracteres alfanuméricos sin espacios." %}</strong>
+                            </p>
+                        </div>
                         </div>
 
                         {{ form.description|as_crispy_field }}
@@ -730,11 +741,11 @@
                         <div class="form-group text-center">
                             <button id="btn-save" type="submit" name="submit" class="btn btn-primary btn-rounded">
                                 <i class="fa fa-save mr-2"></i> Guardar
-                            </button>
+                        </button>
                             <button id="btn-save-loading" class="btn btn-primary btn-rounded d-none" type="button" disabled>
                                 <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                                Guardando...
-                            </button>
+                            Guardando...
+                        </button>
 
                             <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded link-to-animals">
                                 <i class="fas fa-external-link-alt mr-2"></i> Ir a Mi perfil
@@ -756,8 +767,8 @@
                             </button>
                             <button id="btn-social-save-loading" class="btn btn-primary btn-rounded d-none" type="button" disabled>
                                 <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                                Guardando...
-                            </button>
+                            Guardando...
+                        </button>
                         </div>
                     </div>
                 </div>
@@ -767,7 +778,9 @@
         <div class="tab-pane" id="forms-tab" role="tabpanel">
             <div class="py-3">
                 {% if estado_forms %}
+                <div style="margin-bottom: 40px;">
                 <h3 class="section-title">Formularios de Pre-adopción</h3>
+                </div>
                 <table id="forms-table" class="table profile-table">
                     <thead>
                         <th>Candidato</th>
@@ -970,39 +983,39 @@ function saveProfile(form) {
 
 function checkUserName() {
     $("#id_handle").on("keyup", function(input) {
-        var handle = $("#id_handle").val();
-        if (!handle) {
-            return
-        }
+    var handle = $("#id_handle").val();
+    if (!handle) {
+        return
+    }
 
-        var regex = new RegExp("^[0-9a-zA-Z_]+$");
-        if (!regex.test(handle)) {
-            $("#error_2_id_handle").show();
-            $("#id_handle").addClass("is-invalid");
-            return;
+    var regex = new RegExp("^[0-9a-zA-Z_]+$");
+    if (!regex.test(handle)) {
+        $("#error_2_id_handle").show();
+        $("#id_handle").addClass("is-invalid");
+        return;
+    } else {
+        $("#error_2_id_handle").hide();
+        $("#id_handle").removeClass("is-invalid");
+    }
+
+    $("#hint_id_handle_user_part").text(handle);
+
+    $.post("/accounts/checkhandle/", {"handle": handle, "csrfmiddlewaretoken": "{{csrf_token}}"}, function(response) {
+        if (response.status != "success") {
+            if (response.error == "handle") {
+                $("#error_1_id_handle").show();
+            } else if (response.error == "chars") {
+                $("#error_2_id_handle").show();
+            }
+
+        $("#id_handle").addClass("is-invalid");
         } else {
+            $("#error_1_id_handle").hide();
             $("#error_2_id_handle").hide();
             $("#id_handle").removeClass("is-invalid");
+            $("#id_handle").addClass("is-valid");
         }
-
-        $("#hint_id_handle_user_part").text(handle);
-
-        $.post("/accounts/checkhandle/", {"handle": handle, "csrfmiddlewaretoken": "{{csrf_token}}"}, function(response) {
-            if (response.status != "success") {
-                if (response.error == "handle") {
-                    $("#error_1_id_handle").show();
-                } else if (response.error == "chars") {
-                    $("#error_2_id_handle").show();
-                }
-
-                $("#id_handle").addClass("is-invalid");
-            } else {
-                $("#error_1_id_handle").hide();
-                $("#error_2_id_handle").hide();
-                $("#id_handle").removeClass("is-invalid");
-                $("#id_handle").addClass("is-valid");
-            }
-        }, 'json')
+    }, 'json')
     });
 }
 
