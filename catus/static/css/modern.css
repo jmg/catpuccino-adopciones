@@ -543,7 +543,6 @@ body {
   height: 100%;
   object-fit: cover;
   transition: transform 0.8s ease, filter 0.5s ease;
-  filter: brightness(1.05) contrast(1.08);
 }
 
 .post-preview:hover .post-image {
