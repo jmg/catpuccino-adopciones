@@ -32,7 +32,7 @@ body {
   font-family: 'Poppins', 'Open Sans', sans-serif;
   color: var(--text-color);
   background-color: var(--light-bg);
-  padding-top: var(--navbar-height);
+  padding-top: 0;
 }
 
 /* Estilos para la barra de navegación */
@@ -40,10 +40,7 @@ body {
   box-shadow: 0 3px 15px rgba(138, 43, 226, 0.1);
   background-color: var(--navbar-bg);
   padding: 0;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   z-index: 1030;
   height: var(--navbar-height);
   transition: all 0.4s ease;
