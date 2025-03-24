@@ -361,10 +361,15 @@
         }
 
         .limited-td {
-            max-width: 80px;
+            max-width: 120px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+
+        /* Ocultar texto de expirado en móvil */
+        [id^="publicado-expired-text-"] {
+            display: none !important;
         }
 
         /* Ajustes para mostrar solo iconos en los tabs en móvil */
@@ -412,8 +417,62 @@
             padding: 8px 16px;
         }
 
-        .profile-table td, .profile-table th {
-            padding: 10px;
+        /* Mejoras en la tabla para móvil */
+        .profile-table {
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -12px;
+            width: calc(100% + 24px);
+        }
+
+        .profile-table thead th {
+            padding: 12px 15px;
+            font-size: 0.9rem;
+            min-width: 100px;
+        }
+
+        .profile-table td {
+            padding: 12px 15px;
+            min-width: 100px;
+        }
+
+        /* Ajuste específico para la tabla de formularios en móvil */
+        #forms-table {
+            width: 100%;
+            margin: 0;
+        }
+
+        #forms-table thead th,
+        #forms-table td {
+            min-width: 120px;
+        }
+
+        #forms-table td:last-child {
+            min-width: 100px;
+        }
+
+        .action-buttons {
+            gap: 6px;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+        }
+
+        .action-btn i {
+            font-size: 0.9rem;
+        }
+
+        .badge {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+
+        .small-text {
+            font-size: 0.75rem;
         }
 
         .section-title {

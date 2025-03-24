@@ -278,6 +278,37 @@
         box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
     }
 
+    /* Ajuste específico para el botón de volver */
+    #btn-volver {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 500;
+        transition: var(--transition);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        background: linear-gradient(135deg, #6c757d, #495057);
+        color: white;
+        border: none;
+    }
+
+    #btn-volver:hover {
+        background: linear-gradient(135deg, #5a6268, #343a40);
+        color: white;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
+    }
+
+    #btn-volver i {
+        margin-right: 8px !important;
+        font-size: 1rem;
+    }
+
+    #btn-volver span {
+        display: inline;
+    }
+
     /* Ajustes responsivos para dispositivos móviles */
     @media (max-width: 768px) {
         .edit-animal-container {
@@ -389,6 +420,63 @@
             margin-right: 0 !important;
             font-size: 1.2rem;
         }
+
+        /* Ajuste específico para el botón de guardar inferior */
+        #send-form-button-bottom {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-weight: 500;
+            transition: var(--transition);
+            box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+        }
+
+        #send-form-button-bottom:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+        }
+
+        #send-form-button-bottom i {
+            margin-right: 8px !important;
+            font-size: 1rem;
+        }
+
+        #send-form-button-bottom span {
+            display: inline;
+        }
+
+        /* Ajuste específico para el botón de volver en móvil */
+        #btn-volver {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-weight: 500;
+            transition: var(--transition);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+            border: none;
+        }
+
+        #btn-volver:hover {
+            background: linear-gradient(135deg, #5a6268, #343a40);
+            color: white;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
+        }
+
+        #btn-volver i {
+            margin-right: 8px !important;
+            font-size: 1rem;
+        }
+
+        #btn-volver span {
+            display: inline;
+        }
     }
 </style>
 {% endblock %}
@@ -490,8 +578,8 @@
                         </div>
                     </div>
 
-                    <div class="text-center mt-4 mb-3">
-                        <button id="send-form-button-bottom" class="btn btn-primary btn-lg">
+                    <div class="text-center mt-4 mb-3 d-flex justify-content-center">
+                        <button id="send-form-button-bottom" class="btn btn-primary">
                             <i class="fa fa-save mr-2"></i> Guardar Cambios
                         </button>
                     </div>
@@ -501,8 +589,8 @@
             <div class="section-divider"></div>
 
             <div class="text-center mb-3">
-                <a id="btn-volver" class="btn btn-secondary" href="/accounts/profile/">
-                    <i class="fa fa-arrow-left mr-2"></i> Volver al Panel
+                <a id="btn-volver" class="btn" href="/accounts/profile/">
+                    <i class="fa fa-arrow-left"></i> Volver
                 </a>
             </div>
         </div>
@@ -650,7 +738,7 @@
             });
 
             $([document.documentElement, document.body]).animate({
-                scrollTop: $("#id_animalimage_set-" + form_idx + "-DELETE").offset().top - 20
+                scrollTop: $("#id_animalimage_set-" + form_idx + "-DELETE").offset().top - 120
             }, 250);
         });
 
