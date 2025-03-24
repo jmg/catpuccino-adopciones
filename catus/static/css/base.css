@@ -999,10 +999,10 @@ footer .foot {
 
 @media only screen and (max-width: 992px) {
   #mainNav .navbar-nav > li.nav-item > a {
-      background: rgb(0, 0, 0, 0.7);
-      border: 1px solid #6f6f6f;
-      padding: 8px;
-      border-radius: 4px;
+      /* background: rgb(0, 0, 0, 0.7); */
+      /* border: 1px solid #6f6f6f; */
+      /* padding: 8px;
+      border-radius: 4px; */
   }
 
   #forms-table_wrapper {
