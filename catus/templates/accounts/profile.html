@@ -340,6 +340,7 @@
     @media only screen and (max-width: 992px) {
         .dashboard-tabs {
             flex-wrap: wrap;
+            justify-content: center;
         }
 
         .dashboard-tabs .nav-item {
@@ -355,6 +356,68 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+
+        .dashboard-tabs .nav-link {
+            font-size: 0;
+            padding: 0 !important;
+            width: 46px;
+            height: 46px !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .dashboard-tabs .nav-link i {
+            margin-right: 0 !important;
+            font-size: 1.3rem;
+        }
+
+        .dashboard-tabs .nav-item {
+            margin-right: 5px;
+        }
+
+        .dashboard-container {
+            padding: 12px;
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+
+        .dashboard-tab-content {
+            padding: 8px;
+            min-height: 300px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-control {
+            padding: 8px 12px;
+        }
+
+        .btn-primary, .btn-secondary {
+            padding: 8px 16px;
+        }
+
+        .profile-table td, .profile-table th {
+            padding: 10px;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+        }
+
+        .img-container-banner {
+            height: 120px;
+            margin-bottom: 15px;
+        }
+
+        .alert {
+            padding: 12px;
+            margin-bottom: 15px;
         }
     }
 
