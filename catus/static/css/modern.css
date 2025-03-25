@@ -665,10 +665,11 @@ body {
 
 .animal-description-container {
   background-color: var(--light-bg);
-  padding: 15px;
+  padding: 10px;
   border-radius: 8px;
   margin-top: 15px;
   position: relative;
+  font-size: 0.9rem;
 }
 
 .animal-desciption {
@@ -692,7 +693,7 @@ body {
 .card-action {
   padding: 15px;
   border-top: 1px solid rgba(0,0,0,0.05);
-  margin-top: 15px;
+
 }
 
 .instagram-card a {
