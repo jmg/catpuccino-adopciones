@@ -97,6 +97,37 @@
         $("#datos-formulario").slideToggle();
         $(btn).find("i").toggleClass("fa-chevron-up fa-chevron-down");
     }
+
+    // Función para verificar si una URL es un video
+    function isVideoUrl(url) {
+        const videoExtensions = ['.mp4', '.webm', '.ogg'];
+        return videoExtensions.some(ext => url.toLowerCase().endsWith(ext));
+    }
+
+    // Función para convertir imagen en video si corresponde
+    function convertImageToVideo() {
+        document.querySelectorAll('.data-value img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (src && isVideoUrl(src)) {
+                const videoContainer = document.createElement('div');
+                videoContainer.innerHTML = `
+                    <video controls>
+                        <source src="${src}" type="video/${src.split('.').pop()}">
+                        Tu navegador no soporta el elemento video.
+                    </video>
+                    <div class="video-download">
+                        <a href="${src}" download class="btn btn-sm btn-secondary mt-2">
+                            <i class="fa fa-download mr-1"></i> Descargar video
+                        </a>
+                    </div>
+                `;
+                img.parentNode.replaceChild(videoContainer, img);
+            }
+        });
+    }
+
+    // Ejecutar cuando el documento esté listo
+    document.addEventListener('DOMContentLoaded', convertImageToVideo);
 </script>
 {% endblock %}
 
@@ -241,6 +272,7 @@
         border-radius: 6px;
         margin-top: 10px;
         background: #000;
+        display: block;
     }
 
     .form-actions {
