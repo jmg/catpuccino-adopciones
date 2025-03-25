@@ -206,8 +206,8 @@
         content: '';
         position: absolute;
         left: 20px;
-        top: 45px;
-        bottom: -15px;
+        top: 20px;
+        height: calc(100% + 25px);
         width: 2px;
         background-color: rgba(138, 43, 226, 0.2);
     }
@@ -289,6 +289,7 @@
             align-items: flex-start;
             gap: 15px;
             padding-bottom: 25px;
+            position: relative;
         }
 
         .step-number {
@@ -308,8 +309,8 @@
 
         .como-funciona-step:not(:last-child):after {
             left: 20px;
-            top: 45px;
-            bottom: 0;
+            top: 20px;
+            height: calc(100% + 25px);
             width: 2px;
             background-color: rgba(138, 43, 226, 0.2);
         }
