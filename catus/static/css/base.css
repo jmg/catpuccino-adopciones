@@ -861,7 +861,6 @@ footer .foot {
 @media only screen and (max-width: 992px) {
   .post-data {
     font-size: 18px !important;
-    margin-bottom: 25px !important;
   }
   .post-meta {
     font-size: 16px !important;
