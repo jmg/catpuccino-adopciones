@@ -53,7 +53,21 @@
                     {% for attr, value in form_attrs %}
                     <div class="form-data-item">
                         <div class="data-label">{{attr}}</div>
-                        <div class="data-value">{{value|safe}}</div>
+                        <div class="data-value">
+                            {% if value|slice:"-4:" == ".mp4" or value|slice:"-5:" == ".webm" %}
+                                <video controls>
+                                    <source src="{{value}}" type="video/{% if value|slice:'-4:' == '.mp4' %}mp4{% else %}webm{% endif %}">
+                                    Tu navegador no soporta el elemento video.
+                                </video>
+                                <div class="video-download">
+                                    <a href="{{value}}" download class="btn btn-sm btn-secondary mt-2">
+                                        <i class="fa fa-download mr-1"></i> Descargar video
+                                    </a>
+                                </div>
+                            {% else %}
+                                {{value|safe}}
+                            {% endif %}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -222,6 +236,13 @@
         margin-top: 10px;
     }
 
+    .data-value video {
+        max-width: 100%;
+        border-radius: 6px;
+        margin-top: 10px;
+        background: #000;
+    }
+
     .form-actions {
         display: flex;
         gap: 10px;
@@ -261,6 +282,17 @@
         border-color: #545b62;
         transform: translateY(-2px);
         box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    .video-download {
+        text-align: center;
+        margin-top: 5px;
+    }
+
+    .video-download .btn {
+        font-size: 12px;
+        padding: 5px 10px;
+        border-radius: 4px;
     }
 
     @media only screen and (max-width: 768px) {
