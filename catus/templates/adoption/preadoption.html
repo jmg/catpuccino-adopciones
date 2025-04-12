@@ -385,7 +385,7 @@
             hideForm();
         }
 
-        $("input[type=file]").attr("accept", "image/*");
+        $("input[type=file]").attr("accept", "image/*, video/*");
         $("input").not('.form-input').removeAttr('placeholder');
         $('textarea').removeAttr('placeholder');
         $('textarea').css({"height": "100px"});
