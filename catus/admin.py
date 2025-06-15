@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group, User
 from django.contrib.sites.models import Site
 
 from django.utils.safestring import mark_safe
+from catus.services.mail import MailService
 
 
 class AnimalImageAdmin(admin.StackedInline):
@@ -22,6 +23,7 @@ class AnimalAdmin(admin.ModelAdmin):
     search_fields = ["nombre"]
     inlines = [AnimalImageAdmin]
     ordering = ("-fecha_ingreso",)
+    actions = ['aprobar_animales']
 
     def usuario(self, obj):
 
@@ -41,7 +43,36 @@ class AnimalAdmin(admin.ModelAdmin):
             links += " | <a target='_blank' href='/user/settingslogin/?user_id={}'>Login as user</a>".format(obj.cargado_por.id)
 
         links += " | <a target='_blank' href='/tools/preguntaradopcion/?user_id={}'>Preguntar Adopción</a>".format(obj.cargado_por.id)
+
+        # Agregar enlace para aprobar animal si no está aprobado
+        if not obj.aprobado:
+            links += " | <a target='_blank' href='/animal/aprobar/?id={}' style='color: green; font-weight: bold;'>Aprobar Animal</a>".format(obj.id)
+
         return mark_safe(links)
+
+    def aprobar_animales(self, request, queryset):
+        """
+        Acción personalizada para aprobar animales seleccionados
+        """
+        animales_aprobados = 0
+        mail_service = MailService()
+
+        for animal in queryset:
+            if not animal.aprobado:
+                animal.aprobado = True
+                animal.save()
+                # Enviar email de aprobación
+                mail_service.send_mail_aprobacion(animal)
+                animales_aprobados += 1
+
+        if animales_aprobados == 1:
+            message = f"1 animal fue aprobado y se envió el email de notificación."
+        else:
+            message = f"{animales_aprobados} animales fueron aprobados y se enviaron los emails de notificación."
+
+        self.message_user(request, message)
+
+    aprobar_animales.short_description = "Aprobar animales seleccionados"
 
 
 class FormAdmin(FormAdmin):
