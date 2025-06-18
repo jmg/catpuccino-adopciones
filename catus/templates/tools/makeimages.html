@@ -60,7 +60,7 @@
                                 <i class="fa fa-layer-group"></i>
                                 Layout
                             </label>
-                            <select name="layout_{{image.id}}" class="form-control form-control-modern">
+                            <select name="layout_{{image.id}}" class="form-control form-control-modern config-select" data-image-id="{{image.id}}">
                                 <option value="si" {% if image.image_layout %}selected="selected"{% endif %}>Sí - Con diseño y logo</option>
                                 <option value="no" {% if not image.image_layout %}selected="selected"{% endif %}>No - Imagen original</option>
                             </select>
@@ -71,7 +71,7 @@
                                 <i class="fa fa-crosshairs"></i>
                                 Centrada
                             </label>
-                            <select name="centrado_{{image.id}}" class="form-control form-control-modern">
+                            <select name="centrado_{{image.id}}" class="form-control form-control-modern config-select" data-image-id="{{image.id}}">
                                 <option value="si" {% if image.image_centered %}selected="selected"{% endif %}>Sí - Centrada</option>
                                 <option value="no" {% if not image.image_centered %}selected="selected"{% endif %}>No - Original</option>
                             </select>
@@ -82,7 +82,7 @@
                                 <i class="fa fa-font"></i>
                                 Tamaño Fuente
                             </label>
-                            <select class="form-control form-control-modern" name="nombre_font_size_{{image.id}}" required>
+                            <select class="form-control form-control-modern config-select" name="nombre_font_size_{{image.id}}" data-image-id="{{image.id}}" required>
                                 {% for x in fonts %}
                                 <option {% if image.image_font_size == x %}selected="selected"{% endif %} value="{{x}}">{{x}}px</option>
                                 {% endfor %}
@@ -94,7 +94,7 @@
                                 <i class="fa fa-map-marker-alt"></i>
                                 Posición Nombre
                             </label>
-                            <select class="form-control form-control-modern" name="posicion_nombre_{{image.id}}">
+                            <select class="form-control form-control-modern config-select" name="posicion_nombre_{{image.id}}" data-image-id="{{image.id}}">
                                 <option {% if image.image_posicion_nombre == "Izquierda (abajo)" %}selected="selected"{% endif %} value="Izquierda (abajo)">Izquierda (abajo)</option>
                                 <option {% if image.image_posicion_nombre == "Izquierda (arriba)" %}selected="selected"{% endif %} value="Izquierda (arriba)">Izquierda (arriba)</option>
                             </select>
@@ -105,7 +105,7 @@
                                 <i class="fa fa-map-marker-alt"></i>
                                 Posición Edad/Sexo
                             </label>
-                            <select class="form-control form-control-modern" name="posicion_edad_sexo_{{image.id}}">
+                            <select class="form-control form-control-modern config-select" name="posicion_edad_sexo_{{image.id}}" data-image-id="{{image.id}}">
                                 <option {% if image.image_posicion_edad_sexo == "Izquierda (abajo)" %}selected="selected"{% endif %} value="Izquierda (abajo)">Izquierda (abajo)</option>
                                 <option {% if image.image_posicion_edad_sexo == "Izquierda (arriba)" %}selected="selected"{% endif %} value="Izquierda (arriba)">Izquierda (arriba)</option>
                             </select>

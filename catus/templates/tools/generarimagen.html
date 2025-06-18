@@ -1178,13 +1178,12 @@
 }
 
 .image-preview-container {
-    border: 2px solid #e9ecef;
     border-radius: 10px;
     background: #f8f9fa;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 15px;
+    padding: 0;
     flex: 1;
 }
 
@@ -1552,6 +1551,56 @@
             localStorage.setItem('collapsedImageCards', JSON.stringify(collapsedStates));
         });
     }
+
+    // Función para actualizar una imagen individual
+    function updateSingleImage(imageId) {
+        var form = document.getElementById('animals-form');
+        var data = $(form).serializeArray();
+        data.push({name: 'image_id', value: imageId});
+
+        // Mostrar indicador de carga en la imagen específica
+        var imageCard = $('[data-image-id="' + imageId + '"]');
+        var previewSection = imageCard.find('.images-preview-section');
+        var originalHtml = previewSection.html();
+
+        previewSection.html(
+            '<div class="loading-state">' +
+                '<div class="loading-spinner">' +
+                    '<i class="fas fa-spinner fa-spin fa-2x"></i>' +
+                    '<p>Actualizando imagen...</p>' +
+                '</div>' +
+            '</div>'
+        );
+
+        $.post("/tools/makesingleimage/", data, function(response) {
+            previewSection.html(response);
+
+            // Actualizar badge de estado
+            var badge = imageCard.find('.image-config-badge .badge');
+            badge.removeClass('badge-warning').addClass('badge-success').text('Procesada');
+
+            // Actualizar también las vistas previas colapsadas
+            var collapsedPreview = imageCard.find('.collapsed-preview .collapsed-image-item:last-child');
+            var newImg = $(response).find('.img-preview:last');
+            if (newImg.length) {
+                collapsedPreview.find('img').attr('src', newImg.attr('src'));
+                collapsedPreview.find('.collapsed-placeholder').remove();
+                if (!collapsedPreview.find('img').length) {
+                    collapsedPreview.html('<img class="collapsed-img" src="' + newImg.attr('src') + '" alt="Procesada"><span class="collapsed-label">Procesada</span>');
+                }
+            }
+
+        }).fail(function() {
+            $.alert("Error al actualizar la imagen");
+            previewSection.html(originalHtml);
+        });
+    }
+
+    // Event listener para detectar cambios en los selects de configuración
+    $(document).on('change', '.config-select', function() {
+        var imageId = $(this).data('image-id');
+        updateSingleImage(imageId);
+    });
 
 </script>
 {% endblock %}
