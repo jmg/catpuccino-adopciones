@@ -8,46 +8,93 @@
 
     <div class="col-lg-8 col-md-10 mx-auto container-colored">
 
-        <button onclick="facebookLogin()" class="btn btn-primary btn-fb">
-            <i class="fab fa-facebook"></i>
-            <span>Iniciar sesión con Facebook</span>
-        </button>
+        <!-- Botones de acción principales -->
+        <div class="action-buttons-container">
+            <button onclick="facebookLogin()" class="btn btn-primary btn-fb">
+                <i class="fab fa-facebook"></i>
+                <span>Iniciar sesión con Facebook</span>
+            </button>
 
-        <a href="/tools/downloadimages/{{animal.id}}/" class="btn btn-primary">Descargar imagenes </a>
-        <button onclick="publish(this)" class="btn btn-primary btn-ig"><i class="fab fa-instagram"></i> Publicar en Instagram </button>
+            <a href="/tools/downloadimages/{{animal.id}}/" class="btn btn-primary btn-download">
+                <i class="fa fa-download"></i>
+                <span>Descargar imagenes</span>
+            </a>
 
-        <br><br>
+            <button onclick="publish(this)" class="btn btn-primary btn-ig">
+                <i class="fab fa-instagram"></i>
+                <span>Publicar en Instagram</span>
+            </button>
+        </div>
 
-        <form id="animals-form" onsubmit="return updateImages(this)">
-            {% csrf_token %}
-            <input type="hidden" name="animal_id" value="{{animal.id}}">
+        <!-- Formulario de actualización de imágenes -->
+        <div class="form-section">
+            <form id="animals-form" onsubmit="return updateImages(this)">
+                {% csrf_token %}
+                <input type="hidden" name="animal_id" value="{{animal.id}}">
 
-            <button class="btn btn-primary"><i class="fa fa-refresh"></i> Actualizar </button><br><br>
+                                <button class="btn btn-primary btn-update">
+                    <i class="fa fa-refresh"></i>
+                    <span>Actualizar</span>
+                </button>
 
-            <div id="animales-imagenes" class="row">
+                <!-- Sección de Galería de Imágenes -->
+                <div class="images-section">
+                    <div class="images-header">
+                        <h5 class="images-title" style="color: white;">
+                            <i class="fa fa-images"></i>
+                            Galería de Imágenes Generadas
+                        </h5>
+                        <div class="gallery-controls">
+                            <button onclick="toggleAllCards(false)" class="btn-gallery-control" title="Expandir todas">
+                                <i class="fa fa-expand-arrows-alt"></i>
+                            </button>
+                            <button onclick="toggleAllCards(true)" class="btn-gallery-control" title="Colapsar todas">
+                                <i class="fa fa-compress-arrows-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="animales-imagenes" class="images-gallery">
+                        <div class="loading-state">
+                            <div class="loading-spinner">
+                                <i class="fas fa-camera fa-2x"></i>
+                                <p>Cargando imágenes...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-update">
+                    <i class="fa fa-refresh"></i>
+                    <span>Actualizar</span>
+                </button>
+            </form>
+        </div>
+
+        <hr class="section-divider">
+
+                <!-- Configuración de Instagram -->
+        <div class="form-section">
+            <div class="instagram-config">
+                <button onclick="toggleInstagramReady(this)" class="btn btn-instagram-toggle {% if animal.instagram_listo_para_publicar %}btn-ready{% else %}btn-not-ready{% endif %}" data-ready="{% if animal.instagram_listo_para_publicar %}true{% else %}false{% endif %}">
+                    <i class="{% if animal.instagram_listo_para_publicar %}fa fa-check-circle{% else %}fa fa-clock{% endif %}"></i>
+                    <span>{% if animal.instagram_listo_para_publicar %}Listo para Instagram{% else %}Marcar como listo{% endif %}</span>
+                </button>
             </div>
+        </div>
 
-            <button class="btn btn-primary">Actualizar </button>
-        </form>
+        <hr class="section-divider">
 
-        <hr>
+        <!-- Sección de texto del post -->
+        <div class="post-section">
+            <h4 class="section-title">Texto post IG</h4>
+            <button class="btn btn-primary btn-copy" onclick="copiarTexto()">
+                <i class="fa fa-copy"></i>
+                <span>Copiar Texto</span>
+            </button>
 
-        <form onsubmit="return saveForm(this)">
-            {% csrf_token %}
-            <input type="hidden" name="animal_id" value="{{animal.id}}">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="instagram_listo_para_publicar" id="instagram_listo_para_publicar" {% if animal.instagram_listo_para_publicar %}checked="checked"{% endif %}>
-                <label class="form-check-label" for="instagram_listo_para_publicar">Listo para publicar en Instagram</label>
-            </div>
-            <br>
-            <button class="btn btn-primary">Guardar</button>
-        </form>
-
-        <hr>
-        <h4>Texto post IG</h4>
-        <button class="btn btn-primary" onclick="copiarTexto()">Copiar Texto</button>
-        <br><br>
-        <div id="ig-post" style="border: 1px solid #ccc; padding: 5px">{{ig_text|safe}}</div>
+            <div id="ig-post" class="ig-post-content">{{ig_text|safe}}</div>
+        </div>
    </div>
   </div>
 </div>
@@ -56,27 +103,1241 @@
 
 {% block css %}
 <style>
+/* Estilos generales */
 .img-animal {
-    max-height: 300px;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    background: #f8f9fa;
+    padding: 5px;
 }
+
 .form-group {
     margin-left: 0.5rem;
     margin-right: 0.5rem;
+    margin-bottom: 0.8rem;
 }
+
+/* Botones generales */
 .btn {
     border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 12px 20px;
 }
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Botones específicos */
 .btn-fb {
-    background: blue;
+    background: linear-gradient(45deg, #1877f2, #42a5f5);
+    color: white;
 }
+
 .btn-fb:hover {
-    background: blue !important;
+    background: linear-gradient(45deg, #166fe5, #1976d2) !important;
+    color: white;
 }
+
 .btn-ig {
-    background: #3b5998;
+    background: linear-gradient(45deg, #e1306c, #fd1d1d, #fcb045);
+    color: white;
 }
+
 .btn-ig:hover {
-    background: #3b5998 !important;
+    background: linear-gradient(45deg, #c13584, #e1306c, #fd1d1d) !important;
+    color: white;
+}
+
+.btn-download {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+}
+
+.btn-download:hover {
+    background: linear-gradient(45deg, #218838, #1ca085) !important;
+    color: white;
+}
+
+.btn-update {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+}
+
+.btn-update:hover {
+    background: linear-gradient(45deg, #0056b3, #004085) !important;
+    color: white;
+}
+
+.btn-save {
+    background: linear-gradient(45deg, #17a2b8, #138496);
+    color: white;
+}
+
+.btn-save:hover {
+    background: linear-gradient(45deg, #138496, #0f6674) !important;
+    color: white;
+}
+
+.btn-copy {
+    background: linear-gradient(45deg, #6f42c1, #5a32a3);
+    color: white;
+}
+
+.btn-copy:hover {
+    background: linear-gradient(45deg, #5a32a3, #4c2a85) !important;
+    color: white;
+}
+
+/* Contenedores de secciones */
+.action-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 30px;
+}
+
+.form-section {
+    margin-bottom: 30px;
+}
+
+.post-section {
+    margin-bottom: 20px;
+}
+
+.section-divider {
+    margin: 30px 0;
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #dee2e6, transparent);
+}
+
+.section-title {
+    color: #495057;
+    font-weight: 600;
+    margin-bottom: 15px;
+    font-size: 1.25rem;
+}
+
+/* Configuración de Instagram */
+.instagram-config {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.btn-instagram-toggle {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 15px 25px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-instagram-toggle:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-instagram-toggle:hover:before {
+    left: 100%;
+}
+
+/* Estado "No listo" */
+.btn-not-ready {
+    background: linear-gradient(45deg, #ffc107, #fd7e14);
+    border-color: #fd7e14;
+    color: white;
+}
+
+.btn-not-ready:hover {
+    background: linear-gradient(45deg, #e0a800, #fd7e14) !important;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(253, 126, 20, 0.3);
+}
+
+.btn-not-ready i {
+    animation: pulse 2s infinite;
+}
+
+/* Estado "Listo" */
+.btn-ready {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border-color: #20c997;
+    color: white;
+}
+
+.btn-ready:hover {
+    background: linear-gradient(45deg, #1e7e34, #17a085) !important;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+}
+
+.btn-ready i {
+    animation: checkBounce 0.6s ease-out;
+}
+
+/* Animaciones */
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+@keyframes checkBounce {
+    0% {
+        transform: scale(0);
+    }
+    50% {
+        transform: scale(1.3);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Contenido del post de Instagram */
+.ig-post-content {
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    margin-top: 15px;
+    line-height: 1.6;
+    font-family: system-ui, -apple-system, sans-serif;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Sección completa de imágenes */
+.images-section {
+    background: #ffffff;
+    border: 2px solid #e9ecef;
+    border-radius: 20px;
+    margin: 30px 0;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.images-section:hover {
+    box-shadow: 0 12px 35px rgba(0,0,0,0.12);
+    border-color: #007bff;
+}
+
+/* Header de la sección */
+.images-header {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    padding: 15px 25px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.images-title {
+    color: white;
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.images-title i {
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
+
+/* Controles de la galería */
+.images-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gallery-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-gallery-control {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-gallery-control:hover {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.5);
+    transform: scale(1.05);
+}
+
+/* Galería de imágenes mejorada */
+.images-gallery {
+    margin: 0;
+    min-height: 120px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 0;
+    padding: 25px;
+    border: none;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.images-gallery:hover {
+    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+}
+
+/* Estado de carga */
+.loading-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80px;
+    text-align: center;
+}
+
+.loading-spinner {
+    color: #6c757d;
+    animation: fadeInOut 2s ease-in-out infinite;
+}
+
+.loading-spinner i {
+    display: block;
+    margin-bottom: 10px;
+    color: #007bff;
+}
+
+.loading-spinner p {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Grid de imágenes cuando se cargan */
+.images-gallery .row {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    justify-content: center;
+}
+
+/* Contenedor individual de imagen */
+.images-gallery .image-item {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+}
+
+.images-gallery .image-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    border-color: #007bff;
+}
+
+/* Imagen dentro del contenedor */
+.images-gallery .img-animal {
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+    border-radius: 12px 12px 0 0;
+    background: #f8f9fa;
+    padding: 8px;
+}
+
+.images-gallery .image-item:hover .img-animal {
+    transform: scale(1.05);
+}
+
+/* Información/controles de la imagen */
+.images-gallery .image-controls {
+    padding: 12px;
+    background: white;
+    border-top: 1px solid #f1f3f4;
+}
+
+.images-gallery .image-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.images-gallery .image-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+.images-gallery .btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 6px;
+    min-height: auto;
+}
+
+/* Estado vacío */
+.images-gallery.empty {
+    border-style: dashed;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.empty-state {
+    text-align: center;
+    color: #6c757d;
+    padding: 30px 20px;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #dee2e6;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.empty-state h5 {
+    color: #495057;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Estilos móviles */
+@media (max-width: 768px) {
+         .container-small-margin-mobile {
+         padding-left: 8px;
+         padding-right: 8px;
+     }
+
+         /* Botones en móvil */
+     .action-buttons-container {
+         flex-direction: column;
+         gap: 6px;
+         margin-bottom: 20px;
+     }
+
+    .btn {
+        width: 100%;
+        padding: 14px 16px;
+        font-size: 16px;
+        min-height: 48px;
+    }
+
+    .btn i {
+        font-size: 1.1rem;
+    }
+
+    .btn span {
+        font-size: 0.95rem;
+    }
+
+              /* Sección de imágenes en móvil */
+     .images-section {
+         margin: 15px 0;
+         border-radius: 12px;
+     }
+
+     .images-header {
+         padding: 10px 15px;
+     }
+
+     .images-title {
+         font-size: 0.95rem;
+         gap: 6px;
+     }
+
+     .gallery-controls {
+         gap: 4px;
+     }
+
+     .btn-gallery-control {
+         padding: 4px 6px;
+         font-size: 0.75rem;
+     }
+
+     /* Galería de imágenes en móvil */
+     .images-gallery {
+         padding: 12px;
+         min-height: 80px;
+     }
+
+     .images-gallery .row {
+         grid-template-columns: 1fr 1fr;
+         gap: 10px;
+     }
+
+     .images-gallery .img-animal {
+         min-height: 150px;
+         max-height: 200px;
+         padding: 5px;
+     }
+
+     .images-gallery .image-controls {
+         padding: 8px;
+     }
+
+     .images-gallery .image-title {
+         font-size: 11px;
+         margin-bottom: 6px;
+     }
+
+     .images-gallery .btn-sm {
+         padding: 3px 6px;
+         font-size: 10px;
+     }
+
+     .loading-spinner {
+         font-size: 14px;
+     }
+
+     .loading-spinner i {
+         font-size: 1.5rem !important;
+     }
+
+     /* Tarjetas de configuración en móvil */
+     .image-config-card {
+         margin-bottom: 15px;
+         border-radius: 10px;
+     }
+
+     .image-config-header {
+         padding: 8px 12px;
+     }
+
+     .image-config-title {
+         font-size: 0.85rem;
+         gap: 5px;
+     }
+
+     .image-config-content {
+         padding: 12px;
+     }
+
+     .controls-title, .images-title {
+         font-size: 0.85rem;
+         margin-bottom: 10px;
+     }
+
+     .form-label {
+         font-size: 0.7rem;
+         margin-bottom: 3px;
+         gap: 4px;
+     }
+
+     .form-control-modern {
+         padding: 6px 8px;
+         font-size: 0.8rem;
+     }
+
+     .form-group {
+         margin-bottom: 0.6rem;
+     }
+
+     .images-comparison {
+         gap: 8px;
+     }
+
+     .image-preview-label {
+         font-size: 0.8rem;
+     }
+
+     .image-divider {
+         margin: 10px 0;
+     }
+
+     .divider-icon {
+         width: 35px;
+         height: 35px;
+         margin: 0 10px;
+     }
+
+     /* Colapso en móvil */
+     .header-left {
+         gap: 10px;
+     }
+
+     .collapse-toggle {
+         width: 28px;
+         height: 28px;
+     }
+
+     .collapsed-images {
+         gap: 10px;
+     }
+
+     .collapsed-img {
+         width: 60px;
+         height: 60px;
+         padding: 2px;
+     }
+
+     .collapsed-placeholder {
+         width: 60px;
+         height: 60px;
+     }
+
+     .collapsed-placeholder i {
+         font-size: 1rem;
+     }
+
+     .collapsed-label {
+         font-size: 0.7rem;
+         margin-top: 4px;
+     }
+
+     /* Layout móvil - 1 columna */
+     .images-gallery .row {
+         grid-template-columns: 1fr;
+         gap: 15px;
+     }
+
+     .image-config-card:not(.collapsed) {
+         grid-column: span 1;
+     }
+
+         /* Formularios en móvil */
+     .form-section {
+         margin-bottom: 20px;
+     }
+
+     /* Botón Instagram en móvil */
+     .instagram-config {
+         margin-bottom: 12px;
+     }
+
+     .btn-instagram-toggle {
+         width: 100%;
+         padding: 16px 20px;
+         font-size: 16px;
+         border-radius: 10px;
+     }
+
+    /* Post de Instagram en móvil */
+    .ig-post-content {
+        font-size: 14px;
+        padding: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        margin-bottom: 12px;
+    }
+
+         .section-divider {
+         margin: 15px 0;
+     }
+
+    /* Mejorar la legibilidad del texto */
+    .form-check-label {
+        font-size: 16px;
+        line-height: 1.4;
+    }
+}
+
+/* Estilos para pantallas muy pequeñas (< 576px) */
+@media (max-width: 575px) {
+         .container-colored {
+         padding: 12px 8px;
+     }
+
+         .btn {
+         padding: 16px 12px;
+         font-size: 15px;
+     }
+
+          /* Sección de imágenes en pantallas muy pequeñas */
+     .images-section {
+         margin: 10px 0;
+         border-radius: 10px;
+     }
+
+     .images-header {
+         padding: 8px 12px;
+     }
+
+     .images-title {
+         font-size: 0.85rem;
+         gap: 5px;
+     }
+
+     /* Galería en pantallas muy pequeñas */
+     .images-gallery {
+         padding: 10px;
+     }
+
+     .images-gallery .row {
+         grid-template-columns: 1fr 1fr;
+         gap: 8px;
+     }
+
+     .images-gallery .img-animal {
+         min-height: 120px;
+         max-height: 160px;
+         padding: 4px;
+     }
+
+     .images-gallery .image-controls {
+         padding: 6px;
+     }
+
+     .images-gallery .image-title {
+         font-size: 10px;
+     }
+
+     /* Tarjetas de configuración en pantallas muy pequeñas */
+     .image-config-card {
+         margin-bottom: 12px;
+         border-radius: 8px;
+     }
+
+     .image-config-header {
+         padding: 6px 10px;
+     }
+
+     .image-config-title {
+         font-size: 0.8rem;
+     }
+
+     .image-config-content {
+         padding: 10px;
+     }
+
+     .controls-title, .images-title {
+         font-size: 0.8rem;
+         margin-bottom: 8px;
+     }
+
+     .form-label {
+         font-size: 0.65rem;
+         margin-bottom: 2px;
+         gap: 3px;
+     }
+
+     .form-label i {
+         font-size: 0.6rem;
+     }
+
+     .form-control-modern {
+         padding: 5px 6px;
+         font-size: 0.75rem;
+     }
+
+     .form-group {
+         margin-bottom: 0.5rem;
+     }
+
+     .image-divider {
+         margin: 10px 0;
+     }
+
+     .divider-icon {
+         width: 30px;
+         height: 30px;
+         margin: 0 8px;
+     }
+
+     /* Colapso en pantallas muy pequeñas */
+     .header-left {
+         gap: 8px;
+     }
+
+     .collapse-toggle {
+         width: 25px;
+         height: 25px;
+     }
+
+     .collapsed-images {
+         gap: 8px;
+         flex-direction: column;
+         align-items: stretch;
+     }
+
+     .collapsed-image-item {
+         display: flex;
+         align-items: center;
+         gap: 10px;
+         text-align: left;
+     }
+
+     .collapsed-img {
+         width: 50px;
+         height: 50px;
+         flex-shrink: 0;
+         padding: 2px;
+     }
+
+     .collapsed-placeholder {
+         width: 50px;
+         height: 50px;
+         flex-shrink: 0;
+     }
+
+     .collapsed-placeholder i {
+         font-size: 0.9rem;
+     }
+
+     .collapsed-label {
+         font-size: 0.65rem;
+         margin-top: 0;
+     }
+
+     /* Botón Instagram en pantallas muy pequeñas */
+     .btn-instagram-toggle {
+         padding: 14px 16px;
+         font-size: 15px;
+     }
+
+    .ig-post-content {
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    .section-title {
+        font-size: 1rem;
+    }
+}
+
+/* Spinner de carga */
+.fa-spinner {
+    color: #007bff;
+}
+
+/* Animaciones */
+@keyframes fadeInOut {
+    0%, 100% {
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200px 0;
+    }
+    100% {
+        background-position: calc(200px + 100%) 0;
+    }
+}
+
+/* Animación de aparición para imágenes */
+.images-gallery .image-item {
+    animation: slideInUp 0.5s ease-out;
+}
+
+.images-gallery .image-item:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.images-gallery .image-item:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+.images-gallery .image-item:nth-child(4) {
+    animation-delay: 0.3s;
+}
+
+/* Efecto shimmer para loading */
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/* Spinner mejorado */
+.images-gallery .fa-spinner {
+    animation: fadeInOut 2s ease-in-out infinite;
+}
+
+/* Estilos para las tarjetas de configuración de imágenes */
+.image-config-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    margin-bottom: 0;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.image-config-card:hover {
+    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    border-color: #007bff;
+}
+
+/* Header de cada tarjeta de imagen */
+.image-config-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.image-config-header:hover {
+    background: linear-gradient(135deg, #218838 0%, #17a085 100%);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+}
+
+.collapse-toggle {
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.collapse-toggle:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+.collapse-toggle i {
+    color: white;
+    font-size: 0.9rem;
+    transition: transform 0.3s ease;
+}
+
+.image-config-card.collapsed .collapse-toggle i {
+    transform: rotate(180deg);
+}
+
+.image-config-title {
+    color: white;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.image-config-badge .badge {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+.badge-success {
+    background: rgba(255,255,255,0.2) !important;
+    color: white !important;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.badge-warning {
+    background: rgba(255,193,7,0.9) !important;
+    color: #333 !important;
+    border: 1px solid #ffc107;
+}
+
+/* Contenido de cada tarjeta */
+.image-config-content {
+    padding: 20px;
+}
+
+.controls-section, .images-preview-section {
+    height: 100%;
+}
+
+.controls-title, .images-title {
+    color: #495057;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #f8f9fa;
+}
+
+/* Formularios modernos */
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.form-label i {
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+
+.form-control-modern {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+}
+
+.form-control-modern:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.1);
+    background: white;
+}
+
+/* Vista previa de imágenes */
+.images-comparison {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+}
+
+.image-preview-item {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.image-preview-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.image-preview-container {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    flex: 1;
+}
+
+.img-preview {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+    border-radius: 6px;
+}
+
+.image-preview-container:hover .img-preview {
+    transform: scale(1.05);
+}
+
+.image-placeholder {
+    color: #6c757d;
+    text-align: center;
+    padding: 20px;
+}
+
+.image-placeholder i {
+    display: block;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.image-placeholder p {
+    margin: 0;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+/* Divisores entre imágenes */
+.image-divider {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+    position: relative;
+}
+
+.divider-line {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #dee2e6, transparent);
+}
+
+.divider-icon {
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 15px;
+    color: #6c757d;
+    transition: all 0.3s ease;
+}
+
+.divider-icon:hover {
+    border-color: #007bff;
+    color: #007bff;
+    transform: scale(1.1);
+}
+
+/* Estados de colapso */
+.image-config-card.collapsed .expanded-content {
+    display: none;
+}
+
+.image-config-card:not(.collapsed) .collapsed-preview {
+    display: none !important;
+}
+
+/* Vista previa colapsada */
+     .collapsed-preview {
+         padding: 10px 15px;
+     }
+
+.collapsed-images {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.collapsed-image-item {
+    flex: 1;
+    text-align: center;
+}
+
+.collapsed-img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    background: white;
+    padding: 3px;
+}
+
+.collapsed-img:hover {
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.collapsed-placeholder {
+    width: 80px;
+    height: 80px;
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    background: #f8f9fa;
+    margin: 0 auto;
+}
+
+.collapsed-placeholder i {
+    font-size: 1.2rem;
+    margin-bottom: 4px;
+}
+
+.collapsed-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    margin-top: 6px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Contenido expandido */
+.expanded-content {
+    transition: all 0.3s ease;
+}
+
+/* Layout optimizado para 2 columnas */
+.images-gallery .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+/* Tarjetas de imagen ocupan columnas completas cuando están expandidas */
+.image-config-card:not(.collapsed) {
+    grid-column: span 2;
 }
 </style>
 {% endblock %}
@@ -186,20 +1447,110 @@
         $.post("/tools/makeimages/", data, function(response) {
 
             $('#animales-imagenes').html(response);
+
+            // Restaurar estados de colapso después de cargar las imágenes
+            setTimeout(function() {
+                restoreCollapsedStates();
+            }, 100);
         });
 
         return false
     }
 
-    function saveForm(form) {
+        function toggleInstagramReady(btn) {
 
-        var data = $(form).serializeArray()
-        $.post("/tools/saveform/", data, function(response) {
-            $.info(response)
+        $(btn).attr('disabled', true);
+        var isReady = $(btn).data('ready') === true || $(btn).data('ready') === 'true';
+        var newState = !isReady;
+
+        // Cambiar el icono inmediatamente para feedback visual
+        var icon = $(btn).find('i');
+        var span = $(btn).find('span');
+
+        if (newState) {
+            // Cambiar a estado "listo"
+            icon.removeClass('fa-clock').addClass('fa-check-circle');
+            span.text('Listo para Instagram');
+            $(btn).removeClass('btn-not-ready').addClass('btn-ready');
+        } else {
+            // Cambiar a estado "no listo"
+            icon.removeClass('fa-check-circle').addClass('fa-clock');
+            span.text('Marcar como listo');
+            $(btn).removeClass('btn-ready').addClass('btn-not-ready');
+        }
+
+        var params = {
+            "csrfmiddlewaretoken": "{{ csrf_token }}",
+            "animal_id": "{{animal.id}}",
+            "instagram_listo_para_publicar": newState ? 'on' : ''
+        }
+
+        $.post("/tools/saveform/", params, function(response) {
+            $.info(response);
+            $(btn).data('ready', newState);
         }).fail(function(response) {
-            $.alert(response.responseText)
-        })
-        return false
+            $.alert(response.responseText);
+
+            // Revertir cambios si falla
+            if (newState) {
+                icon.removeClass('fa-check-circle').addClass('fa-clock');
+                span.text('Marcar como listo');
+                $(btn).removeClass('btn-ready').addClass('btn-not-ready');
+            } else {
+                icon.removeClass('fa-clock').addClass('fa-check-circle');
+                span.text('Listo para Instagram');
+                $(btn).removeClass('btn-not-ready').addClass('btn-ready');
+            }
+        }).always(function() {
+            $(btn).attr('disabled', false);
+        });
+    }
+
+    function toggleImageCard(header) {
+        var card = $(header).closest('.image-config-card');
+        card.toggleClass('collapsed');
+
+        // Prevenir interferencia con otros eventos
+        event.stopPropagation();
+
+        // Guardar estado en localStorage
+        var imageId = card.data('image-id');
+        var isCollapsed = card.hasClass('collapsed');
+
+        var collapsedStates = JSON.parse(localStorage.getItem('collapsedImageCards') || '{}');
+        collapsedStates[imageId] = isCollapsed;
+        localStorage.setItem('collapsedImageCards', JSON.stringify(collapsedStates));
+    }
+
+    // Restaurar estados de colapso al cargar
+    function restoreCollapsedStates() {
+        var collapsedStates = JSON.parse(localStorage.getItem('collapsedImageCards') || '{}');
+
+        $('.image-config-card').each(function() {
+            var imageId = $(this).data('image-id');
+            if (collapsedStates[imageId]) {
+                $(this).addClass('collapsed');
+            }
+        });
+    }
+
+    // Función para colapsar/expandir todas las tarjetas
+    function toggleAllCards(collapse) {
+        $('.image-config-card').each(function() {
+            var card = $(this);
+            var imageId = card.data('image-id');
+
+            if (collapse) {
+                card.addClass('collapsed');
+            } else {
+                card.removeClass('collapsed');
+            }
+
+            // Actualizar localStorage
+            var collapsedStates = JSON.parse(localStorage.getItem('collapsedImageCards') || '{}');
+            collapsedStates[imageId] = collapse;
+            localStorage.setItem('collapsedImageCards', JSON.stringify(collapsedStates));
+        });
     }
 
 </script>
