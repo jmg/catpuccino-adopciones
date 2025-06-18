@@ -94,6 +94,81 @@ class MakeImagesView(BaseView):
         return self.render_to_response({"animal": animal, "fonts": fonts})
 
 
+class MakeSingleImageView(BaseView):
+
+    url = r"^tools/makesingleimage/$"
+
+    def post(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        from catus.models import AnimalImage
+
+        fonts = [150, 125, 100, 75, 50]
+        image_id = self.request.POST.get("image_id")
+
+        try:
+            imagen = AnimalImage.objects.get(id=image_id)
+        except AnimalImage.DoesNotExist:
+            return self.response("Imagen no encontrada.")
+
+        animal = imagen.animal
+
+        # Obtener configuración de la imagen específica
+        centered = True
+        if self.request.POST.get("centrado_{}".format(imagen.id)) == "no":
+            centered = False
+
+        layout = True
+        if self.request.POST.get("layout_{}".format(imagen.id)) == "no":
+            layout = False
+
+        try:
+            nombre_font_size = int(self.request.POST.get("nombre_font_size_{}".format(imagen.id), 150))
+        except:
+            nombre_font_size = 150
+
+        posicion_edad_sexo = self.request.POST.get("posicion_edad_sexo_{}".format(imagen.id), "Izquierda (abajo)")
+        posicion_nombre = self.request.POST.get("posicion_nombre_{}".format(imagen.id), "Izquierda (abajo)")
+
+        # Procesar la imagen
+        if layout:
+            image = ImageService().generate_logo_image(
+                animal,
+                imagen.image,
+                centered=centered,
+                nombre_font_size=nombre_font_size,
+                posicion_edad_sexo=posicion_edad_sexo,
+                posicion_nombre=posicion_nombre
+            )
+        else:
+            image = imagen.image
+
+        content_file = ContentFile(image.read())
+        file = File(content_file)
+
+        random_name = f'{uuid.uuid4()}.jpeg'
+
+        # Guardar la imagen procesada
+        imagen.image_for_instagram.save(random_name, file, save=True)
+        imagen.image_layout = layout
+        imagen.image_centered = centered
+        imagen.image_font_size = nombre_font_size
+        imagen.image_posicion_edad_sexo = posicion_edad_sexo
+        imagen.image_posicion_nombre = posicion_nombre
+        imagen.save()
+
+                # Renderizar solo esta imagen específica
+        context = {
+            "image": imagen,
+            "animal": animal,
+            "fonts": fonts
+        }
+
+        return HttpResponse(self.render("tools/single_image_result.html", context))
+
+
 class DownloadImagesView(BaseView):
 
     url = r"^tools/downloadimages/(?P<animal_id>.+)/$"

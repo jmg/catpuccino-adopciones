@@ -1,0 +1,29 @@
+<div class="images-preview-section">
+    <h6 class="images-title">
+        <i class="fa fa-eye"></i>
+        Vista Previa
+    </h6>
+
+    <div class="images-comparison">
+        <div class="image-preview-item">
+            <div class="image-preview-label">Original</div>
+            <div class="image-preview-container">
+                <img class="img-animal img-preview" src="{{image.image.url}}" alt="Imagen original">
+            </div>
+        </div>
+
+        <div class="image-preview-item">
+            <div class="image-preview-label">Procesada</div>
+            <div class="image-preview-container">
+                {% if image.image_for_instagram %}
+                    <img class="img-animal img-preview" src="{{image.image_for_instagram.url}}" alt="Imagen procesada">
+                {% else %}
+                    <div class="image-placeholder">
+                        <i class="fa fa-image fa-2x"></i>
+                        <p>Pendiente de procesar</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
