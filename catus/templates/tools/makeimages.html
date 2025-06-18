@@ -1,48 +1,159 @@
 {% for image in animal.get_images %}
 
-    <div class="form-group">
-        <label>Foto Layout</label>
-        <select name="layout_{{image.id}}" class="form-control">
-            <option value="si" {% if image.image_layout %}selected="selected"{% endif %}>Si</option>
-            <option value="no" {% if not image.image_layout %}selected="selected"{% endif %}>No</option>
-        </select>
+    <!-- Contenedor individual para cada imagen -->
+    <div class="image-config-card" data-image-id="{{image.id}}">
+        <div class="image-config-header" onclick="toggleImageCard(this)">
+            <div class="header-left">
+                <h6 class="image-config-title">
+                    <i class="fa fa-image"></i>
+                    Imagen {{forloop.counter}} de {{animal.get_images|length}}
+                </h6>
+                <div class="image-config-badge">
+                    {% if image.image_for_instagram %}
+                        <span class="badge badge-success">Procesada</span>
+                    {% else %}
+                        <span class="badge badge-warning">Pendiente</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="collapse-toggle">
+                <i class="fa fa-chevron-up"></i>
+            </div>
+        </div>
+
+        <!-- Área de configuración -->
+        <div class="image-config-content">
+            <!-- Vista previa compacta cuando está colapsado -->
+            <div class="collapsed-preview" style="display: none;">
+                <div class="collapsed-images">
+                    <div class="collapsed-image-item">
+                        <img class="collapsed-img" src="{{image.image.url}}" alt="Original">
+                        <span class="collapsed-label">Original</span>
+                    </div>
+                    <div class="collapsed-image-item">
+                        {% if image.image_for_instagram %}
+                            <img class="collapsed-img" src="{{image.image_for_instagram.url}}" alt="Procesada">
+                            <span class="collapsed-label">Procesada</span>
+                        {% else %}
+                            <div class="collapsed-placeholder">
+                                <i class="fa fa-clock"></i>
+                                <span class="collapsed-label">Pendiente</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenido expandido -->
+            <div class="expanded-content">
+                <div class="row">
+                    <!-- Columna de controles -->
+                    <div class="col-md-12" style="padding: 0;">
+                        <div class="controls-section">
+                            <h6 class="controls-title">
+                                <i class="fa fa-cogs"></i>
+                                Configuración
+                            </h6>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fa fa-layer-group"></i>
+                                Layout
+                            </label>
+                            <select name="layout_{{image.id}}" class="form-control form-control-modern">
+                                <option value="si" {% if image.image_layout %}selected="selected"{% endif %}>Sí - Con diseño y logo</option>
+                                <option value="no" {% if not image.image_layout %}selected="selected"{% endif %}>No - Imagen original</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fa fa-crosshairs"></i>
+                                Centrada
+                            </label>
+                            <select name="centrado_{{image.id}}" class="form-control form-control-modern">
+                                <option value="si" {% if image.image_centered %}selected="selected"{% endif %}>Sí - Centrada</option>
+                                <option value="no" {% if not image.image_centered %}selected="selected"{% endif %}>No - Original</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fa fa-font"></i>
+                                Tamaño Fuente
+                            </label>
+                            <select class="form-control form-control-modern" name="nombre_font_size_{{image.id}}" required>
+                                {% for x in fonts %}
+                                <option {% if image.image_font_size == x %}selected="selected"{% endif %} value="{{x}}">{{x}}px</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fa fa-map-marker-alt"></i>
+                                Posición Nombre
+                            </label>
+                            <select class="form-control form-control-modern" name="posicion_nombre_{{image.id}}">
+                                <option {% if image.image_posicion_nombre == "Izquierda (abajo)" %}selected="selected"{% endif %} value="Izquierda (abajo)">Izquierda (abajo)</option>
+                                <option {% if image.image_posicion_nombre == "Izquierda (arriba)" %}selected="selected"{% endif %} value="Izquierda (arriba)">Izquierda (arriba)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fa fa-map-marker-alt"></i>
+                                Posición Edad/Sexo
+                            </label>
+                            <select class="form-control form-control-modern" name="posicion_edad_sexo_{{image.id}}">
+                                <option {% if image.image_posicion_edad_sexo == "Izquierda (abajo)" %}selected="selected"{% endif %} value="Izquierda (abajo)">Izquierda (abajo)</option>
+                                <option {% if image.image_posicion_edad_sexo == "Izquierda (arriba)" %}selected="selected"{% endif %} value="Izquierda (arriba)">Izquierda (arriba)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                                <!-- Columna de imágenes -->
+                <div class="col-md-12" style="padding: 0;">
+                    <div class="images-preview-section">
+                        <h6 class="images-title">
+                            <i class="fa fa-eye"></i>
+                            Vista Previa
+                        </h6>
+
+                        <div class="images-comparison">
+                            <div class="image-preview-item">
+                                <div class="image-preview-label">Original</div>
+                                <div class="image-preview-container">
+                                    <img class="img-animal img-preview" src="{{image.image.url}}" alt="Imagen original">
+                                </div>
+                            </div>
+
+                            <div class="image-preview-item">
+                                <div class="image-preview-label">Procesada</div>
+                                <div class="image-preview-container">
+                                    {% if image.image_for_instagram %}
+                                        <img class="img-animal img-preview" src="{{image.image_for_instagram.url}}" alt="Imagen procesada">
+                                    {% else %}
+                                        <div class="image-placeholder">
+                                            <i class="fa fa-image fa-2x"></i>
+                                            <p>Pendiente de procesar</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label>Foto Centrada</label>
-        <select name="centrado_{{image.id}}" class="form-control">
-            <option value="si" {% if image.image_centered %}selected="selected"{% endif %}>Si</option>
-            <option value="no" {% if not image.image_centered %}selected="selected"{% endif %}>No</option>
-        </select>
-    </div>
-    <div class="form-group">
-        <label>Tamaño de Fuente del Nombre</label>
-        <select class="form-control" type="text" name="nombre_font_size_{{image.id}}" required>
-            {% for x in fonts %}
-            <option {% if image.image_font_size == x %}selected="selected"{% endif %} value="{{x}}">{{x}}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="form-group">
-        <label>Posición del texto: nombre</label>
-        <select class="form-control" name="posicion_nombre_{{image.id}}">
-            <option {% if image.image_posicion_nombre == "Izquierda (abajo)" %}selected="selected"{% endif %}>Izquierda (abajo)</option>
-            <option {% if image.image_posicion_nombre == "Izquierda (arriba)" %}selected="selected"{% endif %}>Izquierda (arriba)</option>
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label>Posición del texto: edad y sexo</label>
-        <select class="form-control" name="posicion_edad_sexo_{{image.id}}">
-            <option {% if image.image_posicion_edad_sexo == "Izquierda (abajo)" %}selected="selected"{% endif %}>Izquierda (abajo)</option>
-            <option {% if image.image_posicion_edad_sexo == "Izquierda (arriba)" %}selected="selected"{% endif %}>Izquierda (arriba)</option>
-        </select>
-    </div>
-    <div class="col-md-6">
-        <label for="radio-{{image.id}}"><img class="img-animal" src="{{image.image.url}}"></label>
-    </div>
-    <div class="col-md-6">
-        <label for="radio-{{image.id}}"><img class="img-animal" src="{{image.image_for_instagram.url}}"></label>
-    </div>
+    <!-- Divisor entre imágenes (excepto en la última) -->
+    {% if not forloop.last %}
+        <div class="image-divider">
+        </div>
+    {% endif %}
 
 {% endfor %}
