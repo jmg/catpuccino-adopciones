@@ -1,0 +1,113 @@
+{% extends "base_form.html" %}
+
+{% block content %}
+<div class="container">
+
+<h3 class="m-2 mb-4">Animales Listos para Publicar</h3>
+<p class="text-muted mb-4">Animales que están listos para publicar en Instagram pero aún no han sido publicados y no están adoptados</p>
+
+{% if animals %}
+    {% for animal in animals %}
+    <div class="card p-3 m-2 mt-4 mb-4" style="border: 1px solid #ccc">
+
+        <div class="row">
+            <div class="col-md-2">
+                {% if animal.get_images.first %}
+                    <img src="{{ animal.get_images.first.image.url }}" class="img-fluid rounded" style="max-height: 120px; width: 100%; object-fit: cover;">
+                {% else %}
+                    <div class="bg-light d-flex align-items-center justify-content-center rounded" style="height: 120px;">
+                        <i class="fa fa-image text-muted fa-2x"></i>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="col-md-8">
+                <h5 class="card-title">
+                    <a href="/animales/{{ animal.id }}/" target="_blank">{{ animal.nombre }}</a>
+                    {% if animal.tipo == "P" %}
+                        <span class="badge badge-info">Perro</span>
+                    {% else %}
+                        <span class="badge badge-secondary">Gato</span>
+                    {% endif %}
+                </h5>
+
+                <p class="text-muted mb-1">
+                    <strong>Cargado por:</strong>
+                    {% if animal.cargado_por %}
+                        {{ animal.cargado_por.get_instagram|default:animal.cargado_por.email }}
+                    {% else %}
+                        Sin asignar
+                    {% endif %}
+                </p>
+
+                <p class="text-muted mb-1">
+                    <strong>Fecha ingreso:</strong> {{ animal.get_fecha_ingreso|default:"No especificada" }}
+                </p>
+
+                {% if animal.edad %}
+                <p class="text-muted mb-1">
+                    <strong>Edad:</strong> {{ animal.edad }}
+                </p>
+                {% endif %}
+
+                {% if animal.zona %}
+                <p class="text-muted mb-1">
+                    <strong>Zona:</strong> {{ animal.zona }}
+                </p>
+                {% endif %}
+
+                <div class="mt-2">
+                    <span class="badge badge-success">Listo para publicar</span>
+                    <span class="badge badge-warning">No publicado</span>
+                    <span class="badge badge-{{ animal.get_estado_badge }}">{{ animal.get_estado_display }}</span>
+                </div>
+            </div>
+
+            <div class="col-md-2 text-right">
+                <div class="btn-group-vertical" role="group">
+                    <a href="/animales/{{ animal.id }}/" class="btn btn-sm btn-primary mb-1" target="_blank">
+                        <i class="fa fa-edit"></i> Editar
+                    </a>
+
+                    <a href="/tools/generarimagen/{{ animal.id }}/" class="btn btn-sm btn-success mb-1" target="_blank">
+                        <i class="fa fa-instagram"></i> Publicar
+                    </a>
+
+                    <a href="/tools/downloadimages/{{ animal.id }}/" class="btn btn-sm btn-info mb-1" target="_blank">
+                        <i class="fa fa-download"></i> Descargar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if animal.datos %}
+        <div class="mt-3">
+            <small class="text-muted">
+                <strong>Descripción:</strong> {{ animal.get_datos|truncatewords:30 }}
+            </small>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="alert alert-info">
+        <i class="fa fa-info-circle"></i> No hay animales listos para publicar en este momento.
+    </div>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block css %}
+<style>
+    .card {
+        transition: box-shadow 0.2s;
+    }
+    .card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .btn-group-vertical .btn {
+        margin-bottom: 2px;
+    }
+</style>
+{% endblock %}

@@ -50,6 +50,27 @@ class AnimalesPendientesView(BaseView):
         return self.render_to_response({"animals": animals})
 
 
+class AnimalesListosParaPublicarView(BaseView):
+
+    url = r"^tools/animaleslistosparapublicar/$"
+
+    def get(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        # Animales que están listos para publicar pero aún no han sido publicados
+        # Y que no estén adoptados
+        animals = Animal.objects.filter(
+            instagram_listo_para_publicar=True,
+            instagram_publicado=False,
+            aprobado=True,
+            estado__in=["D", "R"]  # Solo disponibles o reservados, no adoptados
+        ).select_related("cargado_por").prefetch_related("animalimage_set").order_by("-created_at")
+
+        return self.render_to_response({"animals": animals})
+
+
 class MakeImagesView(BaseView):
 
     url = r"^tools/makeimages/$"
