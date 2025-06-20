@@ -37,23 +37,17 @@ SECRET_KEY = app_config.get("DJANGO_SECRET_KEY")
 
 if ENV != "LOCAL":
     ALLOWED_HOSTS = ["adopciones.catpuccino.org"]
-else:
-    ALLOWED_HOSTS = ["localhost"]
 
-if ENV != "LOCAL":
+    # Configure Sentry for production only
     sentry_sdk.init(
         dsn=app_config.get("SENTRY_DSN"),
-        integrations=[DjangoIntegration()]
+        integrations=[DjangoIntegration()],
+        traces_sample_rate=0.1,  # Capture 10% of transactions for performance monitoring
+        send_default_pii=True,   # Send personally identifiable information
+        environment="production" if ENV == "PROD" else ENV.lower(),
     )
-
-    try:
-        import raven
-        RAVEN_CONFIG = {
-            'dsn': app_config.get("SENTRY_DSN"),
-            'release': raven.fetch_git_sha(os.path.dirname(os.pardir)),
-        }
-    except:
-        pass
+else:
+    ALLOWED_HOSTS = ["localhost"]
 
 if ENV != "LOCAL":
     HOST = "adopciones.catpuccino.org"
@@ -65,7 +59,6 @@ else:
 # Application definition
 
 INSTALLED_APPS = [
-    'raven.contrib.django.raven_compat',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

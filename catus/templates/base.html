@@ -220,9 +220,16 @@
   </footer>
 
   {% if request.META.HTTP_HOST != "localhost:8000" %}
-  <script src="https://cdn.ravenjs.com/3.19.1/raven.min.js" crossorigin="anonymous"></script>
+  <script src="https://browser.sentry-cdn.com/7.109.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
   <script type="text/javascript">
-      Raven.config('https://bb5204a3ca694964926f773529c8967e@o4503922256510976.ingest.sentry.io/4503922267717632').install()
+      Sentry.init({
+        dsn: 'https://bb5204a3ca694964926f773529c8967e@o4503922256510976.ingest.sentry.io/4503922267717632',
+        integrations: [
+          new Sentry.BrowserTracing(),
+        ],
+        tracesSampleRate: 0.1,
+        environment: 'production'
+      });
   </script>
   {% endif %}
 
