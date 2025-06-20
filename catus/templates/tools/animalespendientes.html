@@ -1,123 +1,720 @@
 {% extends "base_form.html" %}
 
 {% block content %}
-<div class="container">
+<div class="container container-small-margin-mobile">
+    <div class="row">
+        <div class="col-lg-12 mx-auto container-colored">
 
-<h3 class="m-2 mb-4">Animales Pendientes</h3>
-<p class="text-muted mb-4">Animales que no han sido aprobados o que no tienen imágenes listas para Instagram</p>
-
-{% if animals %}
-    {% for animal in animals %}
-    <div class="card p-3 m-2 mt-4 mb-4" style="border: 1px solid #ccc">
-
-        <div class="row">
-            <div class="col-md-2">
-                {% if animal.get_images.first %}
-                    <img src="{{ animal.get_images.first.image.url }}" class="img-fluid rounded" style="max-height: 120px; width: 100%; object-fit: cover;">
-                {% else %}
-                    <div class="bg-light d-flex align-items-center justify-content-center rounded" style="height: 120px;">
-                        <i class="fa fa-image text-muted fa-2x"></i>
+            <!-- Header Section -->
+            <div class="page-header">
+                <div class="header-content">
+                    <h2 class="main-title">
+                        <i class="fas fa-clock"></i>
+                        Animales Pendientes
+                    </h2>
+                    <p class="subtitle">Gestión de animales que requieren aprobación o preparación de imágenes</p>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <span class="stat-number">{{ animals.count }}</span>
+                        <span class="stat-label">Total pendientes</span>
                     </div>
-                {% endif %}
-            </div>
-
-            <div class="col-md-8">
-                <h5 class="card-title">
-                    <a href="/animales/{{ animal.id }}/" target="_blank">{{ animal.nombre }}</a>
-                    {% if animal.tipo == "P" %}
-                        <span class="badge badge-info">Perro</span>
-                    {% else %}
-                        <span class="badge badge-secondary">Gato</span>
-                    {% endif %}
-                </h5>
-
-                <p class="text-muted mb-1">
-                    <strong>Cargado por:</strong>
-                    {% if animal.cargado_por %}
-                        {{ animal.cargado_por.get_instagram|default:animal.cargado_por.email }}
-                    {% else %}
-                        Sin asignar
-                    {% endif %}
-                </p>
-
-                <p class="text-muted mb-1">
-                    <strong>Fecha ingreso:</strong> {{ animal.get_fecha_ingreso|default:"No especificada" }}
-                </p>
-
-                {% if animal.edad %}
-                <p class="text-muted mb-1">
-                    <strong>Edad:</strong> {{ animal.edad }}
-                </p>
-                {% endif %}
-
-                {% if animal.zona %}
-                <p class="text-muted mb-1">
-                    <strong>Zona:</strong> {{ animal.zona }}
-                </p>
-                {% endif %}
-
-                <div class="mt-2">
-                    {% if not animal.aprobado %}
-                        <span class="badge badge-warning">No aprobado</span>
-                    {% endif %}
-
-                    {% if not animal.instagram_listo_para_publicar %}
-                        <span class="badge badge-danger">Sin imágenes para IG</span>
-                    {% endif %}
-
-                    <span class="badge badge-{{ animal.get_estado_badge }}">{{ animal.get_estado_display }}</span>
                 </div>
             </div>
 
-            <div class="col-md-2 text-right">
-                <div class="btn-group-vertical" role="group">
-                    <a href="/animales/{{ animal.id }}/" class="btn btn-sm btn-primary mb-1" target="_blank">
-                        <i class="fa fa-edit"></i> Editar
-                    </a>
+            <!-- Animals Grid -->
+            {% if animals %}
+                <div class="animals-grid">
+                    {% for animal in animals %}
+                    <div class="animal-card">
+                        <!-- Card Header -->
+                        <div class="card-header">
+                            <div class="animal-image-container">
+                                {% if animal.get_images.first %}
+                                    <img src="{{ animal.get_images.first.image.url }}" class="animal-image" alt="{{ animal.nombre }}">
+                                    <div class="image-overlay">
+                                        <i class="fas fa-eye"></i>
+                                    </div>
+                                {% else %}
+                                    <div class="image-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Sin imagen</span>
+                                    </div>
+                                {% endif %}
+                            </div>
 
-                    {% if not animal.instagram_listo_para_publicar %}
-                    <a href="/tools/generarimagen/{{ animal.id }}/" class="btn btn-sm btn-info mb-1" target="_blank">
-                        <i class="fa fa-image"></i> Generar Imagen
-                    </a>
-                    {% endif %}
+                            <div class="animal-type-badge">
+                                {% if animal.tipo == "P" %}
+                                    <span class="badge badge-dog">
+                                        <i class="fas fa-dog"></i> Perro
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-cat">
+                                        <i class="fas fa-cat"></i> Gato
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
 
-                    {% if not animal.aprobado %}
-                    <a href="/animal/aprobar/?id={{ animal.id }}" class="btn btn-sm btn-success mb-1" onclick="return confirm('¿Aprobar este animal?')" target="_blank">
-                        <i class="fa fa-check"></i> Aprobar
-                    </a>
-                    {% endif %}
+                        <!-- Card Body -->
+                        <div class="card-body">
+                            <div class="animal-info">
+                                <h4 class="animal-name">
+                                    <a href="/animales/{{ animal.id }}/" target="_blank">{{ animal.nombre }}</a>
+                                </h4>
+
+                                <div class="animal-details">
+                                    <div class="detail-item">
+                                        <i class="fas fa-user"></i>
+                                        <span>
+                                            {% if animal.cargado_por %}
+                                                {{ animal.cargado_por.get_instagram|default:animal.cargado_por.email|truncatechars:20 }}
+                                            {% else %}
+                                                Sin asignar
+                                            {% endif %}
+                                        </span>
+                                    </div>
+
+                                    {% if animal.edad %}
+                                    <div class="detail-item">
+                                        <i class="fas fa-birthday-cake"></i>
+                                        <span>{{ animal.edad }}</span>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if animal.zona %}
+                                    <div class="detail-item">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        <span>{{ animal.zona|truncatechars:15 }}</span>
+                                    </div>
+                                    {% endif %}
+
+                                    <div class="detail-item">
+                                        <i class="fas fa-calendar"></i>
+                                        <span>{{ animal.get_fecha_ingreso|default:"No especificada" }}</span>
+                                    </div>
+                                </div>
+
+                                {% if animal.datos %}
+                                <div class="animal-description">
+                                    <p>{{ animal.get_datos|truncatewords:20 }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Status Section -->
+                            <div class="status-section">
+                                <div class="status-badges">
+                                    {% if not animal.aprobado %}
+                                        <span class="status-badge status-not-approved">
+                                            <i class="fas fa-clock"></i>
+                                            No aprobado
+                                        </span>
+                                    {% endif %}
+
+                                    {% if not animal.instagram_listo_para_publicar %}
+                                        <span class="status-badge status-no-images">
+                                            <i class="fas fa-image"></i>
+                                            Sin imágenes IG
+                                        </span>
+                                    {% endif %}
+
+                                    <span class="status-badge status-{{ animal.estado }}">
+                                        <i class="fas fa-info-circle"></i>
+                                        {{ animal.get_estado_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer -->
+                        <div class="card-footer">
+                            <div class="action-buttons">
+                                <a href="/animales/{{ animal.id }}/" class="btn btn-action btn-edit" target="_blank" title="Editar animal">
+                                    <i class="fas fa-edit"></i>
+                                    <span>Editar</span>
+                                </a>
+
+                                {% if not animal.instagram_listo_para_publicar %}
+                                <a href="/tools/generarimagen/{{ animal.id }}/" class="btn btn-action btn-generate" target="_blank" title="Generar imágenes">
+                                    <i class="fas fa-magic"></i>
+                                    <span>Generar</span>
+                                </a>
+                                {% endif %}
+
+                                {% if not animal.aprobado %}
+                                <a href="/animal/aprobar/?id={{ animal.id }}" class="btn btn-action btn-approve" onclick="return confirm('¿Aprobar este animal?')" target="_blank" title="Aprobar animal">
+                                    <i class="fas fa-check"></i>
+                                    <span>Aprobar</span>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-            </div>
-        </div>
+            {% else %}
+                <!-- Empty State -->
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-paw"></i>
+                    </div>
+                    <h4>¡Todo al día!</h4>
+                    <p>No hay animales pendientes en este momento.</p>
+                    <a href="/tools/" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i>
+                        Volver a Herramientas
+                    </a>
+                </div>
+            {% endif %}
 
-        {% if animal.datos %}
-        <div class="mt-3">
-            <small class="text-muted">
-                <strong>Descripción:</strong> {{ animal.get_datos|truncatewords:30 }}
-            </small>
         </div>
-        {% endif %}
     </div>
-    {% endfor %}
-{% else %}
-    <div class="alert alert-info">
-        <i class="fa fa-info-circle"></i> No hay animales pendientes en este momento.
-    </div>
-{% endif %}
-
 </div>
 {% endblock %}
 
 {% block css %}
 <style>
-    .card {
-        transition: box-shadow 0.2s;
+/* Container base */
+.container-small-margin-mobile {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+.container-colored {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    position: relative;
+    overflow: hidden;
+    min-height: 100vh;
+}
+
+/* Header Section */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.header-content {
+    flex: 1;
+}
+
+.main-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.main-title i {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    color: #6c757d;
+    margin: 0;
+    font-weight: 500;
+}
+
+.header-stats {
+    display: flex;
+    gap: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    background: white;
+    padding: 15px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    min-width: 100px;
+}
+
+.stat-number {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ffc107;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Animals Grid */
+.animals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 25px;
+}
+
+/* Animal Card */
+.animal-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 2px solid transparent;
+    position: relative;
+}
+
+.animal-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    border-color: #ffc107;
+}
+
+/* Card Header */
+.card-header {
+    position: relative;
+    height: 200px;
+    overflow: hidden;
+}
+
+.animal-image-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.animal-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.animal-card:hover .animal-image {
+    transform: scale(1.1);
+}
+
+.image-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,193,7,0.8) 0%, rgba(253,126,20,0.8) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.animal-card:hover .image-overlay {
+    opacity: 1;
+}
+
+.image-overlay i {
+    font-size: 2rem;
+    color: white;
+}
+
+.image-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+}
+
+.image-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.image-placeholder span {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.animal-type-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 2;
+}
+
+.badge {
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.badge-dog {
+    background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+    color: white;
+}
+
+.badge-cat {
+    background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
+    color: white;
+}
+
+/* Card Body */
+.card-body {
+    padding: 25px;
+}
+
+.animal-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+
+.animal-name a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.animal-name a:hover {
+    color: #ffc107;
+    text-decoration: none;
+}
+
+.animal-details {
+    margin-bottom: 15px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+.detail-item i {
+    width: 16px;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.animal-description {
+    margin-bottom: 15px;
+}
+
+.animal-description p {
+    margin: 0;
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    font-style: italic;
+}
+
+/* Status Section */
+.status-section {
+    margin-bottom: 20px;
+}
+
+.status-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-not-approved {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    color: white;
+}
+
+.status-no-images {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+}
+
+.status-D {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+}
+
+.status-R {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+}
+
+.status-A {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+}
+
+/* Card Footer */
+.card-footer {
+    padding: 0 25px 25px;
+    border-top: 1px solid #f8f9fa;
+    padding-top: 20px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    flex: 1;
+    min-width: 100px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-action::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-action:hover::before {
+    left: 100%;
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.btn-edit {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+}
+
+.btn-edit:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.3);
+    color: white;
+}
+
+.btn-generate {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+}
+
+.btn-generate:hover {
+    background: linear-gradient(135deg, #138496 0%, #0f6674 100%);
+    box-shadow: 0 6px 15px rgba(23, 162, 184, 0.3);
+    color: white;
+}
+
+.btn-approve {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+}
+
+.btn-approve:hover {
+    background: linear-gradient(135deg, #218838 0%, #17a085 100%);
+    box-shadow: 0 6px 15px rgba(40, 167, 69, 0.3);
+    color: white;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #6c757d;
+}
+
+.empty-icon {
+    font-size: 5rem;
+    margin-bottom: 30px;
+    color: #dee2e6;
+}
+
+.empty-state h4 {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+    color: #495057;
+}
+
+.empty-state p {
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+}
+
+.empty-state .btn {
+    padding: 12px 25px;
+    font-size: 1rem;
+    border-radius: 25px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    border: none;
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.empty-state .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 123, 255, 0.3);
+    text-decoration: none;
+    color: white;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .container-small-margin-mobile {
+        padding-left: 8px;
+        padding-right: 8px;
     }
-    .card:hover {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+
+    .container-colored {
+        padding: 20px 15px;
+        border-radius: 15px;
     }
-    .btn-group-vertical .btn {
-        margin-bottom: 2px;
+
+    .page-header {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
     }
+
+    .main-title {
+        font-size: 1.8rem;
+        justify-content: center;
+    }
+
+    .subtitle {
+        font-size: 1rem;
+    }
+
+    .animals-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .animal-card {
+        border-radius: 15px;
+    }
+
+    .card-header {
+        height: 180px;
+    }
+
+    .card-body {
+        padding: 20px;
+    }
+
+    .animal-name {
+        font-size: 1.25rem;
+    }
+
+    .detail-item {
+        font-size: 0.85rem;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .btn-action {
+        width: 100%;
+        min-width: auto;
+    }
+
+    .stat-item {
+        padding: 12px 15px;
+        min-width: 80px;
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .container-colored {
+        padding: 15px 10px;
+    }
+
+    .main-title {
+        font-size: 1.6rem;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .card-body {
+        padding: 15px;
+    }
+
+    .card-footer {
+        padding: 0 15px 15px;
+    }
+
+    .animal-name {
+        font-size: 1.1rem;
+    }
+
+    .detail-item {
+        font-size: 0.8rem;
+    }
+
+    .header-stats {
+        gap: 10px;
+    }
+
+    .stat-item {
+        padding: 10px 12px;
+    }
+}
 </style>
 {% endblock %}

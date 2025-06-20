@@ -15,6 +15,18 @@ from catus.utils import rreplace
 from django.db.models import Q
 
 
+class ToolsIndexView(BaseView):
+
+    url = r"^tools/$"
+
+    def get(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        return self.render_to_response({})
+
+
 class GenerarImagenView(BaseView):
 
     url = r"^tools/generarimagen/(?P<animal_id>.+)/$"
