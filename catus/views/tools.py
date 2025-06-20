@@ -42,8 +42,9 @@ class AnimalesPendientesView(BaseView):
             return self.response("No tenes permisos para esto.")
 
         # Animales que no han sido aprobados O que no tienen imágenes listas para Instagram
+        # Y que no estén adoptados
         animals = Animal.objects.filter(
-            Q(aprobado=False) | Q(instagram_listo_para_publicar=False)
+            (Q(aprobado=False) | Q(instagram_listo_para_publicar=False)) & ~Q(estado="A")
         ).select_related("cargado_por").prefetch_related("animalimage_set").order_by("-created_at")
 
         return self.render_to_response({"animals": animals})
