@@ -136,6 +136,11 @@
                                     <span>Editar</span>
                                 </a>
 
+                                <a href="/tools/generarimagen/{{ animal.id }}/" class="btn btn-action btn-edit-images" target="_blank" title="Editar imágenes para Instagram">
+                                    <i class="fas fa-images"></i>
+                                    <span>Editar IG</span>
+                                </a>
+
                                 <a href="/tools/generarimagen/{{ animal.id }}/" class="btn btn-action btn-publish" target="_blank" title="Publicar en Instagram">
                                     <i class="fab fa-instagram"></i>
                                     <span>Publicar</span>
@@ -583,6 +588,17 @@
     color: white;
 }
 
+.btn-edit-images {
+    background: linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%);
+    color: white;
+}
+
+.btn-edit-images:hover {
+    background: linear-gradient(135deg, #5a2d91 0%, #4c2a7a 100%);
+    box-shadow: 0 6px 15px rgba(111, 66, 193, 0.3);
+    color: white;
+}
+
 .btn-publish {
     background: linear-gradient(135deg, #e1306c 0%, #fd1d1d 100%);
     color: white;
@@ -707,6 +723,7 @@
     .btn-action {
         width: 100%;
         min-width: auto;
+        margin-bottom: 8px;
     }
 
     .stat-item {
