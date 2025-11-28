@@ -3,6 +3,7 @@ from pyfb.pyfb import Pyfb
 from django.conf import settings
 import requests
 import urllib
+import time
 
 
 class FacebookApiService:
@@ -92,6 +93,52 @@ class FacebookApiService:
         return account_names, instagram_account_names, account_data
 
     @classmethod
+    def wait_for_media_ready(cls, service, creation_id, max_attempts=30, wait_seconds=2):
+        """
+        Wait for a media container to be ready for publishing.
+        Checks the status_code field and waits until it's FINISHED.
+        """
+        url = "{}?fields=status_code".format(creation_id)
+
+        for attempt in range(max_attempts):
+            try:
+                response = service.facebook.request(url)
+                status_code = response.get("status_code")
+
+                if status_code == "FINISHED":
+                    return True
+                elif status_code == "ERROR":
+                    error_msg = response.get("status", response.get("error_message", "Unknown error"))
+                    raise Exception("Media creation failed with status ERROR: {}".format(error_msg))
+                # If status is IN_PROGRESS or None (still processing), continue waiting
+
+                if attempt < max_attempts - 1:
+                    time.sleep(wait_seconds)
+                else:
+                    # Last attempt - if status_code is None, it might still work, so don't fail yet
+                    if status_code is None:
+                        # Give it one more short wait and proceed
+                        time.sleep(1)
+                        return True
+                    raise Exception("Media container status is '{}' after {} attempts. Creation ID: {}".format(status_code, max_attempts, creation_id))
+
+            except Exception as e:
+                # If the request itself fails (e.g., media not found), check if it's a critical error
+                error_str = str(e)
+                if "Media ID is not available" in error_str or "does not exist" in error_str.lower():
+                    raise Exception("Media container {} is not available: {}".format(creation_id, error_str))
+
+                # For other errors, if it's the last attempt, raise it
+                if attempt == max_attempts - 1:
+                    raise Exception("Error checking media status after {} attempts: {}".format(max_attempts, str(e)))
+
+                # Otherwise, wait and retry
+                time.sleep(wait_seconds)
+
+        # Should not reach here, but just in case
+        raise Exception("Media container not ready after {} attempts. Creation ID: {}".format(max_attempts, creation_id))
+
+    @classmethod
     def publish(cls, animal, ig_text):
 
         try:
@@ -144,7 +191,11 @@ class FacebookApiService:
             "locale": "en_us",
         }
 
-        data = service.facebook.request(url, **data)
+        creation_response = service.facebook.request(url, **data)
+        creation_id = creation_response["id"]
+
+        # Wait for media to be ready before publishing
+        cls.wait_for_media_ready(service, creation_id)
 
         #publish the post
         url = "{}/media_publish".format(
@@ -152,7 +203,7 @@ class FacebookApiService:
         )
 
         data = {
-            "creation_id" : data["id"],
+            "creation_id" : creation_id,
             "locale": "en_us",
         }
 
@@ -178,11 +229,19 @@ class FacebookApiService:
                 "locale": "en_us",
             }
 
-            data = service.facebook.request(url, **data)
+            image_creation_response = service.facebook.request(url, **data)
+            image_creation_id = image_creation_response["id"]
 
-            elements.append(data["id"])
+            # Wait for each image media to be ready
+            cls.wait_for_media_ready(service, image_creation_id)
+
+            elements.append(image_creation_id)
 
         #create container of elements
+        url = "{}/media".format(
+            account.business_account_id,
+        )
+
         data = {
             "media_type": "CAROUSEL",
             "children": ",".join(elements),
@@ -190,7 +249,11 @@ class FacebookApiService:
             "locale": "en_us",
         }
 
-        data = service.facebook.request(url, **data)
+        container_response = service.facebook.request(url, **data)
+        container_creation_id = container_response["id"]
+
+        # Wait for carousel container to be ready
+        cls.wait_for_media_ready(service, container_creation_id)
 
         #publish the post
         url = "{}/media_publish".format(
@@ -198,7 +261,7 @@ class FacebookApiService:
         )
 
         data = {
-            "creation_id" : data["id"],
+            "creation_id" : container_creation_id,
             "locale": "en_us",
         }
 
@@ -221,9 +284,20 @@ class FacebookApiService:
     def show_error(cls, e):
 
         if hasattr(e, "info"):
+            error_info = e.info()
+            if isinstance(error_info, dict):
+                # Try to extract meaningful error message
+                error_message = error_info.get("error", {}).get("message", str(e))
+                error_code = error_info.get("error", {}).get("code", "")
+                return "Error {}: {}".format(error_code, error_message)
             return e.info().items()
 
-        return e
+        # Try to extract error message from exception
+        error_str = str(e)
+        if "Media ID is not available" in error_str:
+            return "Error: Media ID no está disponible. El contenedor de medios puede no haberse creado correctamente o haber expirado."
+
+        return error_str
 
     @classmethod
     def update_adoptado_comment(cls, account, animal):
