@@ -1,0 +1,51 @@
+{% extends "admin/index.html" %}
+{% load i18n static %}
+
+{% block content %}
+{{ block.super }}
+
+<div class="module" style="margin-top: 20px;">
+    <table>
+        <caption>
+            <a href="#" class="section-title">Herramientas Administrativas</a>
+        </caption>
+        <tr>
+            <th scope="row">
+                <a href="/tools/animalespendientes/" target="_blank">
+                    Animales Pendientes
+                </a>
+            </th>
+            <td>
+                <a href="/tools/animalespendientes/" target="_blank">
+                    Ver animales que no han sido aprobados o que no tienen imágenes listas para Instagram
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">
+                <a href="/tools/animaleslistosparapublicar/" target="_blank">
+                    Animales Listos para Publicar
+                </a>
+            </th>
+            <td>
+                <a href="/tools/animaleslistosparapublicar/" target="_blank">
+                    Ver animales que están listos para publicar pero aún no han sido publicados
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">
+                <a href="/tools/preguntaradopcion/" target="_blank">
+                    Preguntar por Adopción
+                </a>
+            </th>
+            <td>
+                <a href="/tools/preguntaradopcion/" target="_blank">
+                    Enviar emails preguntando sobre adopciones de animales antiguos
+                </a>
+            </td>
+        </tr>
+    </table>
+</div>
+
+{% endblock %}
