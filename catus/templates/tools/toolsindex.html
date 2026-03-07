@@ -1,0 +1,637 @@
+{% extends "base_form.html" %}
+
+{% block content %}
+<div class="container container-small-margin-mobile">
+    <div class="row">
+        <div class="col-lg-10 col-md-12 mx-auto container-colored">
+
+            <!-- Header Section -->
+            <div class="tools-header">
+                <div class="header-content">
+                    <h2 class="main-title">
+                        <i class="fas fa-tools"></i>
+                        Herramientas Administrativas
+                    </h2>
+                    <p class="subtitle">Panel de gestión para administradores del sistema</p>
+                </div>
+                <div class="header-decoration">
+                    <div class="decoration-circle circle-1"></div>
+                    <div class="decoration-circle circle-2"></div>
+                    <div class="decoration-circle circle-3"></div>
+                </div>
+            </div>
+
+            <!-- Tools Grid -->
+            <div class="tools-grid">
+
+                <!-- Animales Pendientes -->
+                <div class="tool-card card-pending">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="card-badge">
+                            <span class="badge badge-warning">Pendientes</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="card-title">Animales Pendientes</h4>
+                        <p class="card-description">
+                            Gestiona animales que necesitan aprobación o preparación de imágenes para publicación
+                        </p>
+                        <div class="card-features">
+                            <div class="feature-item">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Sin aprobar</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-image"></i>
+                                <span>Imágenes pendientes</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/tools/animalespendientes/" class="btn btn-tool btn-pending">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span>Acceder</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Animales Listos para Publicar -->
+                <div class="tool-card card-ready">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fab fa-instagram"></i>
+                        </div>
+                        <div class="card-badge">
+                            <span class="badge badge-success">Listos</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="card-title">Listos para Publicar</h4>
+                        <p class="card-description">
+                            Animales preparados y listos para publicación en redes sociales
+                        </p>
+                        <div class="card-features">
+                            <div class="feature-item">
+                                <i class="fas fa-check-double"></i>
+                                <span>Aprobados</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-share-alt"></i>
+                                <span>Listos para publicar</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/tools/animaleslistosparapublicar/" class="btn btn-tool btn-ready">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span>Acceder</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Preguntar por Adopción -->
+                <div class="tool-card card-adoption">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-envelope-open-text"></i>
+                        </div>
+                        <div class="card-badge">
+                            <span class="badge badge-info">Email</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="card-title">Consultas de Adopción</h4>
+                        <p class="card-description">
+                            Envía consultas automáticas sobre el estado de adopciones pendientes
+                        </p>
+                        <div class="card-features">
+                            <div class="feature-item">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>Animales antiguos</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-paper-plane"></i>
+                                <span>Email automático</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/tools/preguntaradopcion/" class="btn btn-tool btn-adoption">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span>Acceder</span>
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Info Section -->
+            <div class="info-section">
+                <div class="info-card">
+                    <div class="info-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div class="info-content">
+                        <h5>Acceso Restringido</h5>
+                        <p>Estas herramientas están disponibles únicamente para super usuarios del sistema.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block css %}
+<style>
+/* Container base */
+.container-small-margin-mobile {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+.container-colored {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Header Section */
+.tools-header {
+    text-align: center;
+    margin-bottom: 40px;
+    position: relative;
+    z-index: 2;
+}
+
+.header-content {
+    position: relative;
+    z-index: 3;
+}
+
+.main-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+.main-title i {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    color: #6c757d;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Header Decoration */
+.header-decoration {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+}
+
+.decoration-circle {
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.1;
+}
+
+.circle-1 {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(135deg, #007bff, #28a745);
+    top: -100px;
+    left: -100px;
+    animation: float 6s ease-in-out infinite;
+}
+
+.circle-2 {
+    width: 150px;
+    height: 150px;
+    background: linear-gradient(135deg, #17a2b8, #6f42c1);
+    top: -50px;
+    right: -75px;
+    animation: float 8s ease-in-out infinite reverse;
+}
+
+.circle-3 {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #fd7e14, #e83e8c);
+    bottom: -50px;
+    left: -50px;
+    animation: float 10s ease-in-out infinite;
+}
+
+/* Tools Grid */
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 25px;
+    margin-bottom: 40px;
+}
+
+/* Tool Cards */
+.tool-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 2px solid transparent;
+    position: relative;
+}
+
+.tool-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.tool-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+}
+
+.tool-card:hover::before {
+    opacity: 1;
+}
+
+/* Card Headers */
+.card-header {
+    padding: 25px 25px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+}
+
+.card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-icon::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.card-icon:hover::before {
+    left: 100%;
+}
+
+/* Card specific colors */
+.card-pending .card-icon {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+}
+
+.card-ready .card-icon {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.card-adoption .card-icon {
+    background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+}
+
+.card-badge .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    color: white;
+}
+
+.badge-success {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+}
+
+.badge-info {
+    background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+    color: white;
+}
+
+/* Card Body */
+.card-body {
+    padding: 20px 25px;
+}
+
+.card-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 12px;
+}
+
+.card-description {
+    color: #6c757d;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.card-features {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.feature-item i {
+    width: 16px;
+    color: #28a745;
+    font-size: 0.8rem;
+}
+
+/* Card Footer */
+.card-footer {
+    padding: 0 25px 25px;
+}
+
+.btn-tool {
+    width: 100%;
+    padding: 15px 20px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-tool::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-tool:hover::before {
+    left: 100%;
+}
+
+.btn-tool:hover {
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: white;
+}
+
+.btn-pending {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    color: white;
+}
+
+.btn-pending:hover {
+    background: linear-gradient(135deg, #e0a800 0%, #dc6402 100%);
+    box-shadow: 0 8px 20px rgba(255, 193, 7, 0.3);
+}
+
+.btn-ready {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+}
+
+.btn-ready:hover {
+    background: linear-gradient(135deg, #218838 0%, #17a085 100%);
+    box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+}
+
+.btn-adoption {
+    background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+    color: white;
+}
+
+.btn-adoption:hover {
+    background: linear-gradient(135deg, #138496 0%, #5a32a3 100%);
+    box-shadow: 0 8px 20px rgba(23, 162, 184, 0.3);
+}
+
+/* Info Section */
+.info-section {
+    margin-top: 30px;
+}
+
+.info-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    color: white;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+.info-icon {
+    width: 50px;
+    height: 50px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.info-content h5 {
+    margin: 0 0 5px 0;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.info-content p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* Animations */
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .container-small-margin-mobile {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .container-colored {
+        padding: 20px 15px;
+        border-radius: 15px;
+    }
+
+    .main-title {
+        font-size: 2rem;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .subtitle {
+        font-size: 1rem;
+    }
+
+    .tools-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .tool-card {
+        border-radius: 15px;
+    }
+
+    .card-header {
+        padding: 20px 20px 0;
+    }
+
+    .card-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+    }
+
+    .card-body {
+        padding: 15px 20px;
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+    }
+
+    .card-description {
+        font-size: 0.9rem;
+    }
+
+    .card-footer {
+        padding: 0 20px 20px;
+    }
+
+    .btn-tool {
+        padding: 12px 16px;
+        font-size: 0.95rem;
+    }
+
+    .info-card {
+        padding: 15px;
+        gap: 15px;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .info-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.25rem;
+    }
+
+    .decoration-circle {
+        display: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .container-colored {
+        padding: 15px 10px;
+    }
+
+    .main-title {
+        font-size: 1.75rem;
+    }
+
+    .card-header {
+        padding: 15px 15px 0;
+    }
+
+    .card-body {
+        padding: 12px 15px;
+    }
+
+    .card-footer {
+        padding: 0 15px 15px;
+    }
+
+    .card-title {
+        font-size: 1.1rem;
+    }
+
+    .feature-item {
+        font-size: 0.8rem;
+    }
+}
+</style>
+{% endblock %}

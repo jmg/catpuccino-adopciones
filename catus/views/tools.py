@@ -12,6 +12,19 @@ from django.core.files.base import ContentFile
 from datetime import datetime, timedelta
 from catus.services.mail import MailService
 from catus.utils import rreplace
+from django.db.models import Q
+
+
+class ToolsIndexView(BaseView):
+
+    url = r"^tools/$"
+
+    def get(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        return self.render_to_response({})
 
 
 class GenerarImagenView(BaseView):
@@ -29,6 +42,45 @@ class GenerarImagenView(BaseView):
         fonts = [150, 125, 100, 75, 50]
 
         return self.render_to_response({"animal": animal, "ig_text": ig_text, "fonts": fonts, "settings": settings})
+
+
+class AnimalesPendientesView(BaseView):
+
+    url = r"^tools/animalespendientes/$"
+
+    def get(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        # Animales que no han sido aprobados O que no tienen imágenes listas para Instagram
+        # Y que no estén adoptados
+        animals = Animal.objects.filter(
+            (Q(aprobado=False) | Q(instagram_listo_para_publicar=False)) & ~Q(estado="A")
+        ).select_related("cargado_por").prefetch_related("animalimage_set").order_by("-created_at")
+
+        return self.render_to_response({"animals": animals})
+
+
+class AnimalesListosParaPublicarView(BaseView):
+
+    url = r"^tools/animaleslistosparapublicar/$"
+
+    def get(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        # Animales que están listos para publicar pero aún no han sido publicados
+        # Y que no estén adoptados
+        animals = Animal.objects.filter(
+            instagram_listo_para_publicar=True,
+            instagram_publicado=False,
+            aprobado=True,
+            estado__in=["D", "R"]  # Solo disponibles o reservados, no adoptados
+        ).select_related("cargado_por").prefetch_related("animalimage_set").order_by("-created_at")
+
+        return self.render_to_response({"animals": animals})
 
 
 class MakeImagesView(BaseView):
