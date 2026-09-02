@@ -172,6 +172,32 @@ class AnimalImage(BaseEntity):
     image_posicion_edad_sexo = models.CharField(max_length=255, null=True, blank=True)
     image_posicion_nombre = models.CharField(max_length=255, null=True, blank=True)
 
+    #recorte cuadrado elegido para instagram, en fracciones (0 a 1) de la imagen original
+    crop_x = models.FloatField(null=True, blank=True)
+    crop_y = models.FloatField(null=True, blank=True)
+    crop_w = models.FloatField(null=True, blank=True)
+    crop_h = models.FloatField(null=True, blank=True)
+
+    def get_crop(self):
+        """Devuelve el recorte como (x, y, w, h) en fracciones, o None si no hay."""
+
+        crop = (self.crop_x, self.crop_y, self.crop_w, self.crop_h)
+        if any(value is None for value in crop):
+            return None
+
+        if self.crop_w <= 0 or self.crop_h <= 0:
+            return None
+
+        return crop
+
+    def set_crop(self, crop):
+        """Guarda el recorte. crop es (x, y, w, h) en fracciones, o None para volver al automatico."""
+
+        if crop is None:
+            self.crop_x = self.crop_y = self.crop_w = self.crop_h = None
+        else:
+            self.crop_x, self.crop_y, self.crop_w, self.crop_h = crop
+
 
 class EstadoFormulario(BaseEntity):
 

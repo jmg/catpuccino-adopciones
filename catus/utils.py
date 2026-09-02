@@ -1,3 +1,4 @@
+import math
 import re
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
@@ -48,6 +49,52 @@ def send_html_email(subject, content, from_email, to_email, fail_silently=False,
             error = e
 
     raise error
+
+
+def clean_crop(crop):
+    """Valida un recorte (x, y, w, h) en fracciones de la foto original.
+
+    Devuelve el recorte o None si no sirve. Las fracciones llegan del navegador,
+    asi que no se puede confiar en que esten dentro de rango.
+    """
+
+    if crop is None:
+        return None
+
+    try:
+        x, y, w, h = [float(value) for value in crop]
+    except (TypeError, ValueError):
+        return None
+
+    #NaN pasa cualquier comparacion sin fallar, asi que hay que descartarlo aparte
+    if not all(math.isfinite(value) for value in (x, y, w, h)):
+        return None
+
+    if w <= 0 or h <= 0:
+        return None
+
+    #un poco de tolerancia por los redondeos del selector
+    if x < -0.001 or y < -0.001 or x + w > 1.001 or y + h > 1.001:
+        return None
+
+    return (max(0.0, x), max(0.0, y), min(1.0, w), min(1.0, h))
+
+
+def parse_crop(data, suffix=""):
+    """Lee el recorte de un POST (crop_x_<id>, crop_y_<id>, ...). None si no vino o es invalido."""
+
+    try:
+        crop = [data["crop_{}{}".format(key, suffix)] for key in ("x", "y", "w", "h")]
+    except KeyError:
+        return None
+
+    return clean_crop(crop)
+
+
+def has_crop_fields(data, suffix=""):
+    """True si el form maneja el recorte, aunque venga vacio (vacio = volver al automatico)."""
+
+    return "crop_x{}".format(suffix) in data
 
 
 def get_context_columns(animals):
