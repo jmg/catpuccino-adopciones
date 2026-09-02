@@ -114,3 +114,42 @@ class EnviarFormularioTest(TestCase):
         self.enviar(entry, huerfano, huerfano)
 
         self.assertTrue(mail.outbox)
+
+
+class ElegirFormularioTest(TestCase):
+    """Qué formulario público se muestra en /pre-adopcion/ y /pre-adopcion/perros/."""
+
+    def setUp(self):
+        #el orden de creación importa: antes se elegía por posición
+        self.gatos = Form.objects.create(title="Adopción gatos", slug="formulario-de-pre-adopcion")
+        self.transito = Form.objects.create(title="Tránsito gatos", slug="formulario-de-transito")
+        self.transito_perros = Form.objects.create(title="Tránsito perros", slug="formulario-de-transito-para-perros")
+        self.perros = Form.objects.create(title="Adopción perros", slug="formulario-de-pre-adopcion-para-perros")
+
+    def test_gatos_usa_el_formulario_de_gatos(self):
+
+        self.assertEqual(PreAdoptionView()._get_form(), self.gatos)
+
+    def test_perros_usa_el_formulario_de_perros(self):
+
+        from catus.views.adoption import PreAdoptionPerrosView
+
+        self.assertEqual(PreAdoptionPerrosView()._get_form(), self.perros)
+
+    def test_borrar_otro_formulario_no_rompe_el_de_perros(self):
+        """Antes se tomaba el de la posición 3: borrar cualquiera lo dejaba en 500."""
+
+        from catus.views.adoption import PreAdoptionPerrosView
+
+        self.transito.delete()
+
+        self.assertEqual(PreAdoptionPerrosView()._get_form(), self.perros)
+
+    def test_borrar_otro_formulario_no_cambia_el_de_gatos(self):
+        """Antes, borrar el de gatos hacía que /pre-adopcion/ mostrara el de tránsito."""
+
+        self.assertEqual(PreAdoptionView()._get_form(), self.gatos)
+
+        self.transito.delete()
+
+        self.assertEqual(PreAdoptionView()._get_form(), self.gatos)
