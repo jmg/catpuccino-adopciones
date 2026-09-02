@@ -36,7 +36,10 @@ class GenerarImagenView(BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        animal = Animal.objects.get(id=kwargs["animal_id"])
+        animal = Animal.objects.filter(id=kwargs["animal_id"]).first()
+        if animal is None:
+            return self.response("No se encontró el animal.")
+
         ig_text = self.render("tools/generartexto.html", {"animal": animal})
 
         fonts = [150, 125, 100, 75, 50]
@@ -108,7 +111,9 @@ class MakeImagesView(CropMixin, BaseView):
             return self.response("No tenes permisos para esto.")
 
         fonts = [150, 125, 100, 75, 50]
-        animal = Animal.objects.get(id=self.request.POST["animal_id"])
+        animal = Animal.objects.filter(id=self.request.POST.get("animal_id")).first()
+        if animal is None:
+            return self.response("No se encontró el animal.")
 
         for imagen in animal.get_images():
 
@@ -253,12 +258,19 @@ class DownloadImagesView(BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        animal = Animal.objects.get(id=kwargs["animal_id"])
+        animal = Animal.objects.filter(id=kwargs["animal_id"]).first()
+        if animal is None:
+            return self.response("No se encontró el animal.")
 
         response = HttpResponse(content_type='application/octet-stream')
 
         with zipfile.ZipFile(response, 'w') as zip_file:
             for i, imagen in enumerate(animal.get_images()):
+
+                #las fotos que todavia no se procesaron no tienen imagen de instagram
+                if not imagen.image_for_instagram:
+                    continue
+
                 zip_file.writestr("{}_{}.jpeg".format(animal.nombre, i+1), imagen.image_for_instagram.read())
 
         response['Content-Disposition'] = 'attachment; filename={}.zip'.format(animal.nombre)
@@ -274,7 +286,10 @@ class PublishView(BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        animal = Animal.objects.get(id=self.request.POST.get("animal_id"))
+        animal = Animal.objects.filter(id=self.request.POST.get("animal_id")).first()
+        if animal is None:
+            return self.response("No se encontró el animal.")
+
         ig_text = self.render("tools/generartexto.txt", {"animal": animal})
         ig_text = clean_html(ig_text)
 
@@ -290,7 +305,10 @@ class SaveFormView(BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        animal = Animal.objects.get(id=self.request.POST.get("animal_id"))
+        animal = Animal.objects.filter(id=self.request.POST.get("animal_id")).first()
+        if animal is None:
+            return self.response("No se encontró el animal.")
+
         animal.instagram_listo_para_publicar = self.request.POST.get("instagram_listo_para_publicar") is not None
         animal.save()
 
@@ -337,7 +355,15 @@ class SendPreguntarEmailView(BaseView):
 
     def post(self, *args, **kwargs):
 
-        user = CatusUser.objects.get(id=self.request.POST.get("user_id"))
+        #manda un mail con contenido libre al usuario que se le indique: sin este
+        #chequeo cualquiera podia mandar cualquier cosa desde el dominio del sitio
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        user = CatusUser.objects.filter(id=self.request.POST.get("user_id")).first()
+        if user is None:
+            return self.response("No se encontró el usuario.")
+
         content = self.request.POST.get("content")
         MailService().send_mail_pregunta(user, content)
 
