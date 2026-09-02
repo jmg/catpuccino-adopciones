@@ -35,6 +35,12 @@ class PreAdoptionView(BaseView):
     form_type = "preadoption"
     animal_type = "gato"
 
+    #Buscar el formulario por posición (Form.objects.all()[0]) depende del orden en
+    #que se hayan creado: borrar uno desplaza al resto y esta página puede terminar
+    #mostrando otro formulario, o directamente caerse. El slug es estable.
+    form_slug = "formulario-de-pre-adopcion"
+    form_index = 0
+
     def render_to_response(self, context):
 
         animals = []
@@ -93,7 +99,19 @@ class PreAdoptionView(BaseView):
 
     def _get_form(self):
 
-        return Form.objects.all()[0]
+        form = Form.objects.filter(slug=self.form_slug).first()
+        if form is not None:
+            return form
+
+        #si el slug cambió en el admin no dejamos la página pública sin formulario:
+        #caemos al comportamiento de antes y avisamos por el log
+        logger.error(
+            "No hay ningún formulario con slug '%s'; usando el de la posición %s.",
+            self.form_slug, self.form_index,
+        )
+
+        forms = Form.objects.all()[self.form_index:self.form_index + 1]
+        return forms[0] if forms else None
 
     def post(self, *a, **k):
 
@@ -250,7 +268,6 @@ class PreAdoptionPerrosView(PreAdoptionView):
     animal_type = "perro"
     template_name = "adoption/preadoption.html"
 
-    def _get_form(self):
-
-        return Form.objects.all()[3]
+    form_slug = "formulario-de-pre-adopcion-para-perros"
+    form_index = 3
 
