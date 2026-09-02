@@ -37,6 +37,39 @@ class EditView(LoginRequiredMixin, BaseView):
             animal_image.set_crop(crop)
             animal_image.save()
 
+    def get_error_messages(self, animal_form, image_form_set):
+        """Arma la lista de errores que ve el rescatista cuando no se puede guardar.
+
+        Antes se mostraba lo que devolviera Django: si faltaba una foto, el aviso
+        "Al menos una foto del animal es requerida" vive en non_form_errors() y no
+        se leía nunca, así que la persona veía un cartel de error vacío y no tenía
+        forma de saber qué corregir.
+        """
+
+        mensajes = []
+
+        for campo, errores in animal_form.errors.items():
+            etiqueta = animal_form.fields[campo].label if campo in animal_form.fields else None
+            for error in errores:
+                mensajes.append("{}: {}".format(etiqueta, error) if etiqueta else error)
+
+        mensajes.extend(image_form_set.non_form_errors())
+
+        for form_errores in image_form_set.errors:
+            #normalmente es un dict por foto, pero no confiamos: un solo error raro
+            #no puede dejar a la persona sin saber que corregir
+            if not hasattr(form_errores, "values"):
+                mensajes.append("Fotos: {}".format(form_errores))
+                continue
+
+            for errores in form_errores.values():
+                mensajes.extend("Fotos: {}".format(error) for error in errores)
+
+        if not mensajes:
+            mensajes.append("No pudimos guardar los cambios. Revisá los datos e intentá de nuevo.")
+
+        return mensajes
+
     def req(self, is_post=False, **kwargs):
 
         ImageFormSet = inlineformset_factory(Animal, AnimalImage, extra=0, can_delete=True, form=AnimalImageForm, formset=RequiredImageInlineFormset)
@@ -110,15 +143,7 @@ class EditView(LoginRequiredMixin, BaseView):
                 return self.redirect(settings.LOGIN_REDIRECT_URL)
             else:
                 context["success"] = False
-                context["errors"] = animal_form.errors
-                if not context["errors"]:
-                    try:
-                        context["errors"] = ", ".join(["{}: {}".format(key, error) for key, error in image_form_set.errors.items() if error])
-                    except:
-                        try:
-                            context["errors"] = ", ".join(["{}".format(error) for error in image_form_set.errors if error])
-                        except:
-                            context["errors"] = "Error al guardar las imágenes. Por favor enviar mail a catpuccino.ok@gmail.com"
+                context["errors"] = self.get_error_messages(animal_form, image_form_set)
 
         else:
             animal_form = AnimalForm(instance=animal)
