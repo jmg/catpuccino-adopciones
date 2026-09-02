@@ -78,6 +78,42 @@ def es_url_de_instagram(url):
     return parsed.hostname in INSTAGRAM_HOSTS
 
 
+#hosts desde los que aceptamos traer una foto por URL. Son los CDN que sirven las
+#imágenes de los posts de Instagram, que es de donde vienen.
+IMAGEN_HOST_SUFIJOS = (
+    ".cdninstagram.com",
+    ".fbcdn.net",
+    "instagram.com",
+)
+
+
+def es_url_de_imagen_publica(url):
+    """True si la URL es una foto de Instagram que el server puede ir a buscar.
+
+    urlopen() abre cualquier esquema, incluido file://, y cualquier host, incluidos
+    los de la red interna. Como la URL la manda el navegador, sin este filtro se
+    podía hacer que el server leyera archivos suyos y los guardara como foto.
+    """
+
+    if not url:
+        return False
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    host = parsed.hostname or ""
+
+    return any(
+        host == sufijo or host.endswith(sufijo if sufijo.startswith(".") else "." + sufijo)
+        for sufijo in IMAGEN_HOST_SUFIJOS
+    )
+
+
 def clean_crop(crop):
     """Valida un recorte (x, y, w, h) en fracciones de la foto original.
 

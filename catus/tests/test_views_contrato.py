@@ -141,3 +141,81 @@ class DownloadContractViewTest(ContratoViewTestCase):
         response = self.descargar(AnonymousUser(), self.contrato.id)
 
         self.assertEqual(response.status_code, 302)
+
+
+class ContratoPorPropiedadTest(ContratoViewTestCase):
+    """El registro es abierto, así que "estar logueado" no alcanza como permiso.
+
+    Los ids de formulario y de contrato son correlativos: sin chequeo de propiedad
+    se podían recorrer los datos personales de todos los adoptantes.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.duenio = make_user(email="duenio@catpuccino.test")
+        self.intruso = make_user(email="intruso@catpuccino.test")
+        self.animal.cargado_por = self.duenio
+        self.animal.save()
+
+    def abrir_contrato(self, user):
+
+        from catus.views.contrato import EditView
+
+        request = self.factory.get("/formulario/{}/contrato/".format(self.estado_form.id))
+        request.user = user
+
+        view = EditView()
+        view.request = request
+        view.kwargs = {"estado_id": str(self.estado_form.id)}
+        return view.req()
+
+    def test_un_intruso_no_abre_el_contrato_de_otro(self):
+
+        from django.core.exceptions import PermissionDenied
+
+        with self.assertRaises(PermissionDenied):
+            self.abrir_contrato(self.intruso)
+
+    def test_el_equipo_puede_verlo(self):
+
+        from catus.views.contrato import EditView
+
+        request = self.factory.get("/")
+        request.user = self.admin
+        view = EditView()
+        view.request = request
+
+        self.assertTrue(view.puede_ver(self.estado_form))
+
+    def test_el_duenio_del_animal_puede_verlo(self):
+
+        from catus.views.contrato import EditView
+
+        request = self.factory.get("/")
+        request.user = self.duenio
+        view = EditView()
+        view.request = request
+
+        self.assertTrue(view.puede_ver(self.estado_form))
+
+    def test_el_adoptante_entra_por_hash_sin_cuenta(self):
+
+        from catus.views.contrato import EditPersonaView
+
+        request = self.factory.get("/")
+        request.user = AnonymousUser()
+        view = EditPersonaView()
+        view.request = request
+
+        self.assertTrue(view.puede_ver(self.estado_form))
+
+    def test_un_intruso_no_descarga_el_pdf_de_otro(self):
+
+        from django.core.exceptions import PermissionDenied
+        from catus.views.contrato import DownloadContractView
+
+        request = self.factory.get("/contrato_adopcion/{}/download/".format(self.contrato.id))
+        request.user = self.intruso
+
+        with self.assertRaises(PermissionDenied):
+            DownloadContractView.as_view()(request, contrato_id=str(self.contrato.id))

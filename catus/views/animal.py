@@ -3,6 +3,7 @@ from django.conf import settings
 from catus.services.images import ImageService
 from catus.services.mail import MailService
 from catus.views.base import BaseView, SuperuserRequiredMixin, puede_editar_animal
+from catus.utils import es_url_de_imagen_publica
 from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
 
@@ -104,7 +105,12 @@ class EditView(LoginRequiredMixin, BaseView):
                 is_new_animal = animal_form.instance.id is None
 
                 animal = animal_form.save(commit=False)
-                animal.cargado_por = self.request.user
+
+                #el animal sigue siendo de quien lo cargó: si alguien del equipo entra
+                #a corregirle un dato no puede quedárselo y sacarlo del listado del
+                #rescatista (ni de los mails de sus formularios de pre-adopción)
+                if animal.cargado_por_id is None:
+                    animal.cargado_por = self.request.user
                 if self.request.POST.get("ig_url_for_chatgpt"):
                     animal.ig_url_for_chatgpt = self.request.POST.get("ig_url_for_chatgpt")
                 if self.request.POST.get("chatgpt_response"):
@@ -120,8 +126,16 @@ class EditView(LoginRequiredMixin, BaseView):
                     self.set_suggested_crop(animal_image)
 
                 for image_url in instagram_images:
+
+                    #urlopen abre lo que le den, incluido file:// y direcciones de la
+                    #red interna: sin este chequeo se podía hacer que el server leyera
+                    #su propio archivo de secretos y lo guardara como "foto" del animal
+                    if not es_url_de_imagen_publica(image_url):
+                        logger.warning("Se descartó una foto con URL no permitida: %s", image_url)
+                        continue
+
                     img_temp = NamedTemporaryFile(delete=True, dir=os.path.join(settings.MEDIA_ROOT, "gallery"))
-                    img_temp.write(urlopen(image_url).read())
+                    img_temp.write(urlopen(image_url, timeout=20).read())
                     img_temp.flush()
 
                     animal_image = AnimalImage.objects.create(animal=animal)

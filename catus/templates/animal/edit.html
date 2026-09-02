@@ -648,13 +648,19 @@
         $.get("/animal/pulldatafromig/", {"id": animalId, "url": url }, function(response) {
             enableForm(btn, oldHtml)
 
+            // el server avisa por acá cuando el post es privado, no existe, o la URL no es de Instagram
+            if (response["error"]) {
+                $.alert(response["error"]);
+                return;
+            }
+
             //console.log(response["response"])
             $("#chatgpt-response-input").val(response["response"])
 
             var imgContainer = $("#images-container")
             imgContainer.html("")
 
-            if (response["images"].length > 0) {
+            if (response["images"] && response["images"].length > 0) {
                 $("#images-container-div").show();
                 for (var i=0; i < response["images"].length; i++) {
                     imgContainer.append("<div class='col-md-6 image-preview-item'><img src='" + response["images"][i] + "' class='img-fluid'><input name='instagram_image' type='hidden' value='" + response["images"][i] + "'></div>")
