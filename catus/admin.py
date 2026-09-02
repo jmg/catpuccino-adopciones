@@ -39,10 +39,12 @@ class AnimalAdmin(admin.ModelAdmin):
     def utilidades(self, obj):
 
         links = "<a target='_blank' href='/tools/generarimagen/{}/'>Generar Imagen</a>".format(obj.id)
+
+        #al dar de baja a un rescatista sus animales quedan con cargado_por en NULL
+        #(SET_NULL). Este link estaba fuera del if y tumbaba el listado entero.
         if obj.cargado_por is not None:
             links += " | <a target='_blank' href='/user/settingslogin/?user_id={}'>Login as user</a>".format(obj.cargado_por.id)
-
-        links += " | <a target='_blank' href='/tools/preguntaradopcion/?user_id={}'>Preguntar Adopción</a>".format(obj.cargado_por.id)
+            links += " | <a target='_blank' href='/tools/preguntaradopcion/?user_id={}'>Preguntar Adopción</a>".format(obj.cargado_por.id)
 
         # Agregar enlace para aprobar animal si no está aprobado
         if not obj.aprobado:
@@ -117,7 +119,12 @@ class EstadoFormularioAdmin(admin.ModelAdmin):
 
     def animal_cargado_por(self, obj):
 
-        return obj.gato.cargado_por.get_instagram() if obj.gato.cargado_por else ""
+        #al borrar un animal, los formularios de sus candidatos quedan con gato en
+        #NULL (SET_NULL) y este listado dejaba de abrirse
+        if obj.gato is None or obj.gato.cargado_por is None:
+            return ""
+
+        return obj.gato.cargado_por.get_instagram()
 
 
 class FieldEntryAdmin(admin.ModelAdmin):

@@ -1,11 +1,15 @@
 from datetime import datetime, timedelta
-from socket import IP_DROP_MEMBERSHIP
 from catus.models import *
 from catus.services.facebook import FacebookApiService
-from .base import BaseView
+from .base import BaseView, SuperuserRequiredMixin
 
 
-class LoginView(BaseView):
+class LoginView(SuperuserRequiredMixin, BaseView):
+    """Vincula la cuenta de Instagram desde la que publica el sitio.
+
+    Pisa el token y la cuenta de la organización, así que es solo del equipo:
+    sin el chequeo, cualquiera podía apuntar las publicaciones a otra cuenta.
+    """
 
     def post(self, *args, **kwargs):
 
