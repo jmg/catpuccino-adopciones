@@ -1,4 +1,5 @@
 from catus.models import Animal, AnimalImage, CatusUser, Contrato, ContratoPersona, EstadoFormulario
+from catus.utils import clean_crop
 from django.forms import ModelForm, Form, ChoiceField, ImageField, PasswordInput, CharField, DateField, EmailField
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, ButtonHolder, Submit, Field
@@ -106,9 +107,31 @@ class AnimalImageForm(ModelForm):
 
     image = ImageField(label='Fotos', widget=ImagePreviewWidget)
 
+    CROP_FIELDS = ('crop_x', 'crop_y', 'crop_w', 'crop_h')
+
+    #los escribe el selector de recorte, no la persona. Van como texto a proposito: si
+    #llegara un valor raro queremos ignorarlo, no que invalide el form y no se pueda
+    #guardar el animal por culpa de un recorte.
+    crop_x = CharField(required=False, widget=forms.HiddenInput())
+    crop_y = CharField(required=False, widget=forms.HiddenInput())
+    crop_w = CharField(required=False, widget=forms.HiddenInput())
+    crop_h = CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = AnimalImage
-        fields = ('image', )
+        fields = ('image', 'crop_x', 'crop_y', 'crop_w', 'crop_h')
+
+    def clean(self):
+        """El recorte lo elige el navegador, asi que lo validamos antes de guardarlo."""
+
+        cleaned_data = super().clean()
+
+        crop = clean_crop([cleaned_data.get(field) for field in self.CROP_FIELDS])
+
+        for index, field in enumerate(self.CROP_FIELDS):
+            cleaned_data[field] = crop[index] if crop else None
+
+        return cleaned_data
 
 
 class RequiredImageInlineFormset(forms.models.BaseInlineFormSet):

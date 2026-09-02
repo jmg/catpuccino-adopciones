@@ -145,6 +145,20 @@ single image or carousel container, polls `wait_for_media_ready`, publishes, the
 an "adoptado" comment when the animal's `estado` changes. Tokens are refreshed by
 `refresh_token`.
 
+**Square crop for Instagram.** Posts are 1200×1200 inside a 1400×1400 white frame, so every
+photo has to be cropped square. `AnimalImage.crop_x/y/w/h` hold the chosen crop as fractions
+(0–1) of the source photo, so it survives rescaling; `get_crop()`/`set_crop()` wrap them.
+`ImageService.crop_to_square()` honours that crop and otherwise falls back to the old
+`centered` heuristic, and `suggest_crop()` proposes one by scanning edge energy for the
+squarest window holding the most detail (pure Pillow, no extra dependency). The crop is
+picked with a Cropper.js selector (`static/js/crop-widget.js`, vendored in
+`static/vendor/cropper/`) in two places: the upload formset in `animal/edit.html`, and the
+per-image controls in `tools/makeimages.html`. Uploads without a crop get `suggest_crop()`
+applied in `views/animal.py::EditView.set_suggested_crop`. Crop fractions come from the
+browser, so they are validated by `utils.clean_crop` before use, and `AnimalImageForm`
+declares them as `CharField` on purpose — a malformed crop is ignored rather than making
+the form invalid and blocking the animal from being saved.
+
 **GPT** (`services/gpt.py`) scrapes an Instagram post's `og:title`, asks the OpenAI API to
 extract name/type/sex/age/description as JSON, and prefills the animal form
 (`/animal/pulldatafromig/`). Responses are cached in `ChatGTPResponse`.

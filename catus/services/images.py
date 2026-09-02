@@ -1,6 +1,6 @@
 import uuid
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat
 from django.conf import settings
 from django.core.files import File
 from django.core.files.base import ContentFile
@@ -62,20 +62,36 @@ class ImageService():
 
         return output
 
-    def generate_logo_image(self, animal, image_field, centered=True, nombre_font_size=150, posicion_nombre="Izquierda", posicion_edad_sexo="Izquierda"):
+    def crop_box_from_fractions(self, img, crop):
+        """Convierte un recorte en fracciones (x, y, w, h) a una caja cuadrada de pixeles."""
 
-        img_parts_dir = os.path.join(settings.STATICFILES_DIRS[0])
+        width, height = img.size
 
-        base_size = 1200
-        back_margin_white = 200
+        left = max(0, int(round(crop[0] * width)))
+        top = max(0, int(round(crop[1] * height)))
+        right = min(width, int(round((crop[0] + crop[2]) * width)))
+        bottom = min(height, int(round((crop[1] + crop[3]) * height)))
 
-        logo_size = 250
-        offset = 40
-        offset2 = 40
+        #el selector recorta en cuadrado, pero los redondeos pueden dejarlo apenas rectangular
+        side = min(right - left, bottom - top)
+        if side <= 0:
+            return None
 
-        img = Image.open(image_field).convert("RGBA")
-        logo = Image.open(os.path.join(img_parts_dir, "logo_2.png")).convert("RGBA")
-        logo = logo.resize((logo_size, logo_size), Image.ANTIALIAS)
+        return (left, top, left + side, top + side)
+
+    def crop_to_square(self, img, base_size, centered=True, crop=None):
+        """Recorta la foto a un cuadrado de base_size x base_size.
+
+        Si viene un recorte manual (fracciones) se respeta tal cual. Si no, se cae al
+        recorte automatico de siempre: escalar el lado corto y cortar desde el borde
+        o desde el centro.
+        """
+
+        if crop is not None:
+            box = self.crop_box_from_fractions(img, crop)
+            if box is not None:
+                return img.crop(box).resize((base_size, base_size), Image.ANTIALIAS)
+
         is_horizontal_image = img.size[0] > img.size[1]
 
         if is_horizontal_image:
@@ -99,19 +115,109 @@ class ImageService():
             if not is_horizontal_image:
                 #vertical image
                 if img.size[1] > base_size:
-                    img_centered_start_y = img.size[1] / 4
+                    img_centered_start_y = int((img.size[1] - base_size) / 2)
 
                 boundaries = (0, img_centered_start_y, base_size, base_size + img_centered_start_y)
             else:
                 #horizontal image
                 if img.size[0] > base_size:
-                    img_centered_start_x = img.size[0] / 4
+                    img_centered_start_x = int((img.size[0] - base_size) / 2)
 
                 boundaries = (img_centered_start_x, 0, base_size + img_centered_start_x, base_size)
         else:
             boundaries = (0, img_centered_start_y, base_size, base_size + img_centered_start_y)
 
-        img = img.crop(boundaries)
+        return img.crop(boundaries)
+
+    def suggest_crop(self, image_field, steps=40, center_bias=0.12):
+        """Propone el recorte cuadrado que mas detalle concentra (donde suele estar el animal).
+
+        Devuelve (x, y, w, h) en fracciones, o None si la foto ya es cuadrada o no se pudo leer.
+        """
+
+        try:
+            #si es un campo de Django leemos del disco: viene de optimize(), que ya lo cerro
+            source = getattr(image_field, "path", None)
+            if not source:
+                source = image_field
+                if hasattr(image_field, "seek"):
+                    image_field.seek(0)
+
+            img = self.rotate(Image.open(source).convert("L"))
+        except Exception:
+            return None
+
+        width, height = img.size
+        if width == height or width < 2 or height < 2:
+            return None
+
+        #la busqueda corre sobre una version chica: alcanza para ubicar al animal y es instantanea
+        preview_size = 240
+        scale = preview_size / float(max(width, height))
+        preview = img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
+        edges = preview.filter(ImageFilter.FIND_EDGES)
+
+        #FIND_EDGES dibuja como borde el marco de la foto: si no lo apagamos, todo recorte
+        #pegado a un borde suma energia falsa y la sugerencia se va justo para afuera
+        ImageDraw.Draw(edges).rectangle([0, 0, edges.size[0] - 1, edges.size[1] - 1], outline=0)
+
+        preview_width, preview_height = preview.size
+        side = min(preview_width, preview_height)
+        is_horizontal = preview_width > preview_height
+        long_side = preview_width if is_horizontal else preview_height
+        span = long_side - side
+
+        if span <= 0:
+            return None
+
+        best_offset = 0
+        best_score = None
+
+        #recorremos del centro hacia los bordes: si dos posiciones empatan (una foto plana,
+        #un fondo liso) nos quedamos con la mas centrada
+        offsets = [int(round(span * step / float(steps))) for step in range(steps + 1)]
+        offsets.sort(key=lambda value: abs((value + side / 2.0) - long_side / 2.0))
+
+        for offset in offsets:
+
+            if is_horizontal:
+                box = (offset, 0, offset + side, side)
+            else:
+                box = (0, offset, side, offset + side)
+
+            energy = ImageStat.Stat(edges.crop(box)).sum[0]
+
+            #a igual detalle preferimos el centro, para no pegar el recorte contra un borde
+            distance = abs((offset + side / 2.0) - long_side / 2.0)
+            score = energy * (1 - center_bias * (distance / (span / 2.0)))
+
+            if best_score is None or score > best_score:
+                best_score = score
+                best_offset = offset
+
+        offset_fraction = best_offset / float(long_side)
+
+        if is_horizontal:
+            return (offset_fraction, 0.0, side / float(preview_width), 1.0)
+
+        return (0.0, offset_fraction, 1.0, side / float(preview_height))
+
+    def generate_logo_image(self, animal, image_field, centered=True, nombre_font_size=150, posicion_nombre="Izquierda", posicion_edad_sexo="Izquierda", crop=None):
+
+        img_parts_dir = os.path.join(settings.STATICFILES_DIRS[0])
+
+        base_size = 1200
+        back_margin_white = 200
+
+        logo_size = 250
+        offset = 40
+        offset2 = 40
+
+        img = Image.open(image_field).convert("RGBA")
+        logo = Image.open(os.path.join(img_parts_dir, "logo_2.png")).convert("RGBA")
+        logo = logo.resize((logo_size, logo_size), Image.ANTIALIAS)
+
+        img = self.crop_to_square(img, base_size, centered=centered, crop=crop)
         canvas_size = base_size + back_margin_white
 
         image = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255))

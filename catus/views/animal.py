@@ -21,6 +21,20 @@ class EditView(LoginRequiredMixin, BaseView):
 
     url = [r"^animales/(?P<animal_id>(\d+))/$", r"^animales/$"]
 
+    def set_suggested_crop(self, animal_image):
+        """Si nadie eligio el recorte, proponemos uno para que el animal no salga cortado.
+
+        Es solo un punto de partida: se puede corregir despues desde el selector.
+        """
+
+        if animal_image.get_crop():
+            return
+
+        crop = ImageService().suggest_crop(animal_image.image)
+        if crop:
+            animal_image.set_crop(crop)
+            animal_image.save()
+
     def req(self, is_post=False, **kwargs):
 
         ImageFormSet = inlineformset_factory(Animal, AnimalImage, extra=0, can_delete=True, form=AnimalImageForm, formset=RequiredImageInlineFormset)
@@ -60,6 +74,7 @@ class EditView(LoginRequiredMixin, BaseView):
 
                 for animal_image in animal_images:
                     ImageService().optimize(animal_image.image, max_width=1200)
+                    self.set_suggested_crop(animal_image)
 
                 for image_url in instagram_images:
                     img_temp = NamedTemporaryFile(delete=True, dir=os.path.join(settings.MEDIA_ROOT, "gallery"))
@@ -70,6 +85,7 @@ class EditView(LoginRequiredMixin, BaseView):
                     animal_image.image.save(img_temp.name, File(img_temp))
                     animal_image.save()
                     ImageService().optimize(animal_image.image, max_width=1200)
+                    self.set_suggested_crop(animal_image)
 
                     os.remove(img_temp.name)
 

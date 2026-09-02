@@ -68,6 +68,36 @@
 
                         <div class="form-group">
                             <label class="form-label">
+                                <i class="fa fa-crop-alt"></i>
+                                Recorte
+                            </label>
+
+                            {% comment %}
+                            Recorte elegido a mano, en fracciones de la foto original.
+                            Vacío = recorte automático (el de "Centrada").
+                            {% endcomment %}
+                            <input type="hidden" name="crop_x_{{image.id}}" value="{{image.crop_x|default_if_none:''}}">
+                            <input type="hidden" name="crop_y_{{image.id}}" value="{{image.crop_y|default_if_none:''}}">
+                            <input type="hidden" name="crop_w_{{image.id}}" value="{{image.crop_w|default_if_none:''}}">
+                            <input type="hidden" name="crop_h_{{image.id}}" value="{{image.crop_h|default_if_none:''}}">
+
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-block js-crop-button"
+                                    data-image-id="{{image.id}}"
+                                    data-src="{{image.image.url}}"
+                                    data-nombre="{{animal.nombre}}"
+                                    data-subtitulo="{% if animal.edad %}{{animal.edad}} - {% endif %}{{animal.get_sexo_display}}">
+                                <i class="fa fa-crop-alt"></i>
+                                <span class="js-crop-label">{% if image.get_crop %}Cambiar recorte{% else %}Elegir recorte{% endif %}</span>
+                            </button>
+
+                            <small class="form-text text-muted js-crop-state" data-image-id="{{image.id}}">
+                                {% if image.get_crop %}Recorte elegido a mano{% else %}Recorte automático{% endif %}
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
                                 <i class="fa fa-crosshairs"></i>
                                 Centrada
                             </label>
@@ -75,6 +105,7 @@
                                 <option value="si" {% if image.image_centered %}selected="selected"{% endif %}>Sí - Centrada</option>
                                 <option value="no" {% if not image.image_centered %}selected="selected"{% endif %}>No - Original</option>
                             </select>
+                            <small class="form-text text-muted">Solo se usa cuando no hay recorte elegido a mano.</small>
                         </div>
 
                         <div class="form-group">

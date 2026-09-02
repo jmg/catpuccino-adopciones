@@ -601,6 +601,9 @@
 {% block js %}
 {{ block.super }}
 <script src="/static/js/tinymce/tinymce.min.js"></script>
+<link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css">
+<script src="/static/vendor/cropper/cropper.min.js"></script>
+<script src="/static/js/crop-widget.js?v=1"></script>
 
 <script>
     function enableForm(btn, oldHtml) {
@@ -758,6 +761,139 @@
                 $.info("Por favor clickear en GUARDAR para confirmar eliminar la foto.");
             }
         }
+
+        /*
+         * Selector de recorte para Instagram.
+         *
+         * La foto se publica en cuadrado, así que dejamos que la persona elija qué parte
+         * se ve en vez de recortar de taquito. El recorte se guarda en campos ocultos del
+         * formset, en fracciones de la foto original.
+         */
+        function field(index, name) {
+            return $('#id_animalimage_set-' + index + '-' + name);
+        }
+
+        function setupCropButton(index) {
+
+            var fileInput = field(index, 'image');
+            var cropX = field(index, 'crop_x');
+
+            // los formularios agregados con "Agregar Foto" pasan por acá de nuevo
+            if (!fileInput.length || !cropX.length || fileInput.data('crop-ready')) {
+                return;
+            }
+            fileInput.data('crop-ready', true);
+
+            var holder = fileInput.closest('.form-group');
+            if (!holder.length) {
+                holder = fileInput.parent();
+            }
+
+            var button = $('<button type="button" class="btn btn-outline-primary btn-sm" style="width: 100%; margin-top: 8px;">'
+                + '<i class="fa fa-crop-alt"></i> <span class="crop-label"></span></button>');
+            var state = $('<small class="form-text text-muted"></small>');
+
+            holder.append(button).append(state);
+
+            var objectUrl = null;
+
+            function getCrop() {
+
+                var x = field(index, 'crop_x').val();
+                var w = field(index, 'crop_w').val();
+
+                if (x === '' || w === '' || x === undefined || w === undefined) {
+                    return null;
+                }
+
+                return {
+                    x: parseFloat(x),
+                    y: parseFloat(field(index, 'crop_y').val()),
+                    w: parseFloat(w),
+                    h: parseFloat(field(index, 'crop_h').val())
+                };
+            }
+
+            function setCrop(crop) {
+                field(index, 'crop_x').val(crop ? crop.x : '');
+                field(index, 'crop_y').val(crop ? crop.y : '');
+                field(index, 'crop_w').val(crop ? crop.w : '');
+                field(index, 'crop_h').val(crop ? crop.h : '');
+                refresh();
+            }
+
+            function getSource() {
+
+                var file = fileInput[0].files && fileInput[0].files[0];
+
+                if (file) {
+                    if (objectUrl) {
+                        URL.revokeObjectURL(objectUrl);
+                    }
+                    objectUrl = URL.createObjectURL(file);
+                    return objectUrl;
+                }
+
+                var preview = holder.find('img').first();
+                return preview.length ? preview.attr('src') : null;
+            }
+
+            function refresh() {
+
+                var hasPhoto = !!(fileInput[0].files && fileInput[0].files[0]) || holder.find('img').length > 0;
+                var crop = getCrop();
+
+                button.toggle(hasPhoto);
+                state.toggle(hasPhoto);
+                button.find('.crop-label').text(crop ? 'Cambiar recorte' : 'Elegir recorte para Instagram');
+                state.text(crop
+                    ? 'Recorte elegido: así se va a ver en Instagram.'
+                    : 'Si no elegís, lo recortamos automáticamente.');
+            }
+
+            function subtitulo() {
+
+                var edad = $('#id_edad').val();
+                var sexo = $('#id_sexo option:selected').text();
+
+                return edad ? edad + ' - ' + sexo : sexo;
+            }
+
+            button.click(function() {
+
+                var src = getSource();
+                if (!src) {
+                    $.alert("Primero elegí una foto.");
+                    return;
+                }
+
+                CatusCrop.open({
+                    src: src,
+                    crop: getCrop(),
+                    nombre: $('#id_nombre').val(),
+                    subtitulo: subtitulo(),
+                    posicionNombre: "Izquierda (abajo)",
+                    onSave: setCrop
+                });
+            });
+
+            // si cambia la foto, el recorte viejo ya no corresponde
+            fileInput.change(function() {
+                setCrop(null);
+            });
+
+            refresh();
+        }
+
+        function setupCropButtons() {
+            var total = parseInt($('#id_animalimage_set-TOTAL_FORMS').val(), 10) || 0;
+            for (var i = 0; i < total; i++) {
+                setupCropButton(i);
+            }
+        }
+
+        $('#add_more').click(setupCropButtons);
+        setupCropButtons();
     });
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-from catus.utils import clean_html
+from catus.utils import clean_html, has_crop_fields, parse_crop
 import uuid
 import zipfile
 from django.http import HttpResponse
@@ -83,7 +83,22 @@ class AnimalesListosParaPublicarView(BaseView):
         return self.render_to_response({"animals": animals})
 
 
-class MakeImagesView(BaseView):
+class CropMixin():
+
+    def get_crop(self, imagen, suffix):
+        """Recorte a usar para esta imagen.
+
+        Si el form trae los campos de recorte manda el form (vacio = volver al automatico).
+        Si no los trae (la carga inicial de la galeria) vale el que ya estaba guardado.
+        """
+
+        if has_crop_fields(self.request.POST, suffix):
+            return parse_crop(self.request.POST, suffix)
+
+        return imagen.get_crop()
+
+
+class MakeImagesView(CropMixin, BaseView):
 
     url = r"^tools/makeimages/$"
 
@@ -113,6 +128,8 @@ class MakeImagesView(BaseView):
             posicion_edad_sexo = self.request.POST.get("posicion_edad_sexo_{}".format(imagen.id), "Izquierda")
             posicion_nombre = self.request.POST.get("posicion_nombre_{}".format(imagen.id), "Izquierda")
 
+            crop = self.get_crop(imagen, "_{}".format(imagen.id))
+
             if layout:
                 image = ImageService().generate_logo_image(
                     animal,
@@ -120,7 +137,8 @@ class MakeImagesView(BaseView):
                     centered=centered,
                     nombre_font_size=nombre_font_size,
                     posicion_edad_sexo=posicion_edad_sexo,
-                    posicion_nombre=posicion_nombre
+                    posicion_nombre=posicion_nombre,
+                    crop=crop
                 )
             else:
                 image = imagen.image
@@ -137,6 +155,7 @@ class MakeImagesView(BaseView):
                 imagen.image_font_size = nombre_font_size
                 imagen.image_posicion_edad_sexo = posicion_edad_sexo
                 imagen.image_posicion_nombre = posicion_nombre
+                imagen.set_crop(crop)
 
             elif not imagen.image_for_instagram:
                 imagen.image_for_instagram.save(random_name, file, save=True)
@@ -146,7 +165,7 @@ class MakeImagesView(BaseView):
         return self.render_to_response({"animal": animal, "fonts": fonts})
 
 
-class MakeSingleImageView(BaseView):
+class MakeSingleImageView(CropMixin, BaseView):
 
     url = r"^tools/makesingleimage/$"
 
@@ -184,6 +203,8 @@ class MakeSingleImageView(BaseView):
         posicion_edad_sexo = self.request.POST.get("posicion_edad_sexo_{}".format(imagen.id), "Izquierda (abajo)")
         posicion_nombre = self.request.POST.get("posicion_nombre_{}".format(imagen.id), "Izquierda (abajo)")
 
+        crop = self.get_crop(imagen, "_{}".format(imagen.id))
+
         # Procesar la imagen
         if layout:
             image = ImageService().generate_logo_image(
@@ -192,7 +213,8 @@ class MakeSingleImageView(BaseView):
                 centered=centered,
                 nombre_font_size=nombre_font_size,
                 posicion_edad_sexo=posicion_edad_sexo,
-                posicion_nombre=posicion_nombre
+                posicion_nombre=posicion_nombre,
+                crop=crop
             )
         else:
             image = imagen.image
@@ -209,6 +231,7 @@ class MakeSingleImageView(BaseView):
         imagen.image_font_size = nombre_font_size
         imagen.image_posicion_edad_sexo = posicion_edad_sexo
         imagen.image_posicion_nombre = posicion_nombre
+        imagen.set_crop(crop)
         imagen.save()
 
                 # Renderizar solo esta imagen específica

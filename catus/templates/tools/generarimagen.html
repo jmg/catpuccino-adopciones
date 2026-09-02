@@ -1,4 +1,5 @@
 {% extends "base_form.html" %}
+{% load static %}
 {% load bootstrap4 %}
 {% load crispy_forms_tags %}
 
@@ -1343,6 +1344,9 @@
 
 {% block js %}
 {{block.super}}
+<link rel="stylesheet" href="{% static 'vendor/cropper/cropper.min.css' %}">
+<script src="{% static 'vendor/cropper/cropper.min.js' %}"></script>
+<script src="{% static 'js/crop-widget.js' %}?v=1"></script>
 <script>
     $(document).ready(function() {
 
@@ -1600,6 +1604,50 @@
     $(document).on('change', '.config-select', function() {
         var imageId = $(this).data('image-id');
         updateSingleImage(imageId);
+    });
+
+    // Recorte manual: la galería se inyecta por AJAX, así que el handler va delegado
+    $(document).on('click', '.js-crop-button', function() {
+
+        var button = $(this);
+        var imageId = button.data('image-id');
+        var form = $('#animals-form');
+
+        function input(name) {
+            return form.find('[name="crop_' + name + '_' + imageId + '"]');
+        }
+
+        var current = null;
+        if (input('x').val() !== '' && input('w').val() !== '') {
+            current = {
+                x: parseFloat(input('x').val()),
+                y: parseFloat(input('y').val()),
+                w: parseFloat(input('w').val()),
+                h: parseFloat(input('h').val())
+            };
+        }
+
+        CatusCrop.open({
+            src: button.data('src'),
+            crop: current,
+            nombre: button.data('nombre'),
+            subtitulo: button.data('subtitulo'),
+            posicionNombre: form.find('[name="posicion_nombre_' + imageId + '"]').val(),
+            onSave: function(crop) {
+
+                input('x').val(crop ? crop.x : '');
+                input('y').val(crop ? crop.y : '');
+                input('w').val(crop ? crop.w : '');
+                input('h').val(crop ? crop.h : '');
+
+                button.find('.js-crop-label').text(crop ? 'Cambiar recorte' : 'Elegir recorte');
+                $('.js-crop-state[data-image-id="' + imageId + '"]')
+                    .text(crop ? 'Recorte elegido a mano' : 'Recorte automático');
+
+                // regeneramos solo esta imagen para ver el resultado real
+                updateSingleImage(imageId);
+            }
+        });
     });
 
 </script>
