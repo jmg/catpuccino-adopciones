@@ -127,3 +127,74 @@ class SaveFormViewTest(ToolsViewTestCase):
         response = self.call(SaveFormView, self.admin, data={"animal_id": 999999})
 
         self.assertEqual(response.status_code, 200)
+
+
+class MarcarListoParaInstagramTest(ToolsViewTestCase):
+    """El botón "Listo para Instagram" decide qué publica el cron."""
+
+    def toggle(self, animal, valor):
+
+        from catus.views.tools import SaveFormView
+
+        return self.call(SaveFormView, self.admin, data={
+            "animal_id": animal.id,
+            "instagram_listo_para_publicar": valor,
+        })
+
+    def test_marcar_lo_deja_listo(self):
+
+        animal = make_animal(cargado_por=self.rescatista)
+
+        self.toggle(animal, "on")
+
+        animal.refresh_from_db()
+        self.assertTrue(animal.instagram_listo_para_publicar)
+
+    def test_desmarcar_lo_saca_de_la_cola(self):
+        """El botón manda "" al desmarcar; antes eso lo dejaba marcado igual."""
+
+        animal = make_animal(cargado_por=self.rescatista, instagram_listo_para_publicar=True)
+
+        self.toggle(animal, "")
+
+        animal.refresh_from_db()
+        self.assertFalse(animal.instagram_listo_para_publicar, "desmarcar no tuvo efecto")
+
+
+class PublishCommandTest(TestCase):
+    """A qué animales alcanza el cron de publicación."""
+
+    def animales_a_publicar(self):
+        """Usa el filtro real del comando, no una copia."""
+
+        from catus.management.commands.publish import Command
+
+        return list(Command().animales_a_publicar())
+
+    def test_publica_los_que_estan_en_adopcion(self):
+
+        animal = make_animal(instagram_listo_para_publicar=True, aprobado=True, estado="D")
+
+        self.assertIn(animal, self.animales_a_publicar())
+
+    def test_no_publica_un_animal_ya_adoptado(self):
+        """Se marcaba listo el lunes, se adoptaba el martes y el cron lo publicaba igual."""
+
+        animal = make_animal(instagram_listo_para_publicar=True, aprobado=True, estado="A")
+
+        self.assertNotIn(animal, self.animales_a_publicar())
+
+    def test_no_publica_un_animal_sin_aprobar(self):
+
+        animal = make_animal(instagram_listo_para_publicar=True, aprobado=False, estado="D")
+
+        self.assertNotIn(animal, self.animales_a_publicar())
+
+    def test_no_republica_lo_ya_publicado(self):
+
+        animal = make_animal(
+            instagram_listo_para_publicar=True, aprobado=True, estado="D",
+            instagram_publicado=True,
+        )
+
+        self.assertNotIn(animal, self.animales_a_publicar())
