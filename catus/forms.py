@@ -163,9 +163,10 @@ class RequiredImageInlineFormset(forms.models.BaseInlineFormSet):
             self.raise_error()
 
     def raise_error(self):
-        msg = "Al menos una foto del animal es requerida"
-        self.errors.append((msg))
-        raise forms.ValidationError(msg)
+        #self.errors es una lista de dicts (uno por form). Meterle un string suelto
+        #rompia a quien despues quisiera leer los errores para mostrarlos.
+        #ValidationError desde clean() ya deja el mensaje en non_form_errors().
+        raise forms.ValidationError("Al menos una foto del animal es requerida")
 
 
 class SignupForm(UserCreationForm):
