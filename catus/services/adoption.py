@@ -26,7 +26,7 @@ class AdoptionService():
     def get_form_attrs(self, form_entry, attrs, exact=False, convert_to_str=False):
 
         if not form_entry:
-            return ""
+            return []
 
         values = []
         for form_field in form_entry.fields.all():
@@ -112,7 +112,14 @@ class AdoptionService():
             return None
 
         animal = None
-        animal_id = [x.value for x in form_entry.fields.all()][0]
+
+        #el animal elegido es siempre la primera respuesta del formulario, pero un
+        #formulario sin respuestas no puede tumbar la vista
+        primera_respuesta = form_entry.fields.all().first()
+        if primera_respuesta is None:
+            return None
+
+        animal_id = primera_respuesta.value
 
         if str(animal_id) != "0":
             try:
@@ -126,4 +133,10 @@ class AdoptionService():
     def get_adoptante(self, estado_form):
 
         data_attrs = self.get_form_attrs(estado_form.form_entry, ["Nombre y Apellido"], exact=True, convert_to_str=True)
+
+        #se usa al armar el contrato: si el formulario no trae el campo (lo renombraron,
+        #es un formulario viejo) devolvemos vacio en vez de cortar el flujo del admin
+        if not data_attrs:
+            return ""
+
         return data_attrs[0][1]

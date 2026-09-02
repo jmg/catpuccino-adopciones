@@ -20,13 +20,14 @@ class ImageService():
 
         random_name = f'{uuid.uuid4()}.jpeg'
 
-        if img.size[1] > max_width or img.size[0] > max_width:
+        #se escala por el lado LARGO: escalando siempre por el ancho, una foto vertical
+        #de celular (1080x1920) terminaba agrandada a 1200x2133, mas pesada y sin mas detalle
+        if max(img.size) > max_width:
 
-            wpercent = (max_width / float(img.size[0]))
-            hsize = int((float(img.size[1]) * float(wpercent)))
+            ratio = max_width / float(max(img.size))
+            nuevo_tamano = (max(1, int(img.size[0] * ratio)), max(1, int(img.size[1] * ratio)))
 
-            print (max_width, hsize)
-            img = img.resize((max_width, hsize), Image.ANTIALIAS)
+            img = img.resize(nuevo_tamano, Image.ANTIALIAS)
 
         img = self.rotate(img)
 
