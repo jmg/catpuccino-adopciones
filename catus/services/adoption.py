@@ -2,6 +2,7 @@ from catus.models import Animal
 from forms_builder.forms.models import Form, Field
 import urllib.parse
 from django.conf import settings
+from django.utils.safestring import mark_safe
 
 
 class AdoptionService():
@@ -72,11 +73,14 @@ class AdoptionService():
                         protocol = "https" if settings.ENV != "LOCAL" else "http"
                         val = "{}://{}/{}".format(protocol, settings.HOST, urllib.parse.quote(url))
 
+                        #solo el HTML que armamos acá se marca como seguro. El resto de
+                        #las respuestas las escribe cualquiera que complete el formulario
+                        #público, así que tienen que salir escapadas.
                         if not photos_raw:
                             if not photos_html:
-                                value = "<a target='_blank' href='{}'>{}</a>".format(val, val)
+                                value = mark_safe("<a target='_blank' href='{}'>{}</a>".format(val, val))
                             else:
-                                value = "<img src='{}' style='max-width: 100%'>".format(val)
+                                value = mark_safe("<img src='{}' style='max-width: 100%'>".format(val))
                         else:
                             value = val
                     except:
