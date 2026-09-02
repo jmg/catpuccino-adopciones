@@ -24,4 +24,34 @@ class ValidationService():
 
     def clean_handle(self, handle):
 
-        return re.sub(re.compile("[^0-9a-zA-Z_]"), "", handle)
+        return re.sub(re.compile("[^0-9a-zA-Z_]"), "", handle or "")
+
+    def esta_libre(self, handle, user):
+
+        query_set = CatusUser.objects
+
+        if user is not None and user.pk:
+            query_set = query_set.exclude(pk=user.pk)
+
+        return not query_set.filter(handle=handle).exists()
+
+    def build_handle(self, propuesta, user):
+        """Devuelve un handle válido y libre a partir de lo que puso la persona.
+
+        Antes se limpiaban los caracteres inválidos O se agregaba un "_" si estaba
+        tomado, pero nunca las dos cosas, y no se volvía a chequear: dos personas
+        podían terminar con el mismo handle y /<handle>/ devolvía 500 para las dos.
+        """
+
+        base = self.clean_handle(propuesta)
+        if not base:
+            return None
+
+        handle = base
+        sufijo = 1
+
+        while not self.esta_libre(handle, user):
+            sufijo += 1
+            handle = "{}_{}".format(base, sufijo)
+
+        return handle
