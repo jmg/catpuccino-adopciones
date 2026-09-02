@@ -344,7 +344,7 @@ class DatosView(LoginRequiredMixin, TemplateView):
             "gato": gato,
             "data_attrs": data_attrs,
             "cat_attrs": cat_attrs,
-            "miembro": contrato.miembro_felis_catus_nombre,
+            "miembro": contrato.miembro_adopcion_nombre,
             "link_contrato": link_contrato
         }
 

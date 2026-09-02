@@ -223,6 +223,30 @@ class CatusUserForm(ModelForm):
         self.fields["title"].label = _("Título de tu perfil")
         self.fields["description"].label = _("Descripción de tu perfil")
 
+    def clean_handle(self):
+        """El handle es la URL pública del perfil, así que no puede repetirse.
+
+        La pantalla lo chequea por AJAX mientras se escribe, pero eso es solo una
+        ayuda visual: si dos personas quedaban con el mismo handle, /<handle>/
+        devolvía 500 para las dos.
+        """
+
+        from catus.services.validation import ValidationService
+
+        handle = self.cleaned_data.get("handle")
+        if not handle:
+            return handle
+
+        service = ValidationService()
+
+        if service.clean_handle(handle) != handle:
+            raise forms.ValidationError("Usá solo letras, números y guión bajo.")
+
+        if not service.esta_libre(handle, self.instance):
+            raise forms.ValidationError("Ese link ya está en uso. Probá con otro.")
+
+        return handle
+
 
 class ContratoForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, ModelForm):
 
@@ -230,7 +254,7 @@ class ContratoForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, ModelForm):
 
         model = Contrato
         exclude = ["contrato_aceptado", "contrato_fecha", "adoptante", "hash", "gato", "estado_formulario", "email_enviado", "created_at", "updated_at"]
-        fields_required = ["gato_nombre", "gato_color", "gato_fecha_nacimiento", "gato_edad", "miembro_felis_catus_nombre"]
+        fields_required = ["gato_nombre", "gato_color", "gato_fecha_nacimiento", "gato_edad", "miembro_adopcion_nombre"]
         date_picker = ["gato_fecha_nacimiento", "gato_vacunacion_antirabica_fecha", "gato_vacunacion_triple_1_dosis_fecha", "gato_vacunacion_triple_2_dosis_fecha", "gato_castrado_fecha", "gato_desparasitado_fecha", "gato_pipeta_antipulgas_fecha", "gato_castracion_fecha_futura", "gato_desparasitado_fecha_2", "perro_vacunacion_quintuple_1_dosis_fecha", "perro_vacunacion_quintuple_2_dosis_fecha", "perro_vacunacion_sextuple_1_dosis_fecha"]
 
         labels = {

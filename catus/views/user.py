@@ -28,17 +28,10 @@ class RegisterView(BaseView):
                 instagram = form.cleaned_data.get('instagram')
                 if instagram:
 
-                    handle = instagram
-                    try:
-                        ValidationService().check_handle(instagram, user)
-                    except Exception as e:
-                        if str(e) == "chars":
-                            handle = ValidationService().clean_handle(instagram)
-                        if str(e) == "handle":
-                            handle = "{}_".format(instagram)
-
-                    user.title = handle
-                    user.handle = handle
+                    handle = ValidationService().build_handle(instagram, user)
+                    if handle:
+                        user.title = handle
+                        user.handle = handle
 
                 user.save()
 
