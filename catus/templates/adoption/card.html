@@ -1,6 +1,6 @@
 <div data-id="{{animal.id}}" data-type="{{animal.tipo}}" data-name="{{animal.nombre}}" data-zone="{{animal.zona}}" class="post-preview">
 
-    {% if animal.reservado %}
+    {% if animal.esta_reservado %}
     <div class="reservado-badge">
       <i class="fa fa-paw"></i> ¡Reservado!
     </div>
@@ -34,7 +34,7 @@
     </div>
     {% endif %}
 
-    <a class="animal-title" {% if not animal.reservado %}href="{{ animal.get_adoption_url }}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
+    <a class="animal-title" {% if not animal.esta_reservado %}href="{{ animal.get_adoption_url }}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
       <h3 class="post-subtitle">
         <b>{{animal.nombre}}</b>
       </h3>
@@ -77,7 +77,7 @@
     </div>
 
     <div class="card-action text-center">
-      <a class="btn btn-primary btn-preadopcion" {% if not animal.reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
+      <a class="btn btn-primary btn-preadopcion" {% if not animal.esta_reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
         <span style="text-transform: none;">Formulario de Pre-Adopción</span> <i class="fa fa-paw"></i>
       </a>
     </div>

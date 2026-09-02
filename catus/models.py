@@ -133,6 +133,14 @@ class Animal(BaseEntity):
 
         return self.estado
 
+    def esta_reservado(self):
+
+        return self.get_estado() == "R"
+
+    def esta_adoptado(self):
+
+        return self.get_estado() == "A"
+
     def set_estado(self, estado):
 
         if estado == "A" and self.fecha_adopcion is None:
@@ -248,6 +256,9 @@ class EstadoFormulario(BaseEntity):
         if persona_nombre:
             self.persona_nombre = persona_nombre
             self.save()
+
+        #se muestra directo en las tablas del admin: devolver None imprime "None"
+        return persona_nombre or ""
 
     def get_estado_badge(self):
 
