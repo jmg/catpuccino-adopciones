@@ -13,6 +13,7 @@ from catus.utils import send_html_email
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import redirect_to_login
 from threading import Thread
 
 from catus.forms import ContratoForm
@@ -22,6 +23,21 @@ class EditView(TemplateView):
 
     url = [r"^formulario/(?P<estado_id>(\d*))/contrato/$"]
     is_persona = False
+
+    def requiere_login(self):
+        """La pantalla por id es del equipo y muestra los datos personales del adoptante.
+
+        La versión por hash (EditPersonaView) la usa el adoptante, que no tiene cuenta.
+        """
+
+        return not self.is_persona
+
+    def dispatch(self, request, *args, **kwargs):
+
+        if self.requiere_login() and not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+
+        return super().dispatch(request, *args, **kwargs)
 
     def req(self, is_post=False, **kwargs):
 
@@ -258,17 +274,23 @@ class DownloadContractView(LoginRequiredMixin, TemplateView):
 
     def get(self, *args, **kwargs):
 
-        contrato = Contrato.objects.get(id=self.kwargs.get("contrato_id"))
+        contrato = Contrato.objects.filter(id=self.kwargs.get("contrato_id")).first()
+        if contrato is None:
+            return HttpResponse("No se encontró el contrato.")
+
         contrato_file = os.path.join(
             settings.STATICFILES_DIRS[0],
             "contrato",
             contrato.hash,
-            "contrato_adopcion_responsable_felis_catus_completado.pdf"
+            CONTRATO_COMPLETADO_FILE_NAME,
         )
+
+        if not os.path.exists(contrato_file):
+            return HttpResponse("El contrato todavía no fue generado.")
 
         with open(contrato_file, "rb") as f:
             response = HttpResponse(f, content_type='application/pdf')
-            response['Content-Disposition'] = 'attachment; filename=contrato_adopcion_responsable_felis_catus_vacio.pdf'
+            response['Content-Disposition'] = 'attachment; filename={}'.format(CONTRATO_COMPLETADO_FILE_NAME)
 
         return response
 

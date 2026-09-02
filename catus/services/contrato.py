@@ -7,6 +7,11 @@ from reportlab.lib.pagesizes import letter
 import textwrap
 
 
+#el nombre del PDF generado. La vista de descarga lee este mismo archivo: cuando
+#cada lado tenía su propio literal, descargar el contrato siempre daba 500.
+CONTRATO_COMPLETADO_FILE_NAME = "contrato_adopcion_responsable_completado.pdf"
+
+
 def add_pdf_content(existing_pdf, output, page_num, contrato, tipo):
 
     page = existing_pdf.getPage(page_num)
@@ -361,7 +366,7 @@ def generate_contrato_pdf(contrato, is_test=False):
         if not os.path.exists(contracto_completado_dir):
             os.mkdir(contracto_completado_dir)
 
-        contrato_completado_file_name = "contrato_adopcion_responsable_completado.pdf"
+        contrato_completado_file_name = CONTRATO_COMPLETADO_FILE_NAME
         contrato_completado_file = os.path.join(contracto_completado_dir, contrato_completado_file_name)
     else:
         contracto_vacio_file = contrato_file_name
