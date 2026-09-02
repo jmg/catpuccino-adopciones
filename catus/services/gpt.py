@@ -1,5 +1,6 @@
 from catus.services.base import BaseService
 from catus.models import ChatGTPResponse
+from catus.utils import es_url_de_instagram
 from django.conf import settings
 import openai
 import json
@@ -35,11 +36,20 @@ class GPTService(BaseService):
         #             images.append("{}/gallery/ig/{}/{}".format(settings.SSL_HOST, code, file))
         # except:
 
-        response = requests.get(url)
+        if not es_url_de_instagram(url):
+            raise ValueError("El link tiene que ser de un post de Instagram.")
+
+        response = requests.get(url, timeout=20)
         html_code = response.content
 
         html = BeautifulSoup(html_code, 'html.parser')
         title = html.find("meta", property="og:title")
+
+        #instagram devuelve una pagina sin og:title cuando el post es privado, no
+        #existe, o pide login. Antes se accedia a .attrs sobre None y era un 500.
+        if title is None or not title.attrs.get("content"):
+            raise ValueError("No pudimos leer ese post. Puede ser privado o no existir.")
+
         text = title.attrs["content"]
 
         images = []
@@ -145,6 +155,11 @@ class GPTService(BaseService):
         return data
 
     def pull_data_from_ig(self, url):
+
+        #primero validamos: no tiene sentido preparar el cliente de OpenAI para un
+        #pedido que vamos a rechazar
+        if not es_url_de_instagram(url):
+            raise ValueError("El link tiene que ser de un post de Instagram.")
 
         openai.organization = settings.OPENIA_API_ORG_ID
         openai.api_key = settings.OPENIA_API_KEY
