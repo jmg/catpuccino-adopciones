@@ -15,8 +15,7 @@ All user-facing copy, model field names and template names are in **Spanish** (`
 surrounding code — `gato`, `estado`, `cargado_por`, `aprobado`, `fecha_ingreso` are domain
 terms, not incidental naming.
 
-Single Django app `catus/`, project package `catus_project/`. There is effectively no test
-suite (`catus/tests.py` is the empty stub).
+Single Django app `catus/`, project package `catus_project/`.
 
 ## Commands
 
@@ -30,9 +29,25 @@ python manage.py migrate
 python manage.py makemigrations catus
 python manage.py shell
 python manage.py collectstatic --noinput
-python manage.py test                       # runs, but there are no real tests
-python manage.py test catus.tests.SomeTest.test_x   # single test
+python manage.py test catus                 # the whole suite
+python manage.py test catus.tests.test_crop                          # one module
+python manage.py test catus.tests.test_crop.CleanCropTest.test_rechaza_infinitos_y_nan   # one test
 ```
+
+## Tests
+
+`catus/tests/` holds the suite; `catus/tests/factories.py` builds the objects (`make_animal`,
+`make_user`, `make_estado_formulario`, `uploaded_photo`). Tests and their names are in
+Spanish, like the rest of the code.
+
+Views are exercised by calling them directly with `RequestFactory` — either
+`ViewClass.as_view()(request, **kwargs)` when the test cares about the permission mixins, or
+by instantiating the view and setting `view.request` when it only needs one method. That
+sidesteps the URLconf, which `django-conventions` builds by walking the view classes and
+which needs the whole project booted.
+
+Most tests double as a record of a bug that reached production: their docstring says what
+used to break and for whom. When touching that code, keep the assertion.
 
 `./dev_tools.sh <shell|migrate|makemigrations|createsuperuser|collectstatic|test|check|clean|requirements|backup|reset_db>`
 wraps the same commands behind the author's venv. `./start.sh [port]` and `./run_dev.sh`
@@ -163,6 +178,26 @@ the form invalid and blocking the animal from being saved.
 extract name/type/sex/age/description as JSON, and prefills the animal form
 (`/animal/pulldatafromig/`). Responses are cached in `ChatGTPResponse`.
 
+## Permissions
+
+Registration at `/accounts/register/` is open and self-service, so **"is logged in" is not a
+permission** — an attacker gets an account for free. Two rules carry the model:
+
+- `views/base.py::puede_editar_animal(user, animal)` — the rescuer who loaded the animal
+  (`cargado_por`), or any superuser. Use it for anything scoped to one animal: editing it,
+  changing its state, its adoption forms, its contract and the contract PDF.
+- `views/base.py::SuperuserRequiredMixin` — team-only actions with no per-animal owner:
+  approving an animal, writing internal notes, linking the Instagram account. The `/tools/`
+  views predate the mixin and inline the same check, returning plain text instead of a
+  redirect; match whichever style the file already uses.
+
+Two endpoints are deliberately open and must stay that way: `/contrato/<hash>/`, where the
+adopter fills in their half without an account, and `/animal/photos/`, used by the public
+pre-adoption form (it only serves approved animals).
+
+Anything reached by a sequential id (`/formulario/<id>/…`, `/contrato_adopcion/<id>/…`) is
+enumerable, so it needs an ownership check, not just a login.
+
 ## Known rough edges
 
 - `requirements.txt` is a `pip freeze` of the production box and is **incomplete**: Pillow,
@@ -171,10 +206,16 @@ extract name/type/sex/age/description as JSON, and prefills the animal form
   to install missing packages by hand.
 - `catus/services/tables.py` is an unused near-duplicate of `services/base.py`; only
   `services/base.py` is imported anywhere. Don't edit both.
-- Several `BaseService` methods (`save`, `_get_data`, `update_or_create`, `set_attrs`,
-  `get_action_params`, `check_nullables`) still call `dict.iteritems()` and would raise on
-  Python 3 — they are dead code paths, not working helpers. `open_search` and `render` are
-  the parts actually in use.
+- Most of `BaseService` is dead: its methods still call `dict.iteritems()` (Python 2) and
+  `open_search`, the one part that used to run, lost its only caller when the broken
+  `/formslist/` view was removed. `render` is what's actually in use.
+- Positional lookups against `forms_builder` data are a recurring source of bugs — the app
+  used to pick the public form with `Form.objects.all()[0]`/`[3]` and the animal dropdown
+  with `Field.objects.all()[0]`. Both now resolve by `slug`/`label`. Don't reintroduce
+  index-based lookups: deleting one form in the admin silently shifts the rest.
+- The public form's answers are attacker-controlled text. `AdoptionService` marks only the
+  `<img>`/`<a>` it builds for uploaded photos as safe; never add `|safe` back to the
+  templates that render those values.
 - `CacheService` talks to memcached on `localhost` with pickled values; every call site is
   currently commented out.
 - `MEDIA_URL = "/"` with `MEDIA_ROOT = <repo>/gallery`, so uploads are served from the site
