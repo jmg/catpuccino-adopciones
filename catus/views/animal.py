@@ -1,13 +1,15 @@
 from django.conf import settings
 from catus.services.images import ImageService
 from catus.services.mail import MailService
-from catus.views.base import BaseView
+from catus.views.base import BaseView, SuperuserRequiredMixin, puede_editar_animal
 from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
 
 from catus.models import Animal, AnimalImage, CatusUser
 from catus.forms import AnimalImageForm, CatusUserForm, RequiredImageInlineFormset
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
 from django.core.files import File
 from urllib.request import urlopen
 from tempfile import NamedTemporaryFile
@@ -41,7 +43,12 @@ class EditView(LoginRequiredMixin, BaseView):
         context = {}
 
         if kwargs.get("animal_id"):
-            animal = Animal.objects.get(id=kwargs.get("animal_id"))
+            animal = get_object_or_404(Animal, id=kwargs.get("animal_id"))
+
+            #sin esto cualquiera logueado editaba el animal de otra persona cambiando la URL
+            if not puede_editar_animal(self.request.user, animal):
+                raise PermissionDenied("Este animal lo cargó otra persona.")
+
             context["post_url"] = "/animales/{}/".format(kwargs.get("animal_id"))
         else:
             animal = None
@@ -134,12 +141,13 @@ class EditView(LoginRequiredMixin, BaseView):
         return self.req(is_post=True, **kwargs)
 
 
-class AprobarView(BaseView):
+class AprobarView(SuperuserRequiredMixin, BaseView):
 
     def get(self, *a, **k):
 
-        animal_id = self.request.GET.get("id")
-        animal = Animal.objects.get(id=animal_id)
+        animal = Animal.objects.filter(id=self.request.GET.get("id")).first()
+        if animal is None:
+            return self.response("No se encontró el animal.")
 
         if not animal.aprobado:
             animal.aprobado = True
@@ -151,7 +159,7 @@ class AprobarView(BaseView):
         return self.response("{} ya habia sido aprobado".format(animal.nombre))
 
 
-class ValidateNameView(BaseView):
+class ValidateNameView(LoginRequiredMixin, BaseView):
 
     def post(self, *a, **k):
 
@@ -163,6 +171,7 @@ class ValidateNameView(BaseView):
 
 
 class PhotosView(BaseView):
+    """La usa el formulario público de pre-adopción, así que solo muestra lo publicado."""
 
     def post(self, *a, **k):
 
@@ -170,7 +179,9 @@ class PhotosView(BaseView):
         if not animal_id:
             return self.json_response({"photos_count": 0, "html": "" })
 
-        animal = Animal.objects.get(id=animal_id)
+        animal = Animal.objects.filter(id=animal_id, aprobado=True).first()
+        if animal is None:
+            return self.json_response({"photos_count": 0, "html": "" })
 
         html = self.render("animal/photos.html", {"animal": animal})
 
@@ -205,6 +216,12 @@ class UpdateAnimal(LoginRequiredMixin, BaseView):
 
         animals = Animal.objects.filter(id__in=animal_ids)
 
+        #cada quien maneja sus animales; el equipo maneja todos
+        if not self.request.user.is_superuser:
+            animals = animals.filter(cargado_por=self.request.user)
+
+        animals = list(animals)
+
         for animal in animals:
             self.update(animal, post_data=self.request.POST)
             animal.save()
@@ -212,7 +229,11 @@ class UpdateAnimal(LoginRequiredMixin, BaseView):
         if not animal_id:
             return self.response("Animales marcados como {}!".format(self.response_status))
 
-        return self.json_response({"success": True, "nombre": animal.nombre })
+        #con un id que no existe (o de otra persona) no hay animal que devolver
+        if not animals:
+            return self.json_response({"success": False, "error": "No se encontró el animal."})
+
+        return self.json_response({"success": True, "nombre": animals[0].nombre })
 
 
 class MarcarAdoptado(UpdateAnimal):
@@ -253,7 +274,7 @@ class ActualizarFechaIngreso(UpdateAnimal):
         animal.fecha_ingreso = timezone.now()
 
 
-class AddComment(LoginRequiredMixin, BaseView):
+class AddComment(SuperuserRequiredMixin, BaseView):
 
     template_name = "tools/_comment.html"
 
@@ -262,7 +283,10 @@ class AddComment(LoginRequiredMixin, BaseView):
         user_id = self.request.POST.get("user_id")
         comment = self.request.POST.get("comment")
 
-        user = CatusUser.objects.get(id=user_id)
+        user = CatusUser.objects.filter(id=user_id).first()
+        if user is None:
+            return self.response("No se encontró el usuario.")
+
         user.animales_comentario = comment
         user.save()
 
