@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 import uuid
 from forms_builder.forms.forms import FormForForm
@@ -12,6 +13,8 @@ from django.template import Context
 from django.conf import settings
 from django.utils import timezone
 from catus.views.home import BaseView
+
+logger = logging.getLogger(__name__)
 
 
 class ListView(BaseView):
@@ -203,8 +206,20 @@ class PreAdoptionView(BaseView):
         email_context = {"animal": animal, "fields": fields, "form_hash": estado.hash, "settings": settings}
         content = self.render(self._get_email_template(), email_context)
 
-        to_emails = list(set(["catpuccino.ok@gmail.com", animal.cargado_por.email]))
-        send_html_email(subject, content, settings.SEND_MAIL, to_emails)
+        to_emails = ["catpuccino.ok@gmail.com"]
+
+        #"animal" no siempre es un Animal: con la opción "otro" es el nombre que la
+        #persona escribió a mano, y hay animales viejos sin rescatista asociado
+        rescatista = getattr(animal, "cargado_por", None)
+        if rescatista is not None and rescatista.email:
+            to_emails.append(rescatista.email)
+
+        #el formulario ya quedó guardado: si el mail falla, avisamos por el log pero
+        #no le mostramos un error a quien acaba de completarlo (volvería a mandarlo)
+        try:
+            send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)))
+        except Exception:
+            logger.exception("No se pudo avisar del formulario %s", estado.hash)
 
         try:
             email = AdoptionService().get_form_attr(form_entry, "Email")
@@ -224,8 +239,8 @@ class PreAdoptionView(BaseView):
 
         try:
             send_html_email(subject, content, settings.SEND_MAIL, email)
-        except:
-            pass
+        except Exception:
+            logger.exception("No se pudo confirmarle el formulario %s a %s", estado.hash, email)
 
 
 class PreAdoptionPerrosView(PreAdoptionView):
