@@ -1,3 +1,4 @@
+import logging
 from django.conf import settings
 from catus.services.images import ImageService
 from catus.services.mail import MailService
@@ -17,6 +18,8 @@ from django.utils import timezone
 import os
 
 from catus.forms import AnimalForm
+
+logger = logging.getLogger(__name__)
 
 
 class EditView(LoginRequiredMixin, BaseView):
@@ -218,7 +221,16 @@ class PullDataFromIg(LoginRequiredMixin, BaseView):
     def get(self, *a, **k):
 
         url = self.request.GET.get("url")
-        data = GPTService().pull_data_from_ig(url)
+
+        #depende de Instagram y de la API de OpenAI: cuando algo de eso falla, el
+        #rescatista tiene que poder seguir cargando el animal a mano
+        try:
+            data = GPTService().pull_data_from_ig(url)
+        except ValueError as error:
+            return self.json_response({"error": str(error)})
+        except Exception:
+            logger.exception("No se pudieron traer los datos de %s", url)
+            return self.json_response({"error": "No pudimos leer ese post. Cargá los datos a mano."})
 
         return self.json_response(data)
 

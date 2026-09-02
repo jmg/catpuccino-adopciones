@@ -1,5 +1,7 @@
 import math
 import re
+from urllib.parse import urlparse
+
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.utils import timezone
@@ -49,6 +51,31 @@ def send_html_email(subject, content, from_email, to_email, fail_silently=False,
             error = e
 
     raise error
+
+
+INSTAGRAM_HOSTS = ("instagram.com", "www.instagram.com")
+
+
+def es_url_de_instagram(url):
+    """True si la URL es un link de instagram.com.
+
+    La URL la pega el rescatista y el server la va a pedir, asi que no puede ser
+    cualquier cosa: sin este chequeo se lo podia usar para alcanzar direcciones
+    internas de la red que no son accesibles desde afuera.
+    """
+
+    if not url:
+        return False
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    return parsed.hostname in INSTAGRAM_HOSTS
 
 
 def clean_crop(crop):
