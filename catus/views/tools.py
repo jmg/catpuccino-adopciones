@@ -309,7 +309,11 @@ class SaveFormView(BaseView):
         if animal is None:
             return self.response("No se encontró el animal.")
 
-        animal.instagram_listo_para_publicar = self.request.POST.get("instagram_listo_para_publicar") is not None
+        #el botón manda "" al desmarcar (no omite la clave), así que preguntar por
+        #"is not None" lo dejaba siempre en True: desmarcar no tenía ningún efecto y
+        #el cron publicaba igual el animal
+        valor = (self.request.POST.get("instagram_listo_para_publicar") or "").strip().lower()
+        animal.instagram_listo_para_publicar = valor in ("on", "true", "1", "si")
         animal.save()
 
         return self.response("ok")

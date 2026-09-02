@@ -1,3 +1,5 @@
+import ast
+
 from catus.services.base import BaseService
 from catus.models import ChatGTPResponse
 from catus.utils import es_url_de_instagram
@@ -75,23 +77,55 @@ class GPTService(BaseService):
 
         return value
 
+    def strip_code_fence(self, content):
+        """Saca el ```json ... ``` con el que el modelo suele envolver la respuesta.
+
+        Sin esto json.loads falla y se caía al parseo por líneas, que devolvía el
+        nombre con comillas incluidas y el tipo equivocado.
+        """
+
+        if not content:
+            return content
+
+        limpio = content.strip()
+
+        if not limpio.startswith("```"):
+            return limpio
+
+        limpio = re.sub(r"^```[a-zA-Z]*\s*", "", limpio)
+        limpio = re.sub(r"\s*```$", "", limpio)
+
+        return limpio.strip()
+
+    def parse_data_obj(self, response_content):
+        """Interpreta la respuesta del modelo como diccionario, o None."""
+
+        limpio = self.strip_code_fence(response_content)
+
+        try:
+            return json.loads(limpio)
+        except Exception:
+            pass
+
+        try:
+            #a veces viene como dict de Python, con comillas simples. literal_eval
+            #entiende solo literales: con eval(), cualquiera que escribiera el caption
+            #de un post de Instagram podía hacer que el server ejecutara código.
+            return ast.literal_eval(limpio)
+        except Exception:
+            pass
+
+        try:
+            return self.convert_to_dict(limpio)
+        except Exception:
+            return None
+
     def parse_response(self, response_content):
 
         data = {}
         data["response"] = response_content
 
-        try:
-            data_obj = json.loads(response_content)
-        except:
-            try:
-                #it can be a python dict
-                data_obj = eval(response_content)
-            except:
-                #try parsing by \n
-                try:
-                    data_obj = self.convert_to_dict(response_content)
-                except:
-                    data_obj = None
+        data_obj = self.parse_data_obj(response_content)
 
         if not data_obj or not isinstance(data_obj, dict):
             return data

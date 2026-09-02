@@ -123,3 +123,66 @@ class EsUrlDeImagenPublicaTest(TestCase):
             None,
         ]:
             self.assertFalse(es_url_de_imagen_publica(url), repr(url))
+
+
+class ParseResponseTest(TestCase):
+    """Interpreta lo que devuelve el modelo, que a su vez sale del caption de un post."""
+
+    def setUp(self):
+        self.service = GPTService()
+
+    def test_lee_un_json_normal(self):
+
+        data = self.service.parse_response(
+            '{"nombre": "Willy", "tipo": "gato", "sexo": "macho", "edad": "2 años", '
+            '"descripcion": "Muy compañero"}'
+        )
+
+        self.assertEqual(data["Nombre"], "Willy")
+        self.assertEqual(data["Tipo"], "G")
+        self.assertEqual(data["Sexo"], "M")
+        self.assertEqual(data["Edad"], "2 años")
+
+    def test_lee_un_json_envuelto_en_backticks(self):
+        """El modelo suele responder con ```json ... ```; antes salía todo mal parseado."""
+
+        data = self.service.parse_response(
+            '```json\n{"nombre": "Rocco", "tipo": "perro", "sexo": "macho", "edad": "3 años"}\n```'
+        )
+
+        self.assertEqual(data["Nombre"], "Rocco")
+        self.assertEqual(data["Tipo"], "P", "un perro se cargó como gato")
+
+    def test_lee_un_dict_de_python(self):
+
+        data = self.service.parse_response("{'nombre': 'Willy', 'tipo': 'gato'}")
+
+        self.assertEqual(data["Nombre"], "Willy")
+
+    def test_no_ejecuta_codigo_de_la_respuesta(self):
+        """Con eval(), el caption de un post de Instagram podía ejecutar código en el server."""
+
+        import os
+
+        marca = os.path.join("/tmp", "catus-rce-no-deberia-existir")
+        if os.path.exists(marca):
+            os.remove(marca)
+
+        payload = "__import__('pathlib').Path(%r).write_text('rce')" % marca
+
+        data = self.service.parse_response(payload)
+
+        self.assertFalse(os.path.exists(marca), "se ejecutó código de la respuesta del modelo")
+        self.assertNotIn("Nombre", data)
+
+    def test_una_respuesta_basura_no_rompe(self):
+
+        for basura in ["", "no encontré nada", "{{{", None]:
+            data = self.service.parse_response(basura)
+            self.assertIn("response", data)
+
+    def test_una_lista_no_se_toma_como_datos(self):
+
+        data = self.service.parse_response('["Willy", "Rocco"]')
+
+        self.assertNotIn("Nombre", data)
