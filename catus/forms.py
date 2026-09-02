@@ -5,6 +5,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, ButtonHolder, Submit, Field
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.forms import ImageField
 from django.forms.widgets import FileInput
@@ -92,15 +93,18 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 class ImagePreviewWidget(FileInput):
 
     def render(self, name, value, attrs=None, **kwargs):
-        input_html = super().render(name, value, attrs=None, **kwargs)
+        #pasar attrs=None descartaba el id que arma Django, así que el input quedaba
+        #sin id: la etiqueta no lo apuntaba y el JS (por ejemplo el selector de
+        #recorte para Instagram) no podía encontrarlo.
+        input_html = super().render(name, value, attrs=attrs, **kwargs)
         if value:
             try:
-                img_html = mark_safe("<img style='max-width: 100%; width: 100%; margin-top: 10px;' src='/{}'/>".format(value))
+                img_html = mark_safe("<img style='max-width: 100%; width: 100%; margin-top: 10px;' src='/{}'/>".format(escape(value)))
             except:
                 img_html = ""
         else:
             img_html = ""
-        return '{}{}'.format(input_html, img_html)
+        return mark_safe('{}{}'.format(input_html, img_html))
 
 
 class AnimalImageForm(ModelForm):
@@ -135,31 +139,33 @@ class AnimalImageForm(ModelForm):
 
 
 class RequiredImageInlineFormset(forms.models.BaseInlineFormSet):
-    """ Makes inline fields required """
+    """Un animal publicado tiene que quedar siempre con al menos una foto."""
 
     def clean(self):
-        # get forms that actually have valid data
-        count = 0
-        delete_checked = 0
+        """Cuenta cuántas fotos quedan después de guardar, no cuántas vinieron.
+
+        La versión anterior solo miraba el caso de tener exactamente una foto, así
+        que con dos o más se podían tildar todas para eliminar y el animal quedaba
+        publicado sin ninguna.
+        """
+
+        quedan = 0
+
         for form in self.forms:
             try:
-                if form.cleaned_data:
-                    count += 1
-                    if form.cleaned_data['DELETE']:
-                        delete_checked += 1
-                    if not form.cleaned_data['DELETE']:
-                        delete_checked -= 1
+                cleaned_data = form.cleaned_data
             except AttributeError:
-                # annoyingly, if a subform is invalid Django explicity raises
-                # an AttributeError for cleaned_data
-                pass
+                #si un subform es inválido, Django levanta AttributeError acá
+                continue
 
-        # Case no images uploaded
-        if count < 1:
-            self.raise_error()
+            if not cleaned_data or cleaned_data.get("DELETE"):
+                continue
 
-        # Case one image added and another deleted
-        if delete_checked > 0 and AnimalImage.objects.filter(animal=self.instance).count() == 1:
+            #cuenta una foto ya guardada que no se borra, o una nueva que se sube
+            if cleaned_data.get("id") is not None or cleaned_data.get("image"):
+                quedan += 1
+
+        if quedan < 1:
             self.raise_error()
 
     def raise_error(self):

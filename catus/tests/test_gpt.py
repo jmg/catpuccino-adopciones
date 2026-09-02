@@ -82,3 +82,44 @@ class PullDataFromIgTest(TestCase):
 
         self.assertEqual(texto, "Willy busca hogar")
         self.assertEqual(imagenes, [])
+
+
+class EsUrlDeImagenPublicaTest(TestCase):
+    """Las fotos que se traen por URL las manda el navegador: el server no puede abrir cualquier cosa."""
+
+    def test_acepta_los_cdn_de_instagram(self):
+
+        from catus.utils import es_url_de_imagen_publica
+
+        for url in [
+            "https://scontent-eze1-1.cdninstagram.com/v/t51.29350-15/foto.jpg",
+            "https://scontent.xx.fbcdn.net/v/t51/foto.jpg",
+            "https://www.instagram.com/p/abc/media/?size=l",
+        ]:
+            self.assertTrue(es_url_de_imagen_publica(url), url)
+
+    def test_rechaza_archivos_locales(self):
+        """Con file:// el server leía sus propios archivos, incluido el de secretos."""
+
+        from catus.utils import es_url_de_imagen_publica
+
+        for url in [
+            "file:///etc/secrets/catpuccino_adopciones.PROD.json",
+            "file:///etc/passwd",
+        ]:
+            self.assertFalse(es_url_de_imagen_publica(url), url)
+
+    def test_rechaza_la_red_interna_y_otros_dominios(self):
+
+        from catus.utils import es_url_de_imagen_publica
+
+        for url in [
+            "http://127.0.0.1:3306/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://localhost/admin/",
+            "https://sitio-del-atacante.test/foto.jpg",
+            "https://cdninstagram.com.atacante.test/foto.jpg",
+            "",
+            None,
+        ]:
+            self.assertFalse(es_url_de_imagen_publica(url), repr(url))
