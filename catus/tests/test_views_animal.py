@@ -228,3 +228,46 @@ class ValidateNameViewTest(AnimalViewTestCase):
         response = self.call(ValidateNameView, self.duenio, data={"name": "Nombre Nuevo"})
 
         self.assertTrue(json.loads(response.content.decode())["valid"])
+
+
+class MailDeAprobacionTest(TestCase):
+    """El aviso de "ya está publicado" que recibe el rescatista."""
+
+    def enviar(self, animal):
+
+        from catus.services.mail import MailService
+
+        MailService().send_mail_aprobacion(animal)
+
+    def test_avisa_al_rescatista(self):
+
+        from django.core import mail
+        from django.test import override_settings
+
+        user = make_user(email="rescatista@catpuccino.test")
+        animal = make_animal(nombre="Willy", cargado_por=user)
+
+        with override_settings(ENV="TEST", SEND_MAIL="sitio@catpuccino.test"):
+            self.enviar(animal)
+
+        self.assertIn("rescatista@catpuccino.test", [d for m in mail.outbox for d in m.to])
+
+    def test_un_animal_sin_rescatista_no_rompe(self):
+        """Sin esto, aprobar un animal huérfano tiraba 500 y lo dejaba sin aprobar."""
+
+        from django.test import override_settings
+
+        animal = make_animal(nombre="Huérfano", cargado_por=None)
+
+        with override_settings(ENV="TEST", SEND_MAIL="sitio@catpuccino.test"):
+            self.enviar(animal)
+
+    def test_un_rescatista_sin_mail_no_rompe(self):
+
+        from django.test import override_settings
+
+        user = make_user(email="")
+        animal = make_animal(nombre="Willy", cargado_por=user)
+
+        with override_settings(ENV="TEST", SEND_MAIL="sitio@catpuccino.test"):
+            self.enviar(animal)

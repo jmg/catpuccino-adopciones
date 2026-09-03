@@ -45,11 +45,17 @@
                             <i class="fa fa-images"></i>
                             Galería de Imágenes Generadas
                         </h5>
+                        {% comment %}
+                        type="button": estos controles están dentro del form, y sin el
+                        type un <button> es submit. Colapsar la galería, que es solo
+                        visual, mandaba el formulario y regeneraba y reescribía en disco
+                        todas las imágenes del animal.
+                        {% endcomment %}
                         <div class="gallery-controls">
-                            <button onclick="toggleAllCards(false)" class="btn-gallery-control" title="Expandir todas">
+                            <button type="button" onclick="toggleAllCards(false)" class="btn-gallery-control" title="Expandir todas">
                                 <i class="fa fa-expand-arrows-alt"></i>
                             </button>
-                            <button onclick="toggleAllCards(true)" class="btn-gallery-control" title="Colapsar todas">
+                            <button type="button" onclick="toggleAllCards(true)" class="btn-gallery-control" title="Colapsar todas">
                                 <i class="fa fa-compress-arrows-alt"></i>
                             </button>
                         </div>

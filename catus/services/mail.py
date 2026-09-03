@@ -22,6 +22,12 @@ class MailService(BaseService):
         if settings.ENV == "LOCAL":
             return
 
+        #hay animales sin rescatista (los cargados antes de que existieran las cuentas,
+        #y los de quien fue dado de baja): no hay a quién avisarle, pero eso no puede
+        #hacer fallar la aprobación
+        if animal.cargado_por is None or not animal.cargado_por.email:
+            return
+
         subject = "Catpuccino Adopciones - {} ya está publicado!".format(animal.nombre.capitalize())
         content = self.render("email/new_animal_aprobacion.html", {"animal": animal, "settings": settings })
 

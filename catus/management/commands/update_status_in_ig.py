@@ -14,8 +14,12 @@ class Command(BaseCommand):
 
         #update the status in IG
 
+        #solo los adoptados: el comentario dice "Ya fue adoptado" y acá también entraban
+        #los reservados, que todavía pueden no adoptarse. Y como después se guarda
+        #instagram_comment_id, el comentario equivocado ya no se volvía a corregir.
+        #Un reservado que después se adopte lo toma una corrida posterior.
         animals = Animal.objects.filter(
-            Q(estado="A") | Q(estado="R"),
+            estado="A",
             instagram_publicado=True,
             instagram_post_id__isnull=False,
             instagram_comment_id__isnull=True,

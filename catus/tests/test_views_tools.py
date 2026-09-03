@@ -198,3 +198,50 @@ class PublishCommandTest(TestCase):
         )
 
         self.assertNotIn(animal, self.animales_a_publicar())
+
+
+class ComentarioDeAdoptadoEnInstagramTest(TestCase):
+    """El cron que comenta en el post de Instagram cuando el animal encuentra hogar."""
+
+    def animales_a_comentar(self):
+        """Mismo filtro que update_status_in_ig."""
+
+        from catus.models import Animal
+
+        return list(Animal.objects.filter(
+            estado="A",
+            instagram_publicado=True,
+            instagram_post_id__isnull=False,
+            instagram_comment_id__isnull=True,
+        ))
+
+    def publicado(self, **kwargs):
+
+        kwargs.setdefault("instagram_publicado", True)
+        kwargs.setdefault("instagram_post_id", "123")
+        return make_animal(**kwargs)
+
+    def test_comenta_en_los_adoptados(self):
+
+        animal = self.publicado(estado="A")
+
+        self.assertIn(animal, self.animales_a_comentar())
+
+    def test_no_comenta_en_los_reservados(self):
+        """Decía "Ya fue adoptado" sobre un animal solo reservado, y no se podía corregir."""
+
+        animal = self.publicado(estado="R")
+
+        self.assertNotIn(animal, self.animales_a_comentar())
+
+    def test_no_comenta_dos_veces(self):
+
+        animal = self.publicado(estado="A", instagram_comment_id="456")
+
+        self.assertNotIn(animal, self.animales_a_comentar())
+
+    def test_no_comenta_en_los_que_no_se_publicaron(self):
+
+        animal = make_animal(estado="A", instagram_publicado=False)
+
+        self.assertNotIn(animal, self.animales_a_comentar())

@@ -54,7 +54,21 @@ class FormView(BaseView):
         form_hash = kwargs.get("form_hash")
         estado_form = get_object_or_404(EstadoFormulario, hash=form_hash)
 
-        estado_form_form = EstadoFormularioForm(self.request.POST, instance=estado_form)
+        datos = self.request.POST.copy()
+
+        #'gato' es opcional en el form: si el POST no lo trae (por ejemplo cuando solo
+        #se manda el select de estado), guardar lo dejaba en None y el formulario perdía
+        #el vínculo con el animal, en silencio
+        if "gato" not in datos:
+            datos["gato"] = estado_form.gato_id or ""
+
+        estado_form_form = EstadoFormularioForm(datos, instance=estado_form)
+
+        #save() sin is_valid() levanta ValueError con cualquier dato raro: 500 en vez
+        #de un mensaje
+        if not estado_form_form.is_valid():
+            return self.json_response({"status": "error", "errores": estado_form_form.errors})
+
         estado_form_form.save()
 
         #el estado del candidato arrastra al del animal: si alguien lo reservó o lo adoptó,
