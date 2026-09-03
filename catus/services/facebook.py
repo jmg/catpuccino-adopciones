@@ -291,12 +291,20 @@ class FacebookApiService:
     @classmethod
     def get_media_url(cls, service, response):
 
-        url = "{}?fields=permalink".format(response["id"])
-        response = service.facebook.request(url)
+        post_id = response["id"]
+
+        #en este punto el post YA está publicado. Si falla el pedido del permalink no
+        #puede propagarse: publish() lo tomaba como que falló todo, no marcaba
+        #instagram_publicado, y la corrida siguiente del cron publicaba el animal de
+        #nuevo, duplicando el post.
+        try:
+            permalink = service.facebook.request("{}?fields=permalink".format(post_id))
+        except Exception:
+            return {"id": post_id, "url": ""}
 
         return {
-            "id": response["id"],
-            "url": response["permalink"],
+            "id": permalink.get("id", post_id),
+            "url": permalink.get("permalink", ""),
         }
 
     @classmethod
