@@ -129,10 +129,10 @@ class ModeracionService():
 
         animales = [str(a).strip().lower() for a in crudos]
 
-        descripcion = datos.get("descripcion") or ""
-        if not isinstance(descripcion, str):
-            descripcion = str(descripcion)
-        descripcion = descripcion.strip()[:300]
+        #la descripción se le muestra tal cual al equipo: si no es texto la descartamos
+        #en vez de imprimir el repr de un dict en la pantalla de pendientes
+        descripcion = datos.get("descripcion")
+        descripcion = descripcion.strip()[:300] if isinstance(descripcion, str) else ""
 
         if datos.get("inapropiado"):
             return Animal.REVISION_REVISAR, "Puede tener contenido inapropiado. {}".format(descripcion).strip()
