@@ -556,3 +556,60 @@ class TiempoAcotadoTest(TestCase):
         peor_caso = service.TIMEOUT * (service.REINTENTOS + 1)
 
         self.assertLess(peor_caso, 15, "el alta puede pasarse del timeout del worker")
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class SinAnimalPorPalabrasTest(TestCase):
+    """El prompt pide lista vacía cuando no hay animales, pero el modelo a veces lo
+    dice con palabras. Sin normalizar eso, ["ninguno"] contaba como "hay un animal"
+    y la publicación se auto-aprobaba igual."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G")
+
+    def test_las_formas_de_decir_que_no_hay_animal_se_entienden(self):
+
+        for crudo in [[], ["ninguno"], ["ninguna"], [""], ["  "], ["none"], ["null"],
+                      ["no"], ["nada"], ["sin animales"], ["N/A"], ["NINGUNO"]]:
+            estado, _ = self.service.decidir(
+                self.animal, {"animales": crudo, "descripcion": "Es una captura."},
+            )
+
+            self.assertEqual(
+                estado, Animal.REVISION_REVISAR,
+                "animales={!r} se auto-aprobó".format(crudo),
+            )
+
+    def test_un_animal_de_verdad_sigue_pasando(self):
+
+        for crudo in [["gato"], ["perro"], ["otro"], ["gato", "perro"]]:
+            estado, _ = self.service.decidir(self.animal, {"animales": crudo})
+
+            self.assertEqual(estado, Animal.REVISION_OK, "animales={!r}".format(crudo))
+
+    def test_una_negacion_mezclada_con_un_animal_no_lo_tapa(self):
+
+        estado, _ = self.service.decidir(self.animal, {"animales": ["ninguno", "gato"]})
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+
+class TextoDeRefugioTest(TestCase):
+    """Un refugio argentino pone el alias y el CVU para donaciones en la descripción.
+
+    Con la definición de spam anterior ("pide plata o datos bancarios") el modelo
+    marcaba esas publicaciones y frenaba la auto-aprobación. Verificado contra la API
+    real: 1 de 5 textos legítimos quedaba frenado; después del cambio, 0 de 5, y los
+    2 de spam real se siguen frenando.
+    """
+
+    def test_el_prompt_aclara_que_pedir_donaciones_no_es_spam(self):
+
+        from catus.services import moderacion
+
+        prompt = " ".join(moderacion.PROMPT.split())
+
+        self.assertIn("NO es spam", prompt)
+        self.assertIn("donaciones", prompt)
+        self.assertNotIn("pide plata o datos bancarios", prompt)

@@ -9,9 +9,10 @@ todo lo demás, incluidos los atributos on* y los href con javascript:.
 No usamos una librería porque el deploy es un git pull sin pip install: una
 dependencia nueva rompería el sitio en el próximo despliegue.
 """
+import re
+
 from html import escape
 from html.parser import HTMLParser
-from urllib.parse import urlparse
 
 
 #etiqueta -> atributos que se le permiten
@@ -47,6 +48,25 @@ TAGS_CON_CONTENIDO_DESCARTADO = {"script", "style", "noscript", "iframe", "objec
 
 ESQUEMAS_PERMITIDOS = ("http", "https", "mailto")
 
+#los navegadores ignoran espacios y caracteres de control adentro del esquema, así que
+#"java\tscript:alert(1)" se ejecuta igual. Los sacamos nosotros: delegarlo en urlparse
+#depende de hardenings de CPython (bpo-43882, CVE-2023-24329) que el Python viejo de
+#producción puede no tener, y ahí se colaba un XSS almacenado.
+_CONTROLES = re.compile(r"[\x00-\x20\x7f]")
+
+
+def _esquema_de(valor):
+    """El esquema tal como lo lee un navegador, sin depender de urlparse."""
+
+    for i, caracter in enumerate(valor):
+        if caracter == ":":
+            return valor[:i].lower()
+        if caracter in "/?#":
+            #apareció un separador de ruta antes que los dos puntos: es relativo
+            return ""
+
+    return ""
+
 
 def _href_seguro(valor):
     """Deja pasar solo links normales: nada de javascript: ni data:."""
@@ -54,18 +74,18 @@ def _href_seguro(valor):
     if not valor:
         return None
 
-    valor = valor.strip()
-
-    #un link relativo no tiene esquema y es seguro
-    try:
-        esquema = urlparse(valor).scheme
-    except ValueError:
+    limpio = _CONTROLES.sub("", valor)
+    if not limpio:
         return None
 
-    if esquema and esquema.lower() not in ESQUEMAS_PERMITIDOS:
+    esquema = _esquema_de(limpio)
+
+    if esquema and esquema not in ESQUEMAS_PERMITIDOS:
         return None
 
-    return valor
+    #devolvemos lo ya limpio, no el original: lo que se emite tiene que ser
+    #exactamente lo que validamos
+    return limpio
 
 
 class _Limpiador(HTMLParser):

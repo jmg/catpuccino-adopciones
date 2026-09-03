@@ -42,12 +42,24 @@ Respondé únicamente un objeto JSON, sin markdown ni texto alrededor, con esta 
   Las fotos pueden tener un marco, un nombre escrito encima o un logo del refugio: es
   material del propio refugio, mirá el animal e ignorá los adornos.
 - "descripcion": una frase corta en español rioplatense sobre lo que se ve.
-- "texto_sospechoso": true solo si el texto que te paso es spam o estafa evidente (vende
-  otra cosa, promociona un negocio ajeno, pide plata o datos bancarios, o no tiene
-  ninguna relación con animales). Que sea corto, genérico o esté vacío NO es sospechoso.
+- "texto_sospechoso": true solo si el texto que te paso es spam o estafa evidente: vende
+  otra cosa, promociona un negocio ajeno, o no tiene ninguna relación con animales.
+  Que sea corto, genérico o esté vacío NO es sospechoso.
+  OJO, esto NO es spam y es lo más normal del mundo en un refugio: pedir colaboración
+  para una castración o una veterinaria, dejar un alias, un CVU o un Mercado Pago para
+  donaciones, pedir donaciones de alimento o arena, o dejar un teléfono, un WhatsApp o
+  un mail de contacto. Nada de eso alcanza para marcar el texto.
 - "inapropiado": true solo si hay violencia explícita, maltrato gráfico o desnudez.
   Un animal flaco, herido, sucio o recién rescatado NO es contenido inapropiado: es un
   refugio y es lo normal."""
+
+
+#formas en que el modelo dice "no hay ningún animal" cuando no manda la lista vacía
+NEGACIONES = {
+    "", "none", "null", "no", "n/a", "na", "-",
+    "ninguno", "ninguna", "ningun", "ningún", "nada", "sin animales", "sin animal",
+    "no hay animales", "no hay", "0", "false",
+}
 
 
 class ModeracionService():
@@ -184,6 +196,11 @@ class ModeracionService():
             crudos = []
 
         animales = [str(a).strip().lower() for a in crudos]
+
+        #el prompt pide lista vacía cuando no hay animales, pero el modelo a veces lo
+        #dice con palabras. Sin esto, ["ninguno"] o [""] contaban como "hay un animal"
+        #y la publicación se auto-aprobaba.
+        animales = [a for a in animales if a not in NEGACIONES]
 
         #la descripción se le muestra tal cual al equipo: si no es texto la descartamos
         #en vez de imprimir el repr de un dict en la pantalla de pendientes
