@@ -66,6 +66,39 @@ class Animal(BaseEntity):
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
     chatgpt_response = models.TextField(null=True, blank=True)
 
+    #Revisión automática de la publicación: que las fotos sean del animal que dice
+    #ser y que el texto sea una publicación de adopción de verdad. Es una ayuda para
+    #el equipo, no un veredicto: nunca rechaza sola.
+    REVISION_PENDIENTE = "P"
+    REVISION_OK = "OK"
+    REVISION_REVISAR = "R"
+    REVISION_ERROR = "E"
+
+    REVISION_IA_CHOICES = (
+        (REVISION_PENDIENTE, "Sin revisar"),
+        (REVISION_OK, "Parece correcta"),
+        (REVISION_REVISAR, "Revisar a mano"),
+        (REVISION_ERROR, "No se pudo revisar"),
+    )
+
+    revision_ia_estado = models.CharField(
+        max_length=2, choices=REVISION_IA_CHOICES, default=REVISION_PENDIENTE,
+    )
+    revision_ia_motivo = models.TextField(null=True, blank=True)
+    revision_ia_fecha = models.DateTimeField(null=True, blank=True)
+
+    def necesita_revision_humana(self):
+
+        return self.revision_ia_estado == self.REVISION_REVISAR
+
+    def get_revision_ia_badge(self):
+
+        return {
+            self.REVISION_OK: "success",
+            self.REVISION_REVISAR: "danger",
+            self.REVISION_ERROR: "secondary",
+        }.get(self.revision_ia_estado, "light")
+
     def save(self, *args, **kwargs):
         from catus.services.cache import CacheService
 

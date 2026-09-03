@@ -12,7 +12,7 @@ from django.core.files.base import ContentFile
 from datetime import datetime, timedelta
 from catus.services.mail import MailService
 from catus.utils import rreplace
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 
 
 class ToolsIndexView(BaseView):
@@ -60,9 +60,21 @@ class AnimalesPendientesView(BaseView):
         # Y que no estén adoptados
         animals = Animal.objects.filter(
             (Q(aprobado=False) | Q(instagram_listo_para_publicar=False)) & ~Q(estado="A")
-        ).select_related("cargado_por").prefetch_related("animalimage_set").order_by("-created_at")
+        ).select_related("cargado_por").prefetch_related("animalimage_set")
 
-        return self.render_to_response({"animals": animals})
+        #las que la revisión automática marcó van primero: son las que hay que mirar
+        animals = animals.annotate(
+            _para_revisar=Case(
+                When(revision_ia_estado=Animal.REVISION_REVISAR, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        ).order_by("_para_revisar", "-created_at")
+
+        return self.render_to_response({
+            "animals": animals,
+            "para_revisar": sum(1 for a in animals if a.necesita_revision_humana()),
+        })
 
 
 class AnimalesListosParaPublicarView(BaseView):

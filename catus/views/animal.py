@@ -2,6 +2,7 @@ import logging
 from django.conf import settings
 from catus.services.images import ImageService
 from catus.services.mail import MailService
+from catus.services.moderacion import ModeracionService
 from catus.views.base import BaseView, SuperuserRequiredMixin, puede_editar_animal
 from catus.utils import es_url_de_imagen_publica
 from catus.services.gpt import GPTService
@@ -160,13 +161,30 @@ class EditView(LoginRequiredMixin, BaseView):
 
                 self.request.session["animal_save_success"] = True
                 if is_new_animal:
-                    if animal.cargado_por.automatic_approve:
+
+                    #Revisión automática de la publicación. Es una ayuda para el equipo:
+                    #nunca impide guardar ni publicar por el camino normal. Lo único que
+                    #cambia es que, si marca algo raro, no se auto-aprueba y queda para
+                    #que lo mire una persona.
+                    revision = ModeracionService().revisar_y_guardar(animal)
+
+                    auto_aprobar = (
+                        animal.cargado_por is not None
+                        and animal.cargado_por.automatic_approve
+                        and revision != Animal.REVISION_REVISAR
+                    )
+
+                    if auto_aprobar:
                         animal.aprobado = True
                         animal.save()
                         MailService().send_new_animal_mail(animal)
                         self.request.session["is_new_animal_approved"] = True
                     else:
                         MailService().send_new_animal_mail(animal)
+                        #el mensaje que ve el rescatista es el mismo de siempre ("estamos
+                        #revisando la publicación"): si el filtro se equivoca, acusar a
+                        #alguien que acaba de rescatar un animal es peor que esperar a que
+                        #una persona lo mire. El motivo lo ve el equipo en /tools/.
                         self.request.session["is_new_animal"] = True
 
                 return self.redirect(settings.LOGIN_REDIRECT_URL)

@@ -123,7 +123,26 @@
                                         <i class="fas fa-info-circle"></i>
                                         {{ animal.get_estado_display }}
                                     </span>
+
+                                    {% if animal.revision_ia_estado == "R" %}
+                                        <span class="status-badge status-revisar-ia">
+                                            <i class="fas fa-triangle-exclamation"></i>
+                                            Revisar publicación
+                                        </span>
+                                    {% elif animal.revision_ia_estado == "OK" %}
+                                        <span class="status-badge status-ok-ia">
+                                            <i class="fas fa-robot"></i>
+                                            Revisada
+                                        </span>
+                                    {% endif %}
                                 </div>
+
+                                {% if animal.revision_ia_motivo %}
+                                    <div class="revision-ia {% if animal.revision_ia_estado == "R" %}revision-ia-alerta{% endif %}">
+                                        <i class="fas fa-robot"></i>
+                                        {{ animal.revision_ia_motivo }}
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -439,6 +458,31 @@
 /* Status Section */
 .status-section {
     margin-bottom: 20px;
+}
+
+.status-revisar-ia {
+    background: #fdecea;
+    color: #a4262c;
+}
+
+.status-ok-ia {
+    background: #eef7ee;
+    color: #2e6b33;
+}
+
+.revision-ia {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #f4f4f6;
+    color: #555;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.revision-ia-alerta {
+    background: #fdecea;
+    color: #a4262c;
 }
 
 .status-badges {
