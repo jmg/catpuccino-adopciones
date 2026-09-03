@@ -6,6 +6,10 @@ import urllib
 import time
 
 
+class MediaError(Exception):
+    """Instagram marcó el contenedor como fallado: reintentar no lo va a arreglar."""
+
+
 class FacebookApiService:
 
     def __init__(self, token=None, account=None, raw_data=False):
@@ -109,7 +113,7 @@ class FacebookApiService:
                     return True
                 elif status_code == "ERROR":
                     error_msg = response.get("status", response.get("error_message", "Unknown error"))
-                    raise Exception("Media creation failed with status ERROR: {}".format(error_msg))
+                    raise MediaError("Media creation failed with status ERROR: {}".format(error_msg))
                 # If status is IN_PROGRESS or None (still processing), continue waiting
 
                 if attempt < max_attempts - 1:
@@ -121,6 +125,11 @@ class FacebookApiService:
                         time.sleep(1)
                         return True
                     raise Exception("Media container status is '{}' after {} attempts. Creation ID: {}".format(status_code, max_attempts, creation_id))
+
+            except MediaError:
+                #Instagram ya dijo que falló: el except de abajo lo tomaba como un error
+                #cualquiera y seguía reintentando 30 veces, o sea un minuto por foto
+                raise
 
             except Exception as e:
                 # If the request itself fails (e.g., media not found), check if it's a critical error
@@ -148,11 +157,24 @@ class FacebookApiService:
         except:
             pass
 
+        #en local se reemplazaba la imagen por una URL fija de otro sitio, pero se
+        #publicaba igual en la cuenta real de la organización: probar la integración
+        #desde una máquina de desarrollo dejaba un post de verdad en Instagram
+        if settings.ENV == "LOCAL":
+            return "ENV=LOCAL: no se publica. Se hubiera publicado '{}' con el texto:\n{}".format(
+                animal.nombre, ig_text,
+            )
+
         account = FacebookAccount.objects.all().first()
+        if account is None:
+            return "No hay ninguna cuenta de Instagram vinculada."
+
         service = FacebookApiService(account=account)
 
         #create elements of post
         images = animal.get_images()
+        if not images:
+            return "{} no tiene fotos para publicar.".format(animal.nombre)
 
         try:
             if len(images) > 1:
@@ -176,10 +198,7 @@ class FacebookApiService:
 
         image = images[0]
 
-        if settings.ENV == "LOCAL":
-            image_url = "https://www.feliscatus.com.ar/gallery/5e3802ef-e764-4875-9f36-401c43dd5bad.jpeg"
-        else:
-            image_url = "{}{}".format(settings.SSL_HOST, image.image_for_instagram.url)
+        image_url = "{}{}".format(settings.SSL_HOST, image.image_for_instagram.url)
 
         url = "{}/media".format(
             account.business_account_id,
