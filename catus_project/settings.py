@@ -196,6 +196,13 @@ def _config_bool(clave, por_defecto=True):
 MODERACION_IA_ACTIVA = _config_bool("MODERACION_IA_ACTIVA", True)
 MODERACION_IA_MODELO = app_config.get("MODERACION_IA_MODELO") or "gpt-4o-mini"
 
+#tope de revisiones por persona por dia: acota lo que puede gastar alguien que se
+#registre solo para hacer subir la factura. 0 lo desactiva.
+try:
+    MODERACION_IA_MAX_POR_DIA = int(app_config.get("MODERACION_IA_MAX_POR_DIA") or 20)
+except (TypeError, ValueError):
+    MODERACION_IA_MAX_POR_DIA = 20
+
 EMAIL_BACKEND = "sgbackend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
 

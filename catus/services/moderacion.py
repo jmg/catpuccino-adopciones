@@ -15,6 +15,8 @@ import logging
 import re
 
 from django.conf import settings
+from datetime import timedelta
+
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -52,20 +54,62 @@ class ModeracionService():
 
     #cuántas fotos se mandan como mucho: alcanzan para decidir y mantienen el costo bajo
     MAX_FOTOS = 3
-    TIMEOUT = 25
+
+    #El alta del animal espera esto de forma sincrónica y el worker de producción corta
+    #a los 30s. El SDK reintenta solo por defecto, así que hay que desactivarlo: 3
+    #intentos de 25s son 75s y el rescatista se come un 502 con el animal ya guardado.
+    TIMEOUT = 8
+    REINTENTOS = 0
+
+    #El registro es abierto y cada alta dispara una llamada paga: sin tope, cualquiera
+    #puede vaciarle la cuenta de OpenAI al refugio con un script. Nadie carga 20
+    #animales en un día, así que el tope no molesta a ningún rescatista real.
+    MAX_POR_USUARIO_POR_DIA = 20
 
     #el modelo trabaja a 512px con detail=low: mandar más grande no agrega información
     LADO_MAXIMO = 512
 
     def esta_activa(self):
 
-        return bool(getattr(settings, "MODERACION_IA_ACTIVA", False)) and bool(
-            getattr(settings, "OPENIA_API_KEY", None)
-        )
+        if not getattr(settings, "MODERACION_IA_ACTIVA", False):
+            return False
+
+        if not getattr(settings, "OPENIA_API_KEY", None):
+            return False
+
+        #desde una máquina de desarrollo no mandamos fotos reales con la key de la
+        #organización, igual que hace MailService con los mails
+        return getattr(settings, "ENV", "LOCAL") != "LOCAL"
 
     def get_modelo(self):
 
         return getattr(settings, "MODERACION_IA_MODELO", "gpt-4o-mini")
+
+    def get_limite_diario(self):
+
+        return getattr(settings, "MODERACION_IA_MAX_POR_DIA", self.MAX_POR_USUARIO_POR_DIA)
+
+    def paso_el_limite(self, usuario):
+        """True si esta persona ya gastó su cupo de revisiones de hoy.
+
+        Pasarse no bloquea nada: el animal se carga igual y queda sin revisar, que es
+        el mismo estado que tenían todos antes de que esto existiera.
+        """
+        from catus.models import Animal
+
+        if usuario is None:
+            return False
+
+        limite = self.get_limite_diario()
+        if not limite:
+            return False
+
+        desde = timezone.now() - timedelta(days=1)
+
+        return Animal.objects.filter(
+            cargado_por=usuario,
+            revision_ia_fecha__gte=desde,
+        ).count() >= limite
 
     def revisar(self, animal):
         """Devuelve (estado, motivo) sin levantar nunca una excepción.
@@ -76,6 +120,13 @@ class ModeracionService():
 
         if not self.esta_activa():
             return Animal.REVISION_ERROR, "La revisión automática está desactivada."
+
+        if self.paso_el_limite(animal.cargado_por):
+            logger.warning(
+                "El usuario %s pasó el límite diario de revisiones",
+                getattr(animal.cargado_por, "id", None),
+            )
+            return Animal.REVISION_ERROR, "Se alcanzó el límite de revisiones del día."
 
         try:
             fotos = self._leer_fotos(animal)
@@ -89,7 +140,12 @@ class ModeracionService():
         try:
             contenido = self._preguntar(self._describir(animal), fotos)
         except Exception as error:
-            logger.exception("Falló la revisión automática de %s", animal.id)
+            #Sentry manda a nivel ERROR el contexto del request, cookie de sesión
+            #incluida. Que OpenAI esté caída o sin crédito es esperable y pasa en masa:
+            #va como warning, sin exc_info, para no crear un evento por cada alta.
+            logger.warning(
+                "No se pudo revisar el animal %s: %s", animal.id, type(error).__name__,
+            )
             return Animal.REVISION_ERROR, "No se pudo consultar el servicio: {}".format(
                 type(error).__name__
             )
@@ -134,10 +190,10 @@ class ModeracionService():
         descripcion = datos.get("descripcion")
         descripcion = descripcion.strip()[:300] if isinstance(descripcion, str) else ""
 
-        if datos.get("inapropiado"):
+        if self._es_verdadero(datos.get("inapropiado")):
             return Animal.REVISION_REVISAR, "Puede tener contenido inapropiado. {}".format(descripcion).strip()
 
-        if datos.get("texto_sospechoso"):
+        if self._es_verdadero(datos.get("texto_sospechoso")):
             return Animal.REVISION_REVISAR, "El texto parece spam o no habla de una adopción."
 
         if not animales:
@@ -155,6 +211,18 @@ class ModeracionService():
             ).strip()
 
         return Animal.REVISION_OK, descripcion or "Se ve un animal en las fotos."
+
+    def _es_verdadero(self, valor):
+        """El modelo a veces manda los booleanos como texto ("false", "no").
+
+        Sin esto, un "false" en string es verdadero en Python y mandaba a revisión
+        humana una publicación sana.
+        """
+
+        if isinstance(valor, str):
+            return valor.strip().lower() in ("true", "1", "si", "sí", "yes")
+
+        return bool(valor)
 
     def revisar_y_guardar(self, animal):
         """Revisa y deja el resultado en el animal. Devuelve el estado."""
@@ -179,19 +247,19 @@ class ModeracionService():
 
         tipo = "gato" if animal.tipo == "G" else "perro"
 
+        #todos estos campos los escribe quien carga el animal: van sin HTML y recortados
         partes = [
             "DATOS SIN VERIFICAR que cargó la persona (pueden no coincidir con las fotos):",
             "Tipo declarado: {}".format(tipo),
-            "Nombre: {}".format(animal.nombre or "(sin nombre)"),
+            "Nombre: {}".format(self._sin_html(animal.nombre)[:80] or "(sin nombre)"),
         ]
 
         if animal.edad:
-            partes.append("Edad: {}".format(animal.edad))
+            partes.append("Edad: {}".format(self._sin_html(animal.edad)[:40]))
         if animal.zona:
-            partes.append("Zona: {}".format(animal.zona))
+            partes.append("Zona: {}".format(self._sin_html(animal.zona)[:60]))
         if animal.datos:
-            #el texto viene de un editor enriquecido: al modelo le mandamos texto pelado
-            partes.append("Descripción: {}".format(self._sin_html(animal.datos)[:1500]))
+            partes.append("Descripción: {}".format(self._sin_html(animal.datos)[:600]))
 
         partes.append("")
         partes.append("Ahora mirá las imágenes y describí lo que hay en ellas.")
@@ -274,7 +342,11 @@ class ModeracionService():
 
         if hasattr(openai, "OpenAI"):
 
-            cliente_kwargs = {"api_key": settings.OPENIA_API_KEY, "timeout": self.TIMEOUT}
+            cliente_kwargs = {
+                "api_key": settings.OPENIA_API_KEY,
+                "timeout": self.TIMEOUT,
+                "max_retries": self.REINTENTOS,
+            }
             organizacion = getattr(settings, "OPENIA_API_ORG_ID", None)
             if organizacion:
                 cliente_kwargs["organization"] = organizacion

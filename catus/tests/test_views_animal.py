@@ -5,7 +5,7 @@ rescatista que lo cargó) y los superusuarios administran todo. Una persona
 logueada no debería poder tocar animales de otra persona.
 """
 from django.contrib.auth.models import AnonymousUser
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
 from catus.models import Animal, CatusUser
 from catus.tests.factories import make_animal, make_user
@@ -271,3 +271,82 @@ class MailDeAprobacionTest(TestCase):
 
         with override_settings(ENV="TEST", SEND_MAIL="sitio@catpuccino.test"):
             self.enviar(animal)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="TEST")
+class RevisionAlEditarTest(AnimalViewTestCase):
+    """Editar un animal ya revisado tiene que volver a revisarlo.
+
+    Sin esto alguien podía cargar un gato de verdad, quedar aprobado, y después
+    editar la publicación para reemplazar fotos y texto por otra cosa, conservando
+    el "OK" que el equipo ve en /tools/animalespendientes/.
+    """
+
+    def campos_del_formset(self, animal):
+
+        imagenes = list(animal.get_images())
+
+        datos = {
+            "animalimage_set-TOTAL_FORMS": str(len(imagenes)),
+            "animalimage_set-INITIAL_FORMS": str(len(imagenes)),
+            "animalimage_set-MIN_NUM_FORMS": "0",
+            "animalimage_set-MAX_NUM_FORMS": "1000",
+        }
+        for i, imagen in enumerate(imagenes):
+            datos["animalimage_set-%d-id" % i] = str(imagen.id)
+            datos["animalimage_set-%d-animal" % i] = str(animal.id)
+
+        return datos
+
+    def editar(self, animal, **cambios):
+
+        from unittest import mock
+        from catus.services.moderacion import ModeracionService
+
+        datos = {
+            "tipo": animal.tipo, "estado": animal.estado, "nombre": animal.nombre,
+            "edad": animal.edad or "", "sexo": animal.sexo, "zona": animal.zona or "",
+            "datos": animal.datos or "",
+        }
+        datos.update(cambios)
+        datos.update(self.campos_del_formset(animal))
+
+        request = self.factory.post("/animales/%s/" % animal.id, datos)
+        request.user = self.duenio
+
+        from django.contrib.sessions.middleware import SessionMiddleware
+        SessionMiddleware().process_request(request)
+        request.session.save()
+
+        from catus.views.animal import EditView
+        view = EditView()
+        view.request = request
+
+        with mock.patch.object(ModeracionService, "revisar_y_guardar") as revisar:
+            view.req(is_post=True, animal_id=str(animal.id))
+
+        return revisar
+
+    def setUp(self):
+        super().setUp()
+        from catus.tests.factories import make_animal_image
+
+        self.animal.datos = "Un gatito."
+        self.animal.save()
+        make_animal_image(animal=self.animal)
+
+    def test_cambiar_el_texto_dispara_una_nueva_revision(self):
+
+        revisar = self.editar(self.animal, datos="Vendo iPhone barato 11-5555-5555")
+
+        self.assertTrue(revisar.called, "editar el texto no volvió a revisar")
+
+    def test_cambiar_el_nombre_dispara_una_nueva_revision(self):
+
+        self.assertTrue(self.editar(self.animal, nombre="Otro").called)
+
+    def test_editar_solo_la_zona_no_gasta_una_llamada(self):
+
+        revisar = self.editar(self.animal, zona="Otra zona")
+
+        self.assertFalse(revisar.called, "una edición menor gastó una llamada paga")
