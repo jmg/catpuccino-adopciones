@@ -135,17 +135,18 @@ render HTML cells.
 - `FacebookAccount` — single row holding the long-lived token and IG business account ids.
 
 **Adoption form flow.** Public forms are `django-forms-builder` `Form` objects created in the
-admin, *not* Django forms in this repo — `views/adoption.py::PreAdoptionView` picks them
-positionally (`Form.objects.all()[0]`, `[3]` for dogs), so reordering forms in the database
-breaks the site. On submit it saves a `FormEntry`, wraps it in a new `EstadoFormulario` with a
-uuid hash, and emails both the rescuer and the applicant. `AdoptionService` reads answers back
+admin, *not* Django forms in this repo — `views/adoption.py::PreAdoptionView` resolves them by
+`slug` (`PreAdoptionView.form_slug`), falling back to the old positional lookup with a log line
+if the slug is gone. On submit it saves a `FormEntry`, wraps it in a new `EstadoFormulario` with
+a uuid hash, and emails both the rescuer and the applicant. `AdoptionService` reads answers back
 out of the `FieldEntry` rows **by Spanish label** ("Nombre y Apellido", "Email", …), so
 renaming a field label in the admin silently breaks parsing.
 
 `catus/signals.py` keeps the forms-builder "which animal" dropdown in sync: any `Animal` or
 `Form` save/delete rewrites that `Field.choices` string with the current adoptable animal ids.
-It swallows all exceptions and locates the cat field as `Field.objects.all()[0]` — fragile in
-the same positional way.
+It finds each field by label (`ANIMAL_FIELD_LABELS`), handles cats and dogs independently so a
+failure on one doesn't stall the other, and logs what it swallows — it runs inside `Animal.save()`
+and must never make saving an animal fail.
 
 **Contract PDFs** (`services/contrato.py`) stamp text onto the static templates
 `catus/static/contrato/contrato.pdf` / `contrato_perros.pdf` with reportlab + PyPDF2, at
@@ -216,6 +217,13 @@ enumerable, so it needs an ownership check, not just a login.
 - The public form's answers are attacker-controlled text. `AdoptionService` marks only the
   `<img>`/`<a>` it builds for uploaded photos as safe; never add `|safe` back to the
   templates that render those values.
+- Rich text written by users (`Animal.datos`, `CatusUser.description`) goes through the
+  `|html_seguro` filter, backed by `services/html_seguro.py` — an allowlist sanitizer built
+  on stdlib. Don't swap it for `|safe`, and don't reach for a sanitizer library: `deploy.sh`
+  is a `git pull` with no `pip install`, so a new dependency breaks the next deploy.
+- Decimal values written into HTML inputs need `{% localize off %}`. With `LANGUAGE_CODE`
+  `es-ar` Django renders `0.25` as `0,25`, which no longer parses as a number on the way
+  back — that silently wiped saved Instagram crops.
 - `CacheService` talks to memcached on `localhost` with pickled values; every call site is
   currently commented out.
 - `MEDIA_URL = "/"` with `MEDIA_ROOT = <repo>/gallery`, so uploads are served from the site
