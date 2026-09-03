@@ -155,6 +155,64 @@ class RevisarTest(TestCase):
 
         self.assertEqual(estado, Animal.REVISION_REVISAR)
 
+    def test_una_respuesta_vacia_no_rompe(self):
+        """openai devuelve content=None cuando el modelo se rehúsa a describir una imagen.
+
+        Antes esto explotaba en la propia línea de log (contenido[:200] sobre None), que
+        estaba fuera del try: el rescatista veía un 500 con el animal ya guardado.
+        """
+
+        with con_respuesta(None):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_una_respuesta_vacia_tampoco_rompe_al_guardar(self):
+
+        with con_respuesta(None):
+            estado = self.service.revisar_y_guardar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_animales_con_forma_rara_es_error_y_no_sospecha(self):
+        """Distinción que importa: si el modelo manda basura donde va la lista, es
+        "no se pudo revisar", no "sospechoso". Marcarlo como sospechoso frenaría la
+        publicación de un animal legítimo por culpa de nuestro propio parseo."""
+
+        for basura in [1, {"a": 1}, True]:
+            with con_respuesta(json.dumps({"animales": basura, "descripcion": "x"})):
+                estado, _ = self.service.revisar(self.animal)
+
+            self.assertEqual(
+                estado, Animal.REVISION_ERROR,
+                "animales={!r} debería dar error, no sospecha".format(basura),
+            )
+
+    def test_un_animal_como_texto_suelto_se_entiende(self):
+        """Si manda "gato" en vez de ["gato"], se entiende igual."""
+
+        with con_respuesta(json.dumps({"animales": "gato", "descripcion": "Un gato."})):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_una_descripcion_mal_formada_no_descarta_un_veredicto_valido(self):
+        """La descripción es cosmética: si la lista de animales vino bien, se aprueba
+        igual. Perder una revisión válida por un campo de texto sería peor."""
+
+        with con_respuesta(json.dumps({"animales": ["gato"], "descripcion": ["a", "b"]})):
+            estado, motivo = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+        self.assertIsInstance(motivo, str)
+
+    def test_una_lista_json_en_vez_de_objeto_es_error(self):
+
+        with con_respuesta('[{"animales": ["gato"]}]'):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
     def test_una_respuesta_ininteligible_no_marca_el_animal(self):
         """Ante la duda no se penaliza: queda como error, no como sospechoso."""
 
@@ -270,6 +328,24 @@ class ArmadoDelPedidoTest(TestCase):
         descripcion = self.service._describir(make_animal(nombre="Willy"))
 
         self.assertIn("SIN VERIFICAR", descripcion)
+
+    def test_el_prompt_conserva_el_encuadre_contra_inyeccion(self):
+        """El texto del aviso lo escribe cualquiera y puede traer instrucciones.
+
+        Se probó contra la API real con cuatro intentos de inyección (orden directa,
+        falso bloque de sistema, instrucción metida en el nombre, y afirmación
+        insistente de que hay un gato) sobre una imagen sin ningún animal: los cuatro
+        fueron bloqueados. Eso depende de estas dos frases del prompt, así que si
+        alguien las saca conviene que se entere acá.
+        """
+        from catus.services import moderacion
+
+        #el prompt viene con saltos de línea: comparamos con el espacio normalizado
+        prompt = " ".join(moderacion.PROMPT.split())
+
+        self.assertIn("REGLA MÁS IMPORTANTE", prompt)
+        self.assertIn("pueden ser falsos", prompt)
+        self.assertIn("ÚNICAMENTE lo que se ve en las imágenes", prompt)
 
     def test_le_dice_al_modelo_que_tipo_declaro_el_rescatista(self):
 

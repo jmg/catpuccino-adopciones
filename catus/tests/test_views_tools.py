@@ -245,3 +245,94 @@ class ComentarioDeAdoptadoEnInstagramTest(TestCase):
         animal = make_animal(estado="A", instagram_publicado=False)
 
         self.assertNotIn(animal, self.animales_a_comentar())
+
+
+class AnimalesPendientesViewTest(ToolsViewTestCase):
+    """La pantalla donde el equipo revisa lo que falta aprobar."""
+
+    def abrir(self, user):
+        """django-conventions deriva template_name del módulo+clase al armar el urlconf;
+        acá las vistas se llaman directo, así que hay que pasárselo."""
+
+        from catus.views.tools import AnimalesPendientesView
+
+        request = self.factory.get("/tools/animalespendientes/")
+        request.user = user
+        response = AnimalesPendientesView.as_view(
+            template_name="tools/animalespendientes.html",
+        )(request)
+
+        #TemplateResponse llega sin renderizar cuando se llama a la vista directo
+        if hasattr(response, "render") and not response.is_rendered:
+            response.render()
+
+        return response
+
+    def test_un_usuario_comun_no_entra(self):
+
+        response = self.abrir(self.cualquiera)
+
+        self.assertIn("No tenes permisos", response.content.decode())
+
+    def test_lista_los_que_faltan_aprobar(self):
+
+        animal = make_animal(nombre="Willy", cargado_por=self.rescatista, aprobado=False)
+
+        response = self.abrir(self.admin)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Willy", response.content.decode())
+
+    def test_no_lista_los_adoptados(self):
+
+        make_animal(nombre="YaAdoptado", cargado_por=self.rescatista, aprobado=False, estado="A")
+
+        self.assertNotIn("YaAdoptado", self.abrir(self.admin).content.decode())
+
+    def test_los_marcados_por_la_ia_aparecen_primero(self):
+        """Es el punto de la pantalla: que lo dudoso se vea sin buscar."""
+
+        from catus.models import Animal
+
+        make_animal(nombre="Comun", cargado_por=self.rescatista, aprobado=False)
+        make_animal(
+            nombre="Sospechoso", cargado_por=self.rescatista, aprobado=False,
+            revision_ia_estado=Animal.REVISION_REVISAR,
+            revision_ia_motivo="No se ve ningún animal en las fotos.",
+        )
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertLess(
+            cuerpo.index("Sospechoso"), cuerpo.index("Comun"),
+            "el marcado por la IA no quedó primero",
+        )
+
+    def test_muestra_el_motivo_de_la_ia(self):
+
+        from catus.models import Animal
+
+        make_animal(
+            nombre="Sospechoso", cargado_por=self.rescatista, aprobado=False,
+            revision_ia_estado=Animal.REVISION_REVISAR,
+            revision_ia_motivo="No se ve ningún animal en las fotos.",
+        )
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertIn("No se ve ningún animal", cuerpo)
+        self.assertIn("Revisar publicación", cuerpo)
+
+    def test_los_animales_viejos_sin_revisar_no_molestan(self):
+        """Tras migrar, todos los que ya existen quedan en 'sin revisar'."""
+
+        from catus.models import Animal
+
+        animal = make_animal(nombre="Viejo", cargado_por=self.rescatista, aprobado=False)
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_PENDIENTE)
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertIn("Viejo", cuerpo)
+        self.assertNotIn("Revisar publicación", cuerpo)
+        self.assertNotIn("Revisada", cuerpo)
