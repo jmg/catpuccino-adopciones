@@ -71,3 +71,81 @@ class EstadoFormularioAdminTest(TestCase):
         estado = make_estado_formulario(animal=make_animal(cargado_por=None))
 
         self.assertEqual(self.admin.animal_cargado_por(estado), "")
+
+
+class CatusUserAdminTest(TestCase):
+    """CatusUser es el modelo de login: el admin no puede escribirle la contraseña."""
+
+    def setUp(self):
+        from catus.admin import CatusUserAdmin
+        from catus.models import CatusUser
+
+        self.admin = CatusUserAdmin(CatusUser, AdminSite())
+
+    def test_la_contrasena_no_es_editable(self):
+        """Un ModelAdmin común la mostraba como texto y la guardaba sin hashear."""
+
+        self.assertIn("password", self.admin.get_readonly_fields(None))
+
+    def test_el_formulario_no_expone_la_contrasena_como_campo(self):
+
+        form = self.admin.get_form(None)
+
+        self.assertNotIn("password", form.base_fields)
+
+    def test_cuenta_los_animales_del_rescatista(self):
+
+        user = make_user(instagram="catpuccino")
+        make_animal(cargado_por=user)
+        make_animal(cargado_por=user)
+        make_animal(cargado_por=make_user(email="otra@catpuccino.test"))
+
+        self.assertEqual(self.admin.animal_count(user), 2)
+
+
+class AprobarAnimalesTest(TestCase):
+    """La acción en lote del listado de animales."""
+
+    def setUp(self):
+        from catus.admin import AnimalAdmin
+
+        self.admin = AnimalAdmin(Animal, AdminSite())
+        self.request = None
+
+    def aprobar(self, queryset):
+
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.test import RequestFactory
+
+        request = RequestFactory().post("/")
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        self.admin.aprobar_animales(request, queryset)
+
+    def test_aprueba_los_seleccionados(self):
+
+        make_animal(nombre="Uno", aprobado=False, cargado_por=make_user())
+
+        self.aprobar(Animal.objects.all())
+
+        self.assertTrue(Animal.objects.get(nombre="Uno").aprobado)
+
+    def test_un_animal_sin_rescatista_no_corta_la_tanda(self):
+        """Antes el mail de aviso explotaba y los siguientes quedaban sin aprobar."""
+
+        make_animal(nombre="Huérfano", aprobado=False, cargado_por=None)
+        make_animal(nombre="Con dueño", aprobado=False, cargado_por=make_user())
+
+        self.aprobar(Animal.objects.all())
+
+        self.assertTrue(Animal.objects.get(nombre="Huérfano").aprobado)
+        self.assertTrue(Animal.objects.get(nombre="Con dueño").aprobado)
+
+    def test_no_reprocesa_los_ya_aprobados(self):
+
+        make_animal(nombre="Ya estaba", aprobado=True, cargado_por=make_user())
+
+        self.aprobar(Animal.objects.all())
+
+        self.assertTrue(Animal.objects.get(nombre="Ya estaba").aprobado)

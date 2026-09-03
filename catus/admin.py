@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import admin
 from django.urls import reverse, re_path
 
@@ -9,6 +11,8 @@ from django.contrib.sites.models import Site
 
 from django.utils.safestring import mark_safe
 from catus.services.mail import MailService
+
+logger = logging.getLogger(__name__)
 
 
 class AnimalImageAdmin(admin.StackedInline):
@@ -57,20 +61,31 @@ class AnimalAdmin(admin.ModelAdmin):
         Acción personalizada para aprobar animales seleccionados
         """
         animales_aprobados = 0
+        sin_aviso = 0
         mail_service = MailService()
 
         for animal in queryset:
-            if not animal.aprobado:
-                animal.aprobado = True
-                animal.save()
-                # Enviar email de aprobación
+            if animal.aprobado:
+                continue
+
+            animal.aprobado = True
+            animal.save()
+            animales_aprobados += 1
+
+            #un problema mandando un mail no puede dejar la tanda a medio aprobar
+            try:
                 mail_service.send_mail_aprobacion(animal)
-                animales_aprobados += 1
+            except Exception:
+                sin_aviso += 1
+                logger.exception("No se pudo avisar de la aprobación de %s", animal.nombre)
 
         if animales_aprobados == 1:
-            message = f"1 animal fue aprobado y se envió el email de notificación."
+            message = "1 animal fue aprobado."
         else:
-            message = f"{animales_aprobados} animales fueron aprobados y se enviaron los emails de notificación."
+            message = "{} animales fueron aprobados.".format(animales_aprobados)
+
+        if sin_aviso:
+            message += " {} quedaron sin aviso por mail (mirá el log).".format(sin_aviso)
 
         self.message_user(request, message)
 
@@ -92,6 +107,12 @@ class CatusUserAdmin(admin.ModelAdmin):
 
     list_display = ("email", "handle", "get_instagram", "automatic_approve", "no_preguntar_adoptado", "animal_count", "login")
     list_editable = ("automatic_approve", "no_preguntar_adoptado")
+
+    #este es el modelo de login, y al ser un ModelAdmin común el campo password salía
+    #editable como texto: lo que se escribiera ahí se guardaba tal cual, sin hashear,
+    #y esa persona después no podía entrar. Se cambia con "Cambiar contraseña" del
+    #propio perfil o con manage.py changepassword.
+    readonly_fields = ("password", "last_login", "date_joined")
 
     def animal_count(self, obj):
 

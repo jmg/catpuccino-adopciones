@@ -90,3 +90,58 @@ class FormViewPostTest(TestCase):
         response = self.post("A")
 
         self.assertEqual(json.loads(response.content.decode())["estado"], "A")
+
+
+class FormViewPostRobustezTest(TestCase):
+    """El endpoint acepta POST directo, así que no puede confiar en lo que le llega."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.animal = make_animal(nombre="Willy", estado="D")
+        self.estado_form = make_estado_formulario(animal=self.animal, hash="abc123", estado="N")
+
+    def post(self, data):
+
+        request = self.factory.post("/formularios/abc123/", data)
+        request.user = make_user()
+
+        view = FormView()
+        view.request = request
+        return view.post(form_hash="abc123")
+
+    def test_un_post_sin_gato_no_borra_el_vinculo_con_el_animal(self):
+        """El campo es opcional: al guardar sin él, el formulario perdía su animal."""
+
+        self.post({"estado": "P"})
+
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.gato, self.animal, "se perdió el animal del formulario")
+        self.assertEqual(self.estado_form.estado, "P")
+
+    def test_un_estado_invalido_no_rompe(self):
+        """save() sin is_valid() levanta ValueError: 500 en vez de un mensaje."""
+
+        import json
+
+        response = self.post({"estado": "ZZZ", "gato": self.animal.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content.decode())["status"], "error")
+
+    def test_un_estado_invalido_no_cambia_nada(self):
+
+        self.post({"estado": "ZZZ", "gato": self.animal.id})
+
+        self.estado_form.refresh_from_db()
+        self.animal.refresh_from_db()
+        self.assertEqual(self.estado_form.estado, "N")
+        self.assertEqual(self.animal.estado, "D")
+
+    def test_se_puede_cambiar_el_animal_a_proposito(self):
+
+        otro = make_animal(nombre="Otro")
+
+        self.post({"estado": "N", "gato": otro.id})
+
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.gato, otro)

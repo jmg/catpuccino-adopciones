@@ -211,7 +211,11 @@
       <!-- Footer Bottom -->
       <div class="footer-bottom">
         <div class="footer-copyright text-center">
-          Catpuccino Adopciones <span class="copyleft">&copy;</span> {{ current_year|default:2025 }}.
+          {% comment %}
+          current_year no lo setea ninguna vista, así que el default se quedaba fijo
+          en 2025 en todo el sitio. {% now %} no depende de que la vista lo pase.
+          {% endcomment %}
+          Catpuccino Adopciones <span class="copyleft">&copy;</span> {% now "Y" %}.
           Made with <i class="fa fa-heart"></i> by cat lovers
         </div>
 
