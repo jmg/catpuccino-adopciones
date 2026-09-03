@@ -85,3 +85,36 @@ class WaitForMediaReadyTest(TestCase):
             FacebookApiService.wait_for_media_ready(service, "1", wait_seconds=0)
 
         self.assertEqual(service.facebook.request.call_count, 1, "siguió reintentando")
+
+
+class GetMediaUrlTest(TestCase):
+    """Se pide después de publicar, cuando el post ya está arriba."""
+
+    def test_devuelve_id_y_permalink(self):
+
+        service = mock.Mock()
+        service.facebook.request.return_value = {"id": "99", "permalink": "https://instagr.am/p/99"}
+
+        datos = FacebookApiService.get_media_url(service, {"id": "99"})
+
+        self.assertEqual(datos, {"id": "99", "url": "https://instagr.am/p/99"})
+
+    def test_si_falla_el_permalink_igual_devuelve_el_post(self):
+        """El post ya está publicado: si esto propagaba, el cron lo publicaba de nuevo."""
+
+        service = mock.Mock()
+        service.facebook.request.side_effect = Exception("error transitorio de Graph")
+
+        datos = FacebookApiService.get_media_url(service, {"id": "99"})
+
+        self.assertEqual(datos["id"], "99")
+        self.assertEqual(datos["url"], "")
+
+    def test_si_la_respuesta_viene_incompleta_no_rompe(self):
+
+        service = mock.Mock()
+        service.facebook.request.return_value = {}
+
+        datos = FacebookApiService.get_media_url(service, {"id": "99"})
+
+        self.assertEqual(datos["id"], "99")
