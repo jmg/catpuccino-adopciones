@@ -119,9 +119,21 @@ class EditView(LoginRequiredMixin, BaseView):
                 animal.save()
 
                 image_form_set.instance = animal
-                animal_images = image_form_set.save()
+                image_form_set.save()
 
-                for animal_image in animal_images:
+                #optimize() reescribe el archivo con otro nombre, así que solo corre
+                #sobre las fotos que realmente se subieron: si no, editarle la edad a un
+                #animal recomprimía y renombraba todas sus fotos, y las URLs que ya
+                #habían salido por mail quedaban rotas
+                for form in image_form_set.forms:
+
+                    if form.cleaned_data.get("DELETE") or "image" not in form.changed_data:
+                        continue
+
+                    animal_image = form.instance
+                    if animal_image.pk is None:
+                        continue
+
                     ImageService().optimize(animal_image.image, max_width=1200)
                     self.set_suggested_crop(animal_image)
 
