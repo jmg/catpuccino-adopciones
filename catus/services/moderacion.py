@@ -94,12 +94,20 @@ class ModeracionService():
                 type(error).__name__
             )
 
-        datos = self._parsear(contenido)
-        if datos is None:
-            logger.error("Respuesta ininteligible al revisar %s: %r", animal.id, contenido[:200])
-            return Animal.REVISION_ERROR, "La respuesta del servicio no se entendió."
+        #interpretar la respuesta va en su propio try: el modelo puede devolver
+        #cualquier forma (o None, cuando se rehúsa a describir una imagen) y nada de
+        #eso puede escaparse hacia arriba, porque acá arriba está el alta del animal
+        try:
+            datos = self._parsear(contenido)
 
-        return self.decidir(animal, datos)
+            if datos is None:
+                logger.error("Respuesta ininteligible al revisar %s: %r", animal.id, contenido)
+                return Animal.REVISION_ERROR, "La respuesta del servicio no se entendió."
+
+            return self.decidir(animal, datos)
+        except Exception:
+            logger.exception("No se pudo interpretar la revisión de %s", animal.id)
+            return Animal.REVISION_ERROR, "La respuesta del servicio no se entendió."
 
     def decidir(self, animal, datos):
         """Traduce lo que vio el modelo a un veredicto.
@@ -111,8 +119,20 @@ class ModeracionService():
         """
         from catus.models import Animal
 
-        animales = [str(a).strip().lower() for a in (datos.get("animales") or [])]
-        descripcion = (datos.get("descripcion") or "").strip()[:300]
+        #el modelo no siempre respeta el esquema: puede mandar un número donde va una
+        #lista, o una lista donde va un texto. Normalizamos en vez de confiar.
+        crudos = datos.get("animales") or []
+        if isinstance(crudos, str):
+            crudos = [crudos]
+        elif not isinstance(crudos, (list, tuple, set)):
+            crudos = []
+
+        animales = [str(a).strip().lower() for a in crudos]
+
+        descripcion = datos.get("descripcion") or ""
+        if not isinstance(descripcion, str):
+            descripcion = str(descripcion)
+        descripcion = descripcion.strip()[:300]
 
         if datos.get("inapropiado"):
             return Animal.REVISION_REVISAR, "Puede tener contenido inapropiado. {}".format(descripcion).strip()
@@ -138,13 +158,20 @@ class ModeracionService():
 
     def revisar_y_guardar(self, animal):
         """Revisa y deja el resultado en el animal. Devuelve el estado."""
+        from catus.models import Animal
 
         estado, motivo = self.revisar(animal)
 
-        animal.revision_ia_estado = estado
-        animal.revision_ia_motivo = motivo
-        animal.revision_ia_fecha = timezone.now()
-        animal.save()
+        try:
+            animal.revision_ia_estado = estado
+            animal.revision_ia_motivo = motivo
+            animal.revision_ia_fecha = timezone.now()
+            animal.save()
+        except Exception:
+            #guardar el resultado es lo de menos: el animal ya está cargado y lo que
+            #no puede pasar es que esto le devuelva un error a quien lo publicó
+            logger.exception("No se pudo guardar la revisión de %s", animal.id)
+            return Animal.REVISION_ERROR
 
         return estado
 
@@ -293,6 +320,13 @@ class ModeracionService():
                 return None
 
         if not isinstance(datos, dict) or "animales" not in datos:
+            return None
+
+        #"animales" es la única clave de la que depende la decisión. Si viene con una
+        #forma que no entendemos, esto es "no se pudo revisar" y NO "sospechoso":
+        #tratar nuestra propia falla de parseo como sospecha frenaría la publicación
+        #de un animal legítimo.
+        if not isinstance(datos["animales"], (list, tuple, str)):
             return None
 
         return datos
