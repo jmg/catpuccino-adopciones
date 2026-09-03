@@ -10,6 +10,43 @@ from io import BytesIO
 
 class ImageService():
 
+    #el posteo de Instagram recorta un cuadrado del LADO CORTO de la foto, así que
+    #achicar por debajo de esto es perder nitidez justo en lo que se publica
+    LADO_CUADRADO_IG = 1200
+
+    #tope duro para que una foto muy alargada no se guarde entera
+    TOPE_LADO_LARGO = 2600
+
+    def _ratio_para_optimizar(self, size, max_width):
+        """Cuánto achicar una foto recién subida. Devuelve 1.0 si no hay que tocarla.
+
+        Escalar siempre por el ancho agrandaba las verticales (1080x1920 -> 1200x2133).
+        Pero escalar por el lado largo a secas las achicaba a 675x1200, y entonces el
+        cuadrado de Instagram se armaba estirando 675 hasta 1200: peor todavía, porque
+        tira los píxeles que ese recorte necesita. Se achica por el lado largo, sin
+        bajar el lado corto de lo que pide el cuadrado, y sin agrandar nunca.
+        """
+
+        lado_corto, lado_largo = min(size), max(size)
+
+        if not lado_corto or not lado_largo:
+            return 1.0
+
+        #si la foto ya venía con el lado corto por debajo del cuadrado, se respeta:
+        #no hay nada que ganar estirándola
+        minimo_corto = min(lado_corto, self.LADO_CUADRADO_IG)
+
+        ratio = min(1.0, max_width / float(lado_largo))
+
+        if lado_corto * ratio < minimo_corto:
+            ratio = minimo_corto / float(lado_corto)
+
+        #una panorámica podría quedar enorme al respetar el lado corto: le ponemos techo
+        if lado_largo * ratio > self.TOPE_LADO_LARGO:
+            ratio = self.TOPE_LADO_LARGO / float(lado_largo)
+
+        return min(ratio, 1.0)
+
     def optimize(self, image_field, max_width):
 
         OUTPUT_FORMAT = "JPEG"
@@ -20,13 +57,10 @@ class ImageService():
 
         random_name = f'{uuid.uuid4()}.jpeg'
 
-        #se escala por el lado LARGO: escalando siempre por el ancho, una foto vertical
-        #de celular (1080x1920) terminaba agrandada a 1200x2133, mas pesada y sin mas detalle
-        if max(img.size) > max_width:
+        ratio = self._ratio_para_optimizar(img.size, max_width)
 
-            ratio = max_width / float(max(img.size))
+        if ratio < 1.0:
             nuevo_tamano = (max(1, int(img.size[0] * ratio)), max(1, int(img.size[1] * ratio)))
-
             img = img.resize(nuevo_tamano, Image.ANTIALIAS)
 
         img = self.rotate(img)
