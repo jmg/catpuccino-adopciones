@@ -205,6 +205,8 @@ class RevisarTest(TestCase):
 
         self.assertEqual(estado, Animal.REVISION_OK)
         self.assertIsInstance(motivo, str)
+        #y no imprime el repr de la estructura en la pantalla del equipo
+        self.assertNotIn("[", motivo)
 
     def test_una_lista_json_en_vez_de_objeto_es_error(self):
 
