@@ -11,7 +11,7 @@ from forms_builder.forms.models import Field, FieldEntry, Form, FormEntry
 
 from catus.models import FacebookAccount
 from catus.services.adoption import AdoptionService
-from catus.tests.factories import make_user
+from catus.tests.factories import make_animal, make_user
 
 
 class RespuestasNoConfiablesTest(TestCase):
@@ -94,3 +94,41 @@ class FacebookLoginTest(TestCase):
         self.conectar(make_user(email="cualquiera@ejemplo.test"))
 
         self.assertEqual(FacebookAccount.objects.count(), 0)
+
+
+class DescripcionesEnPaginasPublicasTest(TestCase):
+    """La descripción del animal y la del perfil las escribe cualquiera que se registre.
+
+    Se muestran con formato (son campos de texto enriquecido) en páginas públicas
+    sin login, así que tienen que conservar negritas y links pero no ejecutar nada.
+    """
+
+    def render_card(self, datos):
+
+        from django.template.loader import render_to_string
+
+        animal = make_animal(nombre="Willy", datos=datos, aprobado=True)
+        return render_to_string("adoption/card.html", {"animal": animal, "cols": 4})
+
+    def test_la_descripcion_conserva_el_formato(self):
+
+        html = self.render_card("<p>Willy es <strong>muy</strong> compañero</p>")
+
+        self.assertIn("<strong>", html)
+
+    def test_la_descripcion_no_puede_traer_scripts(self):
+        """Iba con |safe a la home: el script corría en el navegador de cada visitante."""
+
+        html = self.render_card('Hola <img src=x onerror="alert(1)">')
+
+        self.assertNotIn("onerror", html)
+        self.assertNotIn("<img src=x", html)
+
+    def test_la_descripcion_no_puede_traer_links_con_javascript(self):
+
+        html = self.render_card('<a href="javascript:alert(1)">click</a>')
+
+        #el propio template usa href="javascript:" para "Mostrar más", así que
+        #miramos el payload y no cualquier aparición de la palabra
+        self.assertNotIn("javascript:alert", html)
+        self.assertIn("<a>click</a>", html, "debería quedar el texto sin el link")

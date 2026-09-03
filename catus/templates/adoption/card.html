@@ -1,3 +1,4 @@
+{% load catus_html %}
 <div data-id="{{animal.id}}" data-type="{{animal.tipo}}" data-name="{{animal.nombre}}" data-zone="{{animal.zona}}" class="post-preview">
 
     {% if animal.esta_reservado %}
@@ -69,7 +70,7 @@
       </div>
 
       <div class="animal-description-container">
-        <span class="animal-desciption show-more-text">{% if animal.datos %}{{animal.get_datos|safe}}{% else %}No hay descripción disponible{% endif %}</span>
+        <span class="animal-desciption show-more-text">{% if animal.datos %}{{animal.get_datos|html_seguro}}{% else %}No hay descripción disponible{% endif %}</span>
         <div>
           <a class="show-more-a" href="javascript:" onclick="showMore(this)">Mostrar más</a>
         </div>
