@@ -179,6 +179,34 @@ the form invalid and blocking the animal from being saved.
 extract name/type/sex/age/description as JSON, and prefills the animal form
 (`/animal/pulldatafromig/`). Responses are cached in `ChatGTPResponse`.
 
+**Automatic post review** (`services/moderacion.py`). When an animal is created — or edited
+in a way that changes its photos, `nombre`, `datos` or `tipo` — its photos and text go to a
+cheap vision model to catch listings that are not an animal in adoption: screenshots,
+landscapes, ads, spam, inappropriate content. The verdict lands in
+`Animal.revision_ia_estado` (`P` sin revisar / `OK` / `R` revisar / `E` no se pudo revisar)
+plus `revision_ia_motivo`, and `/tools/animalespendientes/` sorts flagged listings first.
+
+Two invariants hold the design together, and both have tests that fail if they break:
+
+- **It can never stop someone publishing an animal.** Every failure path — API down, no
+  credit, refusal (`content=None`), malformed JSON, a failed save — returns `E`, which does
+  not block anything. `E` and `R` look similar but only `R` withholds auto-approval, so a
+  parsing failure of *ours* must never be reported as suspicion of *theirs*.
+- **The model describes, the code decides.** `PROMPT` asks only for what is visible;
+  `decidir()` holds the policy. An earlier version asked the model to judge and it echoed the
+  prompt's rules instead of looking, flagging 10 of 14 real gallery photos. After the split,
+  0 of 24. Keep policy out of the prompt.
+
+Other constraints baked in: the listing text is framed as unverified data (that framing is
+what makes prompt injection through `nombre`/`datos` fail, and a test asserts it survives);
+photos are downscaled to 512px and capped at 3 per call; the SDK runs with `max_retries=0`
+and an 8s timeout because the upload POST waits on it and the worker cuts at 30s; there is a
+per-user daily cap (`MODERACION_IA_MAX_POR_DIA`) because registration is open and each upload
+costs money; expected API failures log at `warning`, not `exception`, since Sentry attaches
+the session cookie to `ERROR` events. Inactive when `ENV=LOCAL`, when `MODERACION_IA_ACTIVA`
+is off, or when there is no `OPENIA_API_KEY`. Supports both openai SDK generations, since the
+production version is unknown.
+
 ## Permissions
 
 Registration at `/accounts/register/` is open and self-service, so **"is logged in" is not a
