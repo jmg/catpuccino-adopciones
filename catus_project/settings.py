@@ -180,6 +180,22 @@ FACEBOOK_APP_SECRET = app_config.get("FACEBOOK_APP_SECRET")
 OPENIA_API_KEY = app_config.get("OPENIA_API_KEY")
 OPENIA_API_ORG_ID = app_config.get("OPENIA_API_ORG_ID")
 
+
+def _config_bool(clave, por_defecto=True):
+    """read_config convierte todo a string, asi que "0"/"false" llegan como texto."""
+
+    valor = app_config.get(clave)
+    if valor is None:
+        return por_defecto
+
+    return str(valor).strip().lower() not in ("0", "false", "no", "")
+
+
+#Revision automatica de las publicaciones. Se puede apagar desde la config sin tocar
+#codigo; si no hay OPENIA_API_KEY queda inactiva sola.
+MODERACION_IA_ACTIVA = _config_bool("MODERACION_IA_ACTIVA", True)
+MODERACION_IA_MODELO = app_config.get("MODERACION_IA_MODELO") or "gpt-4o-mini"
+
 EMAIL_BACKEND = "sgbackend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
 
