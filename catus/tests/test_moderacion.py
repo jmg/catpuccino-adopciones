@@ -406,3 +406,153 @@ class AutoAprobacionTest(TestCase):
 
         self.assertEqual(revision, Animal.REVISION_ERROR)
         self.assertNotEqual(revision, Animal.REVISION_REVISAR)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class LimiteDiarioTest(TestCase):
+    """El registro es abierto y cada alta cuesta plata: sin tope, cualquiera puede
+    vaciarle la cuenta de OpenAI al refugio."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.usuario = make_user(email="alguien@ejemplo.test")
+
+    def cargar_revisados(self, cantidad, usuario=None):
+
+        from django.utils import timezone
+
+        for i in range(cantidad):
+            make_animal(
+                nombre="A%d" % i, cargado_por=usuario or self.usuario,
+                revision_ia_estado=Animal.REVISION_OK,
+                revision_ia_fecha=timezone.now(),
+            )
+
+    def test_deja_pasar_dentro_del_cupo(self):
+
+        self.cargar_revisados(3)
+
+        self.assertFalse(self.service.paso_el_limite(self.usuario))
+
+    def test_frena_al_llegar_al_tope(self):
+
+        self.cargar_revisados(self.service.get_limite_diario())
+
+        self.assertTrue(self.service.paso_el_limite(self.usuario))
+
+    def test_el_tope_es_por_persona(self):
+
+        otro = make_user(email="otro@ejemplo.test")
+        self.cargar_revisados(self.service.get_limite_diario())
+
+        self.assertFalse(self.service.paso_el_limite(otro))
+
+    def test_no_cuenta_las_de_ayer(self):
+
+        from django.utils import timezone
+        from datetime import timedelta
+
+        ayer = timezone.now() - timedelta(days=2)
+        for i in range(self.service.get_limite_diario()):
+            make_animal(nombre="V%d" % i, cargado_por=self.usuario,
+                        revision_ia_estado=Animal.REVISION_OK, revision_ia_fecha=ayer)
+
+        self.assertFalse(self.service.paso_el_limite(self.usuario))
+
+    def test_pasarse_del_tope_no_bloquea_la_publicacion(self):
+        """Quedar sin revisar es el mismo estado que tenían todos antes de esto."""
+
+        self.cargar_revisados(self.service.get_limite_diario())
+        animal = make_animal(nombre="Nuevo", cargado_por=self.usuario)
+        make_animal_image(animal=animal)
+
+        with mock.patch.object(ModeracionService, "_preguntar") as preguntar:
+            estado, _ = self.service.revisar(animal)
+
+        preguntar.assert_not_called()
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertNotEqual(estado, Animal.REVISION_REVISAR)
+
+    @override_settings(MODERACION_IA_MAX_POR_DIA=0)
+    def test_se_puede_desactivar_el_tope(self):
+
+        self.cargar_revisados(50)
+
+        self.assertFalse(self.service.paso_el_limite(self.usuario))
+
+    def test_un_animal_sin_dueno_no_rompe(self):
+
+        self.assertFalse(self.service.paso_el_limite(None))
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class BooleanosDelModeloTest(TestCase):
+    """gpt-4o-mini a veces manda los booleanos como texto."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G")
+
+    def test_false_como_texto_no_manda_a_revisar(self):
+        """En Python "false" es verdadero: sin convertirlo, mandaba a revisión humana
+        una publicación perfectamente sana."""
+
+        datos = {"animales": ["gato"], "descripcion": "Un gato.",
+                 "texto_sospechoso": "false", "inapropiado": "false"}
+
+        estado, _ = self.service.decidir(self.animal, datos)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_true_como_texto_si_manda_a_revisar(self):
+
+        datos = {"animales": ["gato"], "descripcion": "x", "inapropiado": "true"}
+
+        estado, _ = self.service.decidir(self.animal, datos)
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+
+    def test_no_y_si_tambien_se_entienden(self):
+
+        self.assertFalse(self.service._es_verdadero("no"))
+        self.assertFalse(self.service._es_verdadero("No"))
+        self.assertTrue(self.service._es_verdadero("sí"))
+        self.assertTrue(self.service._es_verdadero(True))
+        self.assertFalse(self.service._es_verdadero(None))
+
+
+class EntornoTest(TestCase):
+    """Desde una máquina de desarrollo no se mandan fotos reales con la key real."""
+
+    @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="LOCAL")
+    def test_en_local_no_llama_a_la_api(self):
+
+        animal = make_animal(nombre="Willy")
+        make_animal_image(animal=animal)
+
+        with mock.patch.object(ModeracionService, "_preguntar") as preguntar:
+            estado, _ = ModeracionService().revisar(animal)
+
+        preguntar.assert_not_called()
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="PROD")
+    def test_en_produccion_si(self):
+
+        self.assertTrue(ModeracionService().esta_activa())
+
+
+class TiempoAcotadoTest(TestCase):
+    """El alta del animal espera esto sincrónicamente y el worker corta a los 30s."""
+
+    def test_no_reintenta(self):
+
+        self.assertEqual(ModeracionService.REINTENTOS, 0)
+
+    def test_el_peor_caso_entra_en_el_worker(self):
+        """timeout x (reintentos + 1) tiene que quedar bien por debajo de 30s."""
+
+        service = ModeracionService()
+        peor_caso = service.TIMEOUT * (service.REINTENTOS + 1)
+
+        self.assertLess(peor_caso, 15, "el alta puede pasarse del timeout del worker")

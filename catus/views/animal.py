@@ -159,7 +159,22 @@ class EditView(LoginRequiredMixin, BaseView):
 
                     os.remove(img_temp.name)
 
+                #Si cambiaron las fotos o el texto, lo revisado ya no es lo que hay: sin
+                #esto alguien podía cargar un gato de verdad, quedar aprobado, y después
+                #editarlo para reemplazar las fotos por otra cosa manteniendo el "OK".
+                cambio_lo_revisable = (
+                    is_new_animal
+                    or any(c in animal_form.changed_data for c in ("nombre", "datos", "tipo"))
+                    or any(
+                        f.has_changed() for f in image_form_set.forms
+                    )
+                )
+
                 self.request.session["animal_save_success"] = True
+
+                if cambio_lo_revisable and not is_new_animal:
+                    ModeracionService().revisar_y_guardar(animal)
+
                 if is_new_animal:
 
                     #Revisión automática de la publicación. Es una ayuda para el equipo:
