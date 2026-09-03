@@ -25,67 +25,71 @@ class ImageServiceTestCase(TestCase):
 
 
 class OptimizeTest(ImageServiceTestCase):
+    """Achicar la foto recién subida.
+
+    Hay tres cosas en tensión y las tres importan: no guardar archivos enormes, no
+    agrandar (agrandar no agrega detalle y pesa más), y no bajar el lado corto por
+    debajo de lo que necesita el cuadrado de Instagram, que se recorta justo de ahí.
+    """
+
+    def optimizada(self, size, max_width=1200):
+
+        imagen = make_animal_image(size=size)
+        self.service.optimize(imagen.image, max_width=max_width)
+        imagen.refresh_from_db()
+
+        with Image.open(imagen.image.path) as foto:
+            return foto.size
 
     def test_achica_una_foto_grande(self):
 
-        imagen = make_animal_image(size=(3000, 2000))
+        self.assertEqual(self.optimizada((3000, 2000)), (1800, 1200))
 
-        self.service.optimize(imagen.image, max_width=1200)
+    def test_nunca_agranda(self):
+        """Escalar siempre por el ancho estiraba las verticales de celular."""
 
-        imagen.refresh_from_db()
-        with Image.open(imagen.image.path) as foto:
-            self.assertEqual(foto.size, (1200, 800))
+        for size in [(1080, 1920), (600, 400), (1200, 1200), (900, 1600)]:
+            resultado = self.optimizada(size)
 
-    def test_no_agranda_una_foto_vertical_chica(self):
-        """Una foto de celular en vertical (1080x1920) no debería salir agrandada.
+            self.assertLessEqual(resultado[0], size[0], "agrandó el ancho de {}".format(size))
+            self.assertLessEqual(resultado[1], size[1], "agrandó el alto de {}".format(size))
 
-        El cálculo escalaba siempre por el ANCHO, así que cualquier foto vertical
-        más angosta que el máximo terminaba estirada a un archivo más pesado que
-        el original y sin más detalle.
+    def test_no_baja_del_cuadrado_que_pide_instagram(self):
+        """El posteo recorta un cuadrado del lado corto.
+
+        Achicar por el lado largo a secas dejaba una vertical de celular en 675x1200,
+        y después el posteo estiraba 675 hasta 1200: se publicaba más borroso que antes.
         """
 
-        imagen = make_animal_image(size=(1080, 1920))
+        for size in [(3024, 4032), (2000, 3000), (4032, 3024)]:
+            resultado = self.optimizada(size)
 
-        self.service.optimize(imagen.image, max_width=1200)
+            self.assertGreaterEqual(
+                min(resultado), self.service.LADO_CUADRADO_IG,
+                "{} quedó en {}: el cuadrado de IG va a salir estirado".format(size, resultado),
+            )
 
-        imagen.refresh_from_db()
-        with Image.open(imagen.image.path) as foto:
-            self.assertLessEqual(foto.size[0], 1080)
-            self.assertLessEqual(foto.size[1], 1920)
+    def test_una_foto_con_el_lado_corto_chico_se_deja_como_está(self):
+        """Si ya venía por debajo del cuadrado, estirarla no aporta nada."""
 
-    def test_el_lado_largo_no_pasa_del_maximo(self):
-
-        for size in [(3000, 2000), (2000, 3000), (4000, 4000), (1600, 900)]:
-            imagen = make_animal_image(size=size)
-
-            self.service.optimize(imagen.image, max_width=1200)
-
-            imagen.refresh_from_db()
-            with Image.open(imagen.image.path) as foto:
-                self.assertLessEqual(
-                    max(foto.size), 1200,
-                    "la foto {} quedó en {}".format(size, foto.size),
-                )
+        self.assertEqual(self.optimizada((1080, 1920)), (1080, 1920))
 
     def test_una_foto_chica_queda_igual(self):
 
-        imagen = make_animal_image(size=(600, 400))
+        self.assertEqual(self.optimizada((600, 400)), (600, 400))
 
-        self.service.optimize(imagen.image, max_width=1200)
+    def test_una_panoramica_tiene_techo(self):
+        """Respetar el lado corto no puede terminar guardando una foto gigante."""
 
-        imagen.refresh_from_db()
-        with Image.open(imagen.image.path) as foto:
-            self.assertEqual(foto.size, (600, 400))
+        resultado = self.optimizada((5000, 1000))
+
+        self.assertLessEqual(max(resultado), self.service.TOPE_LADO_LARGO)
 
     def test_mantiene_la_proporcion(self):
 
-        imagen = make_animal_image(size=(3000, 1000))
+        resultado = self.optimizada((3000, 1000))
 
-        self.service.optimize(imagen.image, max_width=1200)
-
-        imagen.refresh_from_db()
-        with Image.open(imagen.image.path) as foto:
-            self.assertAlmostEqual(foto.size[0] / foto.size[1], 3.0, places=1)
+        self.assertAlmostEqual(resultado[0] / resultado[1], 3.0, places=1)
 
     def test_deja_el_archivo_utilizable(self):
 
