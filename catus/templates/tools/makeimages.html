@@ -1,3 +1,4 @@
+{% load l10n %}
 {% for image in animal.get_images %}
 
     <!-- Contenedor individual para cada imagen -->
@@ -76,10 +77,17 @@
                             Recorte elegido a mano, en fracciones de la foto original.
                             Vacío = recorte automático (el de "Centrada").
                             {% endcomment %}
+                            {% comment %}
+                            localize off: con el locale es-ar Django escribe los decimales
+                            con coma ("0,25"), el server no los puede leer como número y
+                            terminaba borrando el recorte en cada regeneración.
+                            {% endcomment %}
+                            {% localize off %}
                             <input type="hidden" name="crop_x_{{image.id}}" value="{{image.crop_x|default_if_none:''}}">
                             <input type="hidden" name="crop_y_{{image.id}}" value="{{image.crop_y|default_if_none:''}}">
                             <input type="hidden" name="crop_w_{{image.id}}" value="{{image.crop_w|default_if_none:''}}">
                             <input type="hidden" name="crop_h_{{image.id}}" value="{{image.crop_h|default_if_none:''}}">
+                            {% endlocalize %}
 
                             <button type="button"
                                     class="btn btn-outline-primary btn-block js-crop-button"

@@ -107,19 +107,44 @@ class ImagePreviewWidget(FileInput):
         return mark_safe('{}{}'.format(input_html, img_html))
 
 
+class CropField(CharField):
+    """Una fracción del recorte, que escribe el selector y no la persona.
+
+    Va como texto a propósito: si llegara un valor raro queremos ignorarlo, no que
+    invalide el formulario y no se pueda guardar el animal por culpa de un recorte.
+    """
+
+    def has_changed(self, initial, data):
+        """Compara números, no un float contra su texto.
+
+        Django compara el valor inicial (un float que sale del modelo) contra el
+        string del POST sin convertir, así que "0.25" != 0.25 y los cuatro campos
+        figuraban SIEMPRE como modificados. Con eso, guardar un animal sin tocar
+        las fotos devolvía todas como cambiadas y se recomprimían y renombraban,
+        rompiendo las URLs que ya habían salido por mail.
+        """
+
+        def numero(valor):
+            if valor in (None, ""):
+                return None
+            try:
+                return float(valor)
+            except (TypeError, ValueError):
+                return valor
+
+        return numero(initial) != numero(data)
+
+
 class AnimalImageForm(ModelForm):
 
     image = ImageField(label='Fotos', widget=ImagePreviewWidget)
 
     CROP_FIELDS = ('crop_x', 'crop_y', 'crop_w', 'crop_h')
 
-    #los escribe el selector de recorte, no la persona. Van como texto a proposito: si
-    #llegara un valor raro queremos ignorarlo, no que invalide el form y no se pueda
-    #guardar el animal por culpa de un recorte.
-    crop_x = CharField(required=False, widget=forms.HiddenInput())
-    crop_y = CharField(required=False, widget=forms.HiddenInput())
-    crop_w = CharField(required=False, widget=forms.HiddenInput())
-    crop_h = CharField(required=False, widget=forms.HiddenInput())
+    crop_x = CropField(required=False, widget=forms.HiddenInput())
+    crop_y = CropField(required=False, widget=forms.HiddenInput())
+    crop_w = CropField(required=False, widget=forms.HiddenInput())
+    crop_h = CropField(required=False, widget=forms.HiddenInput())
 
     class Meta:
         model = AnimalImage
