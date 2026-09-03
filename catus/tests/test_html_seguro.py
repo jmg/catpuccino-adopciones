@@ -147,3 +147,86 @@ class FiltroDeTemplateTest(TestCase):
     def test_un_valor_vacio_no_rompe(self):
 
         self.assertEqual(self.render(None), "")
+
+
+class EsquemasSinUrlparseTest(TestCase):
+    """El filtro de esquema no puede depender de urlparse.
+
+    Los navegadores ignoran espacios y caracteres de control adentro del esquema, así
+    que "java\\tscript:alert(1)" ejecuta igual. Que urlparse los saque depende de
+    hardenings de CPython (bpo-43882, CVE-2023-24329) que llegaron en 2021 y 2023: si
+    al Python de producción le falta alguno, ahí había un XSS almacenado en /<handle>/.
+    """
+
+    def test_bloquea_javascript_con_caracteres_de_control(self):
+
+        for payload in [
+            "java\tscript:alert(1)",
+            "java\nscript:alert(1)",
+            "java\rscript:alert(1)",
+            "\x00javascript:alert(1)",
+            "\x01javascript:alert(1)",
+            "  javascript:alert(1)",
+            "\x0bjavascript:alert(1)",
+            "JaVaScRiPt:alert(1)",
+            "javascript\x7f:alert(1)",
+        ]:
+            salida = sanitizar_html('<a href="{}">click</a>'.format(payload))
+
+            self.assertNotIn("javascript", salida.lower(), "pasó: {!r}".format(payload))
+            self.assertNotIn("href=", salida, "pasó: {!r}".format(payload))
+
+    def test_bloquea_data_y_vbscript(self):
+
+        for payload in ["data:text/html,<script>alert(1)</script>", "vbscript:msgbox(1)"]:
+            salida = sanitizar_html('<a href="{}">click</a>'.format(payload))
+
+            self.assertNotIn("href=", salida, "pasó: {!r}".format(payload))
+
+    def test_deja_pasar_los_links_normales(self):
+
+        for url in ["https://instagram.com/catpuccino", "http://ejemplo.test/a?b=1#c",
+                    "mailto:hola@catpuccino.test", "/adopciones/", "../foto.jpg"]:
+            salida = sanitizar_html('<a href="{}">link</a>'.format(url))
+
+            self.assertIn("href=", salida, "bloqueó un link válido: {!r}".format(url))
+
+    def test_un_link_relativo_con_dos_puntos_despues_de_la_barra_es_relativo(self):
+
+        salida = sanitizar_html('<a href="/buscar/gato:negro">link</a>')
+
+        self.assertIn("href=", salida)
+
+
+class DatosRealesTest(TestCase):
+    """Las descripciones que ya están cargadas usan solo p, strong, em, span y br.
+
+    Se comprobó contra los snapshots del refugio (catus.sqlite y el backup de
+    2025-06): cero div, img, table o headings. Las etiquetas que no están en la
+    lista se descartan pero su texto se conserva, así que no se pierde nada.
+    """
+
+    def test_conserva_el_formato_que_realmente_se_usa(self):
+
+        entrada = "<p>Es <strong>muy</strong> <em>mimoso</em>.</p><p>Castrado.<br>Vacunado.</p>"
+
+        salida = sanitizar_html(entrada)
+
+        for tag in ["<p>", "<strong>", "<em>", "<br>"]:
+            self.assertIn(tag, salida)
+
+    def test_una_etiqueta_que_no_esta_en_la_lista_no_se_lleva_el_texto(self):
+
+        salida = sanitizar_html("<div>Primera</div><span>Segunda</span>")
+
+        self.assertIn("Primera", salida)
+        self.assertIn("Segunda", salida)
+        self.assertNotIn("<div", salida)
+
+    def test_no_se_permiten_imagenes_remotas(self):
+        """Una imagen remota en una descripción pública registra la IP de quien la ve."""
+
+        salida = sanitizar_html('<img src="https://rastreador.test/pixel.gif">')
+
+        self.assertNotIn("<img", salida)
+        self.assertNotIn("rastreador.test", salida)

@@ -52,7 +52,9 @@ class AprobarViewTest(AnimalViewTestCase):
 
         self.animal.refresh_from_db()
         self.assertFalse(self.animal.aprobado, "un usuario común aprobó un animal")
-        self.assertIn(response.status_code, (302, 403))
+        #a quien ya está logueado se le contesta con un mensaje, no se lo manda al
+        #login: ver SinPermisoTest más abajo
+        self.assertNotIn("aprobado!", response.content.decode())
 
     def test_el_admin_aprueba(self):
 
@@ -350,3 +352,33 @@ class RevisionAlEditarTest(AnimalViewTestCase):
         revisar = self.editar(self.animal, zona="Otra zona")
 
         self.assertFalse(revisar.called, "una edición menor gastó una llamada paga")
+
+
+class SinPermisoTest(AnimalViewTestCase):
+    """A quien ya está logueado hay que contestarle, no mandarlo al login.
+
+    En Django 2.0 AccessMixin siempre redirige, así que alguien con cuenta que abriera
+    el link "Aprobar!" del mail entraba en un ida y vuelta: se loguea, vuelve a la
+    vista, y la vista lo manda al login otra vez, sin ningún mensaje.
+    """
+
+    def test_un_usuario_logueado_recibe_un_mensaje(self):
+
+        response = self.call(AprobarView, self.intruso, method="get", data={"id": self.animal.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No tenes permisos", response.content.decode())
+
+    def test_un_anonimo_sigue_yendo_al_login(self):
+
+        response = self.call(AprobarView, AnonymousUser(), method="get", data={"id": self.animal.id})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
+
+    def test_el_permiso_no_se_afloja(self):
+
+        self.call(AprobarView, self.intruso, method="get", data={"id": self.animal.id})
+
+        self.animal.refresh_from_db()
+        self.assertFalse(self.animal.aprobado)

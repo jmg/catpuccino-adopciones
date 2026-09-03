@@ -27,6 +27,21 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
 
         return self.request.user.is_authenticated and self.request.user.is_superuser
 
+    def handle_no_permission(self):
+        """A quien ya está logueado le contestamos, no lo mandamos al login.
+
+        En Django 2.0 AccessMixin siempre redirige (lo de tirar PermissionDenied al
+        usuario autenticado recién llega en 2.1), así que alguien con cuenta que
+        abriera el link "Aprobar!" del mail entraba en un ida y vuelta al login sin
+        ningún mensaje: se loguea, vuelve a la vista, y la vista lo manda al login
+        otra vez. Mismo texto que usan las vistas de /tools/.
+        """
+
+        if self.request.user.is_authenticated:
+            return HttpResponse("No tenes permisos para esto.")
+
+        return super().handle_no_permission()
+
 
 class BaseView(TemplateView):
 
