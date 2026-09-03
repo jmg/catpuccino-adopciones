@@ -700,9 +700,14 @@
         }
         $.post("/animal/photos/", data, function(response) {
 
-            if (!!slider) {
+            // lightSlider sale sin adjuntar destroy() cuando el contenedor no existe
+            // todavía (pasa al entrar a /pre-adopcion/ sin animal elegido). Sin este
+            // chequeo, la llamada siguiente tiraba TypeError y las fotos no volvían a
+            // aparecer en toda la sesión.
+            if (slider && typeof slider.destroy === "function") {
                 slider.destroy()
             }
+            slider = null
 
             var container = el.parent().find("#fotos-animal")
             if (container.length == 0) {
@@ -711,12 +716,17 @@
                 container.replaceWith(response.html)
             }
 
+            var fotos = $('#fotos-animal')
+            if (fotos.length == 0 || !response.photos_count) {
+                return
+            }
+
             var sliderItems = mobileCheck() ? 2 : 4
             if (sliderItems > response.photos_count) {
                 sliderItems = response.photos_count
             }
 
-            slider = $('#fotos-animal').lightSlider({
+            slider = fotos.lightSlider({
                 item: sliderItems,
                 auto: sliderItems > 1,
                 loop: true,
