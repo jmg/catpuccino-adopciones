@@ -59,6 +59,18 @@ class Animal(BaseEntity):
     instagram_media_url = models.CharField(max_length=255, null=True, blank=True)
     instagram_comment_id = models.CharField(max_length=255, null=True, blank=True)
 
+    #El posteo automático: al aprobarse, el animal se agenda para más tarde en vez de
+    #publicarse al toque, así queda una ventana para cancelarlo desde /tools/. Hace falta
+    #porque aprobado=True no garantiza que alguien haya mirado: el comando
+    #automatic_approve le regala automatic_approve a cualquiera con un animal aprobado.
+    instagram_programado_para = models.DateTimeField(null=True, blank=True)
+
+    #Sin esto el cron reintenta para siempre y en silencio: los errores se escribían por
+    #stdout, que nadie mira, y no quedaba nada en el animal para mostrar en una pantalla.
+    instagram_intentos = models.PositiveIntegerField(default=0)
+    instagram_ultimo_intento = models.DateTimeField(null=True, blank=True)
+    instagram_error = models.TextField(null=True, blank=True)
+
     mail_preguntar_adopcion_enviado = models.BooleanField(default=False)
 
     custom_link = models.CharField(max_length=255, null=True, blank=True)
@@ -193,7 +205,10 @@ class Animal(BaseEntity):
 
     def get_images(self):
 
-        return self.animalimage_set.order_by(F("posicion").asc(nulls_last=True))
+        #el desempate por id importa: posicion no se escribe en ningún lado, así que sin
+        #él quedan todas en NULL y el orden lo elige la base. En el carrusel de Instagram
+        #eso significa que la foto de portada puede cambiar entre una corrida y la otra.
+        return self.animalimage_set.order_by(F("posicion").asc(nulls_last=True), "id")
 
     def __str__(self):
 
@@ -527,3 +542,31 @@ class ChatGTPResponse(BaseEntity):
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
     chatgpt_response = models.TextField(null=True, blank=True)
+
+    #quién pidió leer el post. Cada pedido cuesta una llamada paga y el registro es
+    #abierto, así que hay que poder contar cuántos hizo cada persona en el día.
+    pedido_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+
+class RevisionIALlamada(BaseEntity):
+    """Una llamada paga a la revisión automática de publicaciones. Existe sólo para
+    contarlas y poder cortar el cupo diario de cada persona.
+
+    Va en una tabla propia y no en ChatGTPResponse porque ese cupo es otro: lo cuenta
+    /animal/pulldatafromig/ sobre sus propias filas, y meter acá las revisiones le
+    comería el cupo a la lectura de posts (y al revés) sin que se note.
+
+    El contador vivía en django.core.cache, pero el proyecto no configura CACHES: el
+    backend real es LocMemCache, por proceso y en memoria. Con varios workers de
+    gunicorn el tope real era MAX_POR_DIA por worker, y cada deploy lo ponía en cero.
+    El registro es abierto: esto es lo único que separa a un refugio chico de una
+    factura de OpenAI.
+    """
+
+    #quién gastó la llamada. La fecha es created_at, que ya pone BaseEntity.
+    pedido_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        #el alta del animal espera la revisión de forma sincrónica: el conteo del día
+        #se hace por este índice y no barriendo las llamadas de toda la historia
+        index_together = [("pedido_por", "created_at")]

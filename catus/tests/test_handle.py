@@ -115,3 +115,30 @@ class CatusUserFormHandleTest(TestCase):
         form = CatusUserForm(self.datos(""), instance=yo)
 
         self.assertTrue(form.is_valid(), form.errors)
+
+    def test_un_handle_viejo_con_punto_no_traba_el_perfil(self):
+        """Antes no se validaba del lado del servidor y quedaron handles con punto.
+
+        El perfil manda el handle actual precargado en el POST, así que esa gente no
+        podía guardar nada: cambiaban solo la descripción y el form entero se invalidaba
+        por un campo que ni tocaron.
+        """
+
+        yo = make_user(email="yo@test.com", handle="cat.puccino")
+
+        datos = self.datos("cat.puccino")
+        datos["description"] = "Rescatamos gatos en Villa Crespo."
+
+        form = CatusUserForm(datos, instance=yo)
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_conservar_el_viejo_no_habilita_cambiarlo_por_otro_invalido(self):
+        """Se deja pasar el que ya tenía guardado, no cualquier cosa que manden."""
+
+        yo = make_user(email="yo@test.com", handle="cat.puccino")
+
+        form = CatusUserForm(self.datos("cat.puccino!"), instance=yo)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("handle", form.errors)

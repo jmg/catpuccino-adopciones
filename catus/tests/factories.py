@@ -4,6 +4,8 @@ from io import BytesIO
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
+from forms_builder.forms.models import Field, FormEntry
+
 from catus.models import Animal, AnimalImage, CatusUser, EstadoFormulario
 
 
@@ -28,6 +30,23 @@ def make_estado_formulario(animal=None, **kwargs):
     kwargs.setdefault("estado", "N")
     kwargs.setdefault("fecha_ingreso", timezone.now())
     return EstadoFormulario.objects.create(gato=animal, **kwargs)
+
+
+def make_form_entry(form, **kwargs):
+    """Una respuesta enviada al formulario público."""
+
+    #entry_time en forms_builder es NOT NULL y no tiene default: crear la entry
+    #sin fecha tira IntegrityError y el test ni llega a correr.
+    kwargs.setdefault("entry_time", timezone.now())
+    return FormEntry.objects.create(form=form, **kwargs)
+
+
+def make_field(form, label, field_type=1, **kwargs):
+    """Un campo del formulario público (field_type 1 = texto de una línea)."""
+
+    #el form no es opcional: Field.save() numera el orden con self.form.fields.count(),
+    #así que sin form revienta antes de guardar.
+    return Field.objects.create(form=form, label=label, field_type=field_type, **kwargs)
 
 
 def photo_bytes(size=(800, 600), color=(120, 120, 120), fmt="JPEG"):

@@ -1,0 +1,14 @@
+{
+  "name": "catus-jstests",
+  "private": true,
+  "description": "Tests de navegador del selector de recorte para Instagram. No forma parte del sitio: no lo toca collectstatic ni lo instala el deploy.",
+  "scripts": {
+    "test": "playwright test",
+    "test:desktop": "playwright test --project=desktop",
+    "test:mobile": "playwright test --project=mobile",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}

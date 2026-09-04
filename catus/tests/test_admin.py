@@ -131,16 +131,26 @@ class AprobarAnimalesTest(TestCase):
 
         self.assertTrue(Animal.objects.get(nombre="Uno").aprobado)
 
-    def test_un_animal_sin_rescatista_no_corta_la_tanda(self):
-        """Antes el mail de aviso explotaba y los siguientes quedaban sin aprobar."""
+    def test_un_fallo_del_mail_no_corta_la_tanda(self):
+        """Antes el mail de aviso explotaba y los siguientes quedaban sin aprobar.
+
+        El mail se rompe a mano porque en LOCAL/TEST send_mail_aprobacion corta
+        antes de salir a la red: sin el mock, el test pasaba igual sin el
+        try/except del admin y no protegía nada.
+        """
+
+        from unittest import mock
+
+        from catus.services.mail import MailService
 
         make_animal(nombre="Huérfano", aprobado=False, cargado_por=None)
         make_animal(nombre="Con dueño", aprobado=False, cargado_por=make_user())
 
-        self.aprobar(Animal.objects.all())
+        with mock.patch.object(MailService, "send_mail_aprobacion", side_effect=Exception("sendgrid caído")):
+            self.aprobar(Animal.objects.all())
 
-        self.assertTrue(Animal.objects.get(nombre="Huérfano").aprobado)
-        self.assertTrue(Animal.objects.get(nombre="Con dueño").aprobado)
+        self.assertTrue(Animal.objects.get(nombre="Huérfano").aprobado, "se perdió la aprobación porque falló el mail")
+        self.assertTrue(Animal.objects.get(nombre="Con dueño").aprobado, "se perdió la aprobación porque falló el mail")
 
     def test_no_reprocesa_los_ya_aprobados(self):
 

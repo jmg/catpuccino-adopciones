@@ -1,0 +1,713 @@
+{% extends "base_form.html" %}
+{% load catus_html %}
+
+{% block content %}
+<div class="container container-small-margin-mobile">
+    <div class="row">
+        <div class="col-lg-12 mx-auto container-colored">
+
+            <div class="page-header">
+                <div class="header-content">
+                    <h2 class="main-title">
+                        <i class="fab fa-instagram"></i>
+                        Cola de Instagram
+                    </h2>
+                    <p class="subtitle">
+                        Lo que va a salir solo, y la ventana para frenarlo antes de que salga.
+                    </p>
+                </div>
+                <div class="header-stats">
+                    {% for grupo in grupos %}
+                    <div class="stat-item stat-{{ grupo.clave }}">
+                        <span class="stat-number">{{ grupo.animales|length }}</span>
+                        <span class="stat-label">{{ grupo.titulo }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% comment %}
+            El orden de los grupos no es decorativo: los agendados van primero porque son
+            los unicos que todavia se pueden frenar. Cuando pasan a "en cola" ya es tarde.
+            {% endcomment %}
+
+            {% for grupo in grupos %}
+            <div class="grupo grupo-{{ grupo.clave }}">
+
+                <h3 class="grupo-titulo">
+                    {% if grupo.clave == "agendados" %}
+                        <i class="fas fa-hourglass-half"></i>
+                    {% elif grupo.clave == "en_cola" %}
+                        <i class="fas fa-stream"></i>
+                    {% else %}
+                        <i class="fas fa-triangle-exclamation"></i>
+                    {% endif %}
+                    {{ grupo.titulo }}
+                    <small>{{ grupo.detalle }}</small>
+                </h3>
+
+                {% if grupo.animales %}
+                <div class="animals-grid">
+                    {% for animal in grupo.animales %}
+                    {% comment %}
+                    El error pinta la tarjeta pero no la mueve de grupo: el grupo lo decide
+                    en que momento del pipeline esta el animal. Cuando lo decidia el error,
+                    a un agendado al que el cron le escribia un motivo se le caia la tarjeta
+                    a "Con problemas" y perdia el boton de cancelar, sin que el posteo se
+                    hubiera frenado: seguia agendado y salia igual al llegar la hora.
+                    {% endcomment %}
+                    <div class="animal-card card-{{ grupo.clave }}{% if animal.instagram_error %} card-con-error{% endif %}">
+
+                        <div class="card-top">
+                            <div class="animal-image-container">
+                                {% comment %}
+                                La foto sale de la lista ya traida por el prefetch de la vista,
+                                en el mismo orden que el carrusel. Pedirla aca adentro del for
+                                —como hacen las otras pantallas de la cola— es una consulta por
+                                animal, y esta pantalla muestra los tres grupos juntos.
+                                {% endcomment %}
+                                {% with foto=animal.fotos.0 %}
+                                {% if foto %}
+                                    <img src="{{ foto.image.url }}" class="animal-image" alt="{{ animal.nombre }}">
+                                {% else %}
+                                    <div class="image-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Sin foto</span>
+                                    </div>
+                                {% endif %}
+                                {% endwith %}
+                            </div>
+
+                            <div class="animal-info">
+                                <h4 class="animal-name">
+                                    <a href="/animales/{{ animal.id }}/" target="_blank">{{ animal.nombre }}</a>
+                                </h4>
+
+                                <div class="detail-item">
+                                    <i class="fas fa-user"></i>
+                                    <span>
+                                        {% if animal.cargado_por %}
+                                            {{ animal.cargado_por.get_instagram|default:animal.cargado_por.email|truncatechars:35 }}
+                                        {% else %}
+                                            Sin asignar
+                                        {% endif %}
+                                    </span>
+                                </div>
+
+                                <div class="detail-item">
+                                    {% if animal.tipo == "P" %}
+                                        <i class="fas fa-dog"></i><span>Perro</span>
+                                    {% else %}
+                                        <i class="fas fa-cat"></i><span>Gato</span>
+                                    {% endif %}
+                                </div>
+
+                                {% if animal.zona %}
+                                <div class="detail-item">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    <span>{{ animal.zona|truncatechars:25 }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="status-badges">
+                            <span class="status-badge">
+                                <i class="fas fa-info-circle"></i>
+                                {{ animal.get_estado_display }}
+                            </span>
+
+                            {% comment %}
+                            El veredicto de la revision automatica se ve aca porque es lo
+                            unico que mira al contenido: aprobado=True no dice que alguien
+                            haya mirado, automatic_approve lo regala.
+                            {% endcomment %}
+                            {% if animal.revision_ia_estado == "R" %}
+                                <span class="status-badge badge-revisar-ia">
+                                    <i class="fas fa-triangle-exclamation"></i>
+                                    Revisar publicación
+                                </span>
+                            {% elif animal.revision_ia_estado == "OK" %}
+                                <span class="status-badge badge-ok-ia">
+                                    <i class="fas fa-robot"></i>
+                                    Revisada
+                                </span>
+                            {% elif animal.revision_ia_estado == "E" %}
+                                <span class="status-badge badge-error-ia">
+                                    <i class="fas fa-robot"></i>
+                                    No se pudo revisar
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        {% if animal.revision_ia_motivo %}
+                        <div class="revision-ia {% if animal.revision_ia_estado == "R" %}revision-ia-alerta{% endif %}">
+                            <i class="fas fa-robot"></i>
+                            {{ animal.revision_ia_motivo }}
+                        </div>
+                        {% endif %}
+
+                        {% if animal.no_sale %}
+                        <div class="no-sale">
+                            <i class="fas fa-hand"></i>
+                            No va a salir: {{ animal.no_sale }}
+                        </div>
+                        {% endif %}
+
+                        {% if animal.instagram_error %}
+                        {% comment %}
+                        El motivo del ultimo fallo es una nota de la tarjeta y no un grupo:
+                        antes vivia abajo, en el pie de "Con problemas", asi que el animal
+                        que fallaba pero seguia en la cola mostraba el error nada mas que
+                        mudandose de grupo, y ahi perdia el boton de cancelar.
+
+                        Sin |safe a proposito: instagram_error es lo que contesto la API de
+                        Facebook, texto ajeno que termina en la pantalla de alguien del
+                        equipo, que es justo quien puede aprobar animales.
+                        {% endcomment %}
+                        <div class="error-motivo">
+                            <i class="fas fa-circle-exclamation"></i>
+                            {{ animal.instagram_error }}
+
+                            <div class="error-intentos">
+                                <i class="fas fa-rotate-right"></i>
+                                {{ animal.instagram_intentos }} intento{{ animal.instagram_intentos|pluralize:"s" }}
+                                {% if animal.instagram_ultimo_intento %}
+                                    · el último {{ animal.instagram_ultimo_intento|date:"d/m/Y H:i" }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if animal.datos %}
+                        {% comment %}
+                        html_seguro y no safe: datos lo escribe cualquiera que se registre y
+                        esta pantalla la abre un superusuario, que con un <script> ajeno
+                        aprueba animales o cambia contraseñas sin darse cuenta.
+                        {% endcomment %}
+                        <div class="animal-description">
+                            {{ animal.get_datos|html_seguro|truncatewords_html:20 }}
+                        </div>
+                        {% endif %}
+
+                        <div class="card-links">
+                            <a href="/animales/{{ animal.id }}/" target="_blank">
+                                <i class="fas fa-edit"></i> Editar
+                            </a>
+                            <a href="/tools/generarimagen/{{ animal.id }}/" target="_blank">
+                                <i class="fas fa-images"></i> Imágenes de Instagram
+                            </a>
+                        </div>
+
+                        <div class="card-footer">
+                            {% if grupo.clave == "agendados" %}
+
+                                <div class="cuenta-regresiva">
+                                    <i class="fas fa-clock"></i>
+                                    <span>
+                                        Sale en <b>{{ animal.falta }}</b>
+                                        ({{ animal.instagram_programado_para|date:"d/m/Y H:i" }})
+                                    </span>
+                                </div>
+
+                            {% elif grupo.clave == "en_cola" %}
+
+                                <div class="cuenta-regresiva">
+                                    <i class="fas fa-clock"></i>
+                                    <span>
+                                        {% if animal.instagram_programado_para %}
+                                            Le tocaba el {{ animal.instagram_programado_para|date:"d/m/Y H:i" }}
+                                        {% else %}
+                                            {% comment %}
+                                            Sin agenda y marcado llegan los dos caminos: el
+                                            que alguien marco a mano desde /tools/ y el que
+                                            ya paso por preparar_publicaciones, que gasta la
+                                            agenda al dejarlo listo.
+                                            {% endcomment %}
+                                            Marcado como listo para publicar
+                                        {% endif %}
+                                    </span>
+                                </div>
+
+                            {% else %}
+
+                                <div class="cuenta-regresiva">
+                                    <i class="fas fa-hand"></i>
+                                    <span>Sin agenda y sin marca: ningún cron lo va a levantar</span>
+                                </div>
+
+                            {% endif %}
+
+                            {% comment %}
+                            Cancelar va en los tres grupos. Estaba solo en "Agendados", que
+                            es el unico que todavia no sale: al que ya vencio y al que quedo
+                            trabado —o sea los que estan por salir o volviendo a intentarlo—
+                            no habia forma de frenarlos desde aca. El endpoint y cancelar()
+                            los aceptan igual.
+
+                            En "En cola" no va "Publicar ya": ya les toca, adelantar lo que
+                            ya vencio no adelanta nada. En "Con problemas" si, que es por
+                            donde vuelven a entrar: les agenda el posteo de nuevo.
+                            {% endcomment %}
+                            <div class="action-buttons">
+                                <button type="button" class="btn btn-action btn-cancelar"
+                                        onclick="accionCola(this, '{{ animal.id }}', 'cancelar')">
+                                    <i class="fas fa-ban"></i>
+                                    <span>Cancelar</span>
+                                </button>
+
+                                {% if grupo.clave == "agendados" %}
+                                <button type="button" class="btn btn-action btn-ya"
+                                        onclick="accionCola(this, '{{ animal.id }}', 'publicar_ya')">
+                                    <i class="fas fa-paper-plane"></i>
+                                    <span>Publicar ya</span>
+                                </button>
+                                {% elif grupo.clave == "con_problemas" %}
+                                <button type="button" class="btn btn-action btn-ya"
+                                        onclick="accionCola(this, '{{ animal.id }}', 'publicar_ya')">
+                                    <i class="fas fa-rotate-right"></i>
+                                    <span>Reintentar</span>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="grupo-vacio">{{ grupo.vacio }}</p>
+                {% endif %}
+
+            </div>
+            {% endfor %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+    //Cancelar y publicar-ya cambian lo que sale a la cuenta de la organizacion, asi que
+    //van por POST con el token, como el resto de /tools/. Con un link GET los disparaba
+    //cualquier prefetch del navegador, sin que nadie apretara nada.
+    function accionCola(btn, animalId, accion) {
+
+        $(btn).attr('disabled', true);
+
+        var params = {
+            "csrfmiddlewaretoken": "{{ csrf_token }}",
+            "animal_id": animalId,
+            "accion": accion
+        }
+
+        $.post("/tools/colainstagram/", params, function(response) {
+
+            if (response == "ok") {
+                location.reload();
+                return;
+            }
+
+            $.alert(response);
+            $(btn).attr('disabled', false);
+
+        }).fail(function() {
+
+            $.alert("No se pudo hacer, proba de nuevo.");
+            $(btn).attr('disabled', false);
+        })
+    }
+</script>
+{% endblock %}
+
+{% block css %}
+<style>
+.container-small-margin-mobile {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+.container-colored {
+    background: linear-gradient(135deg, #fdf2f8 0%, #f3e8ff 100%);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    min-height: 100vh;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0d9f7;
+}
+
+.main-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #c13584;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.subtitle {
+    font-size: 1.05rem;
+    color: #6c757d;
+    margin: 0;
+}
+
+.header-stats {
+    display: flex;
+    gap: 12px;
+}
+
+.stat-item {
+    text-align: center;
+    background: white;
+    padding: 12px 18px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(193, 53, 132, 0.1);
+    min-width: 90px;
+    border: 2px solid #f0d9f7;
+}
+
+.stat-number {
+    display: block;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #c13584;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-con_problemas .stat-number {
+    color: #dc3545;
+}
+
+.grupo {
+    margin-bottom: 40px;
+}
+
+.grupo-titulo {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.grupo-titulo small {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.grupo-vacio {
+    background: white;
+    border: 2px dashed #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    color: #6c757d;
+    margin: 0;
+}
+
+.animals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+}
+
+.animal-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.07);
+    border: 2px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-agendados {
+    border-color: #ffc107;
+}
+
+.card-en_cola {
+    border-color: #20c997;
+}
+
+.card-con_problemas {
+    border-color: #dc3545;
+}
+
+/* el que fallo se sigue viendo de lejos aunque no cambie de grupo */
+.card-con-error {
+    border-color: #dc3545;
+}
+
+.card-top {
+    display: flex;
+    gap: 15px;
+    padding: 18px;
+}
+
+.animal-image-container {
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+.animal-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+    font-size: 0.7rem;
+    gap: 4px;
+}
+
+.image-placeholder i {
+    font-size: 1.5rem;
+}
+
+.animal-info {
+    min-width: 0;
+}
+
+.animal-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+}
+
+.animal-name a {
+    color: #2c3e50;
+    text-decoration: none;
+}
+
+.animal-name a:hover {
+    color: #c13584;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.detail-item i {
+    width: 14px;
+    color: #adb5bd;
+    font-size: 0.75rem;
+}
+
+.status-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 18px 12px;
+}
+
+.status-badge {
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f1f3f5;
+    color: #495057;
+}
+
+.badge-revisar-ia {
+    background: #dc3545;
+    color: white;
+}
+
+.badge-ok-ia {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-error-ia {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.revision-ia {
+    margin: 0 18px 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8f9fa;
+    color: #495057;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.revision-ia-alerta {
+    background: #fff5f5;
+    color: #a71d2a;
+    border-left: 3px solid #dc3545;
+}
+
+.no-sale {
+    margin: 0 18px 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff8e1;
+    color: #7a5b00;
+    font-size: 0.82rem;
+    border-left: 3px solid #ffc107;
+}
+
+.animal-description {
+    margin: 0 18px 12px;
+    color: #6c757d;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    font-style: italic;
+}
+
+.card-links {
+    display: flex;
+    gap: 14px;
+    padding: 0 18px 14px;
+    font-size: 0.8rem;
+}
+
+.card-links a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.card-links a:hover {
+    color: #c13584;
+}
+
+.card-footer {
+    margin-top: auto;
+    padding: 14px 18px;
+    border-top: 1px solid #f1f3f5;
+    background: #fcfcfd;
+}
+
+.cuenta-regresiva {
+    font-size: 0.85rem;
+    color: #495057;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* nota adentro de la tarjeta, como la de la revision automatica: el error acompana al
+   animal en el grupo donde este, no lo manda a otro */
+.error-motivo {
+    margin: 0 18px 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff5f5;
+    border-left: 3px solid #dc3545;
+    font-size: 0.85rem;
+    color: #a71d2a;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.error-intentos {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: #6c757d;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    flex: 1;
+    min-width: 120px;
+    padding: 9px 14px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.btn-cancelar {
+    background: #6c757d;
+}
+
+.btn-cancelar:hover {
+    background: #565e64;
+    color: white;
+}
+
+.btn-ya {
+    background: linear-gradient(135deg, #e1306c 0%, #fd1d1d 100%);
+}
+
+.btn-ya:hover {
+    background: linear-gradient(135deg, #c13584 0%, #e1306c 100%);
+    color: white;
+}
+
+@media (max-width: 768px) {
+    .container-colored {
+        padding: 20px 15px;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 18px;
+    }
+
+    .animals-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .main-title {
+        font-size: 1.7rem;
+    }
+}
+</style>
+{% endblock %}

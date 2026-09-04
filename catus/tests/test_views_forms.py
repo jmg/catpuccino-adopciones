@@ -15,7 +15,9 @@ class FormViewPostTest(TestCase):
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.animal = make_animal(nombre="Willy", estado="D")
+        #el que carga el animal es el que después marca sus formularios
+        self.rescatista = make_user()
+        self.animal = make_animal(nombre="Willy", estado="D", cargado_por=self.rescatista)
         self.estado_form = make_estado_formulario(animal=self.animal, hash="abc123")
 
     def post(self, estado):
@@ -24,7 +26,7 @@ class FormViewPostTest(TestCase):
             "estado": estado,
             "gato": self.animal.id,
         })
-        request.user = make_user()
+        request.user = self.rescatista
 
         view = FormView()
         view.request = request
@@ -97,13 +99,14 @@ class FormViewPostRobustezTest(TestCase):
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.animal = make_animal(nombre="Willy", estado="D")
+        self.rescatista = make_user()
+        self.animal = make_animal(nombre="Willy", estado="D", cargado_por=self.rescatista)
         self.estado_form = make_estado_formulario(animal=self.animal, hash="abc123", estado="N")
 
     def post(self, data):
 
         request = self.factory.post("/formularios/abc123/", data)
-        request.user = make_user()
+        request.user = self.rescatista
 
         view = FormView()
         view.request = request
@@ -145,3 +148,64 @@ class FormViewPostRobustezTest(TestCase):
 
         self.estado_form.refresh_from_db()
         self.assertEqual(self.estado_form.gato, otro)
+
+
+class FormViewPermisosTest(TestCase):
+    """La vista se abre con el hash y sin login, así que el hash no puede ser la única llave.
+
+    Un hash se consigue solo: te registrás, cargás un animal, completás el formulario
+    público de ese animal y te llega por mail. Con uno cualquiera se marcaba "adoptado"
+    cualquier animal del sitio, que es lo que lo saca del listado público.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.duenio = make_user(email="duenio@catpuccino.test")
+        self.animal = make_animal(nombre="Willy", estado="D", cargado_por=self.duenio)
+        self.estado_form = make_estado_formulario(animal=self.animal, hash="abc123")
+
+    def post(self, user, estado="A"):
+
+        request = self.factory.post("/formularios/abc123/", {
+            "estado": estado,
+            "gato": self.animal.id,
+        })
+        request.user = user
+
+        view = FormView()
+        view.request = request
+        return view.post(form_hash="abc123")
+
+    def test_un_ajeno_no_le_cambia_el_estado_al_animal_de_otro(self):
+
+        import json
+
+        response = self.post(make_user(email="ajeno@catpuccino.test"))
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.estado, "D", "un ajeno le marcó el animal como adoptado")
+        self.assertIn(self.animal, Animal.get_all_for_adoption())
+        self.assertEqual(json.loads(response.content.decode())["status"], "error")
+
+    def test_un_anonimo_tampoco(self):
+
+        from django.contrib.auth.models import AnonymousUser
+
+        self.post(AnonymousUser())
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.estado, "D")
+
+    def test_el_rescatista_del_animal_si_puede(self):
+
+        self.post(self.duenio)
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.estado, "A")
+
+    def test_el_equipo_si_puede(self):
+
+        self.post(make_user(email="admin@catpuccino.test", is_superuser=True))
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.estado, "A")

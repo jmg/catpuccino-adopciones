@@ -73,6 +73,12 @@ class ModeracionService():
     TIMEOUT = 8
     REINTENTOS = 0
 
+    #El SDK viejo (openai<1) es el que corre en producción y reintenta la conexión por
+    #su cuenta, sin forma de apagarlo: por eso el timeout va como tupla (conexión,
+    #lectura). Con la conexión corta sus tres intentos entran holgados en los 30s del
+    #worker, en vez de sumar 24s de espera adentro del POST del alta.
+    TIMEOUT_CONEXION = 2
+
     #El registro es abierto y cada alta dispara una llamada paga: sin tope, cualquiera
     #puede vaciarle la cuenta de OpenAI al refugio con un script. Nadie carga 20
     #animales en un día, así que el tope no molesta a ningún rescatista real.
@@ -101,13 +107,54 @@ class ModeracionService():
 
         return getattr(settings, "MODERACION_IA_MAX_POR_DIA", self.MAX_POR_USUARIO_POR_DIA)
 
+    def _llamadas_de_hoy(self, usuario):
+        """Cuántas llamadas pagas gastó hoy esta persona.
+
+        Se cuentan filas de RevisionIALlamada, una por llamada. Antes se contaban los
+        animales con revision_ia_fecha reciente, pero revisar_y_guardar pisa esa fecha
+        sobre la MISMA fila: editando un animal en bucle el conteo se quedaba en 1 y
+        las llamadas pagas eran ilimitadas.
+        """
+        from catus.models import RevisionIALlamada
+
+        #la misma ventana corrida de 24hs que usa el tope de /animal/pulldatafromig/
+        desde = timezone.now() - timedelta(days=1)
+
+        try:
+            return RevisionIALlamada.objects.filter(
+                pedido_por=usuario, created_at__gte=desde,
+            ).count()
+        except Exception as error:
+            #que el conteo falle no puede frenarle el alta a nadie: la revisión es una
+            #ayuda para el equipo y nunca un requisito para publicar un animal
+            logger.warning("No se pudo leer el cupo de revisiones: %s", type(error).__name__)
+            return 0
+
+    def _contar_llamada(self, usuario):
+        """Anota una llamada paga en el cupo del día de esta persona.
+
+        La cuenta va a la base y no a django.core.cache porque el proyecto no configura
+        CACHES: el backend real es LocMemCache, por proceso y en memoria. Con varios
+        workers de gunicorn el tope real era MAX_POR_DIA por worker, y cada deploy o
+        reinicio lo ponía en cero. El registro es abierto: eso es lo único que separa a
+        un refugio chico de una factura de OpenAI.
+        """
+        from catus.models import RevisionIALlamada
+
+        if usuario is None:
+            return
+
+        try:
+            RevisionIALlamada.objects.create(pedido_por=usuario)
+        except Exception as error:
+            logger.warning("No se pudo contar la revisión: %s", type(error).__name__)
+
     def paso_el_limite(self, usuario):
         """True si esta persona ya gastó su cupo de revisiones de hoy.
 
         Pasarse no bloquea nada: el animal se carga igual y queda sin revisar, que es
         el mismo estado que tenían todos antes de que esto existiera.
         """
-        from catus.models import Animal
 
         if usuario is None:
             return False
@@ -116,12 +163,9 @@ class ModeracionService():
         if not limite:
             return False
 
-        desde = timezone.now() - timedelta(days=1)
-
-        return Animal.objects.filter(
-            cargado_por=usuario,
-            revision_ia_fecha__gte=desde,
-        ).count() >= limite
+        #un solo count con índice: el alta del animal espera esta revisión de forma
+        #sincrónica y el worker de producción corta a los 30s
+        return self._llamadas_de_hoy(usuario) >= limite
 
     def revisar(self, animal):
         """Devuelve (estado, motivo) sin levantar nunca una excepción.
@@ -149,6 +193,10 @@ class ModeracionService():
         if not fotos:
             return Animal.REVISION_ERROR, "La publicación no tiene fotos para revisar."
 
+        #se cuenta acá, sobre la llamada de verdad: contar animales revisados no ve
+        #las re-revisiones de un mismo animal, que también se pagan
+        self._contar_llamada(animal.cargado_por)
+
         try:
             contenido = self._preguntar(self._describir(animal), fotos)
         except Exception as error:
@@ -169,7 +217,10 @@ class ModeracionService():
             datos = self._parsear(contenido)
 
             if datos is None:
-                logger.error("Respuesta ininteligible al revisar %s: %r", animal.id, contenido)
+                #que el modelo se rehúse a describir una imagen (content=None) o
+                #conteste cualquier cosa es esperable: va como warning para no crear
+                #un evento ERROR en Sentry, que adjunta la cookie de sesión
+                logger.warning("Respuesta ininteligible al revisar %s: %r", animal.id, contenido)
                 return Animal.REVISION_ERROR, "La respuesta del servicio no se entendió."
 
             return self.decidir(animal, datos)
@@ -247,6 +298,14 @@ class ModeracionService():
 
         estado, motivo = self.revisar(animal)
 
+        #un "no se pudo revisar" no puede borrar una marca que ya estaba puesta: el
+        #tope diario y el servicio apagado también devuelven 'E', y como la re-revisión
+        #la dispara el propio rescatista editando, quien quedaba marcado con 'R' se
+        #sacaba la marca solo. Un veredicto solo lo reemplaza otro veredicto.
+        if estado == Animal.REVISION_ERROR and animal.revision_ia_estado == Animal.REVISION_REVISAR:
+            estado = Animal.REVISION_REVISAR
+            motivo = animal.revision_ia_motivo
+
         try:
             animal.revision_ia_estado = estado
             animal.revision_ia_motivo = motivo
@@ -293,7 +352,7 @@ class ModeracionService():
 
         fotos = []
 
-        for imagen in animal.get_images()[: self.MAX_FOTOS]:
+        for imagen in self._fotos_a_mirar(animal):
 
             if not imagen.image:
                 continue
@@ -314,6 +373,33 @@ class ModeracionService():
 
         return fotos
 
+    def _fotos_a_mirar(self, animal):
+        """Las fotos que se le mandan al modelo, a lo sumo MAX_FOTOS.
+
+        get_images() ordena por posicion, que no se escribe en ningún lado y queda
+        siempre en NULL, así que el orden real es el de carga. Agregarle una cuarta
+        foto a un animal que ya tenía tres hacía que la re-revisión mirara otra vez
+        las tres viejas, no viera la nueva y encima le refrescara el "OK". Cuando ya
+        hubo un veredicto, primero van las fotos que ese veredicto no vio.
+        """
+
+        imagenes = list(animal.get_images())
+        revisado = animal.revision_ia_fecha
+
+        if revisado:
+            nuevas = []
+            viejas = []
+
+            for imagen in imagenes:
+                if imagen.created_at and imagen.created_at > revisado:
+                    nuevas.append(imagen)
+                else:
+                    viejas.append(imagen)
+
+            imagenes = nuevas + viejas
+
+        return imagenes[: self.MAX_FOTOS]
+
     def _achicar(self, crudo):
         """Reduce la foto antes de mandarla.
 
@@ -332,8 +418,10 @@ class ModeracionService():
             salida = BytesIO()
             imagen.save(salida, format="JPEG", quality=80)
             return salida.getvalue()
-        except Exception:
-            logger.exception("No se pudo achicar una foto para revisar")
+        except Exception as error:
+            #una foto que Pillow no puede abrir es esperable y no rompe nada: warning,
+            #porque los eventos ERROR de Sentry se llevan la cookie de sesión puesta
+            logger.warning("No se pudo achicar una foto para revisar: %s", type(error).__name__)
             return crudo
 
     def _mensajes(self, descripcion, fotos):
@@ -380,7 +468,8 @@ class ModeracionService():
 
         respuesta = openai.ChatCompletion.create(
             model=modelo, messages=mensajes, max_tokens=300, temperature=0,
-            request_timeout=self.TIMEOUT,
+            #tupla (conexión, lectura): acá no hay cómo apagar los reintentos del SDK
+            request_timeout=(self.TIMEOUT_CONEXION, self.TIMEOUT),
         )
         return respuesta["choices"][0]["message"]["content"]
 

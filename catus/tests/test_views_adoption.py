@@ -7,10 +7,10 @@ se entera de que alguien se postuló.
 from django.core import mail
 from django.test import RequestFactory, TestCase, override_settings
 
-from forms_builder.forms.models import Field, FieldEntry, Form, FormEntry
+from forms_builder.forms.models import FieldEntry, Form
 
 from catus.models import EstadoFormulario
-from catus.tests.factories import make_animal, make_user
+from catus.tests.factories import make_animal, make_field, make_form_entry, make_user
 from catus.views.adoption import PreAdoptionView
 
 
@@ -23,14 +23,14 @@ class EnviarFormularioTest(TestCase):
         self.animal = make_animal(nombre="Willy", cargado_por=self.rescatista)
 
         self.form = Form.objects.create(title="Pre Adopción")
-        self.campo_animal = Field.objects.create(label="Gato a adoptar", field_type=6)
-        self.campo_nombre = Field.objects.create(label="Nombre y Apellido", field_type=1)
-        self.campo_email = Field.objects.create(label="Email", field_type=1)
-        self.campo_otro = Field.objects.create(label="Nombre del gato a adoptar", field_type=1)
+        self.campo_animal = make_field(self.form, "Gato a adoptar", 6)
+        self.campo_nombre = make_field(self.form, "Nombre y Apellido")
+        self.campo_email = make_field(self.form, "Email")
+        self.campo_otro = make_field(self.form, "Nombre del gato a adoptar")
 
     def build_entry(self, animal_value, email="ana@ejemplo.test"):
 
-        entry = FormEntry.objects.create(form=self.form)
+        entry = make_form_entry(self.form)
         FieldEntry.objects.create(entry=entry, field_id=self.campo_animal.id, value=animal_value)
         FieldEntry.objects.create(entry=entry, field_id=self.campo_nombre.id, value="Ana Gómez")
         FieldEntry.objects.create(entry=entry, field_id=self.campo_email.id, value=email)

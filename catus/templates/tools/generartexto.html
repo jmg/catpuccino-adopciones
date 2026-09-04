@@ -1,11 +1,11 @@
-{% if animal.tipo == "G" %}🐱{% else %}🐶{% endif %} ¡<b>{{animal.nombre}}</b> en Adopción Responsable! {% if animal.tipo == "G" %}🐱{% else %}🐶{% endif %}
+{% load catus_html %}{% if animal.tipo == "G" %}🐱{% else %}🐶{% endif %} ¡<b>{{animal.nombre}}</b> en Adopción Responsable! {% if animal.tipo == "G" %}🐱{% else %}🐶{% endif %}
 <br><br>
 Sexo: <b>{{animal.get_sexo_display}}</b><br>
 Edad: <b>{{animal.edad}}</b><br>
 {% if animal.zona %}Zona: <b>{{animal.zona}}</b><br>{% endif %}
 {% if animal.cargado_por.instagram %}Rescatado por: <b>{{animal.cargado_por.get_instagram}}</b><br>{% endif %}
 <br>
-{% if animal.datos %}{{ animal.get_datos|safe }}{% endif %}
+{% if animal.datos %}{{ animal.get_datos|html_seguro }}{% endif %}{% comment %}html_seguro y no safe: datos lo escribe cualquiera que se registre y esta pantalla la abre un superusuario, que con un <script> ajeno aprueba animales o cambia contraseñas sin darse cuenta.{% endcomment %}
 <br>
 -------------------------------------------------------------------------------
 <br><br>

@@ -24,6 +24,57 @@
             <!-- Tools Grid -->
             <div class="tools-grid">
 
+                {% comment %}
+                La cola va primera y es la unica con un numero: es lo unico de este panel
+                que tiene hora. El posteo automatico se agenda solo al aprobar y sale a la
+                cuenta de la organizacion sin que nadie lo mire —automatic_approve regala la
+                aprobacion—, asi que esa demora es el unico gate humano que queda, y esta
+                pantalla es donde se usa. No figuraba aca: habia que saberse la URL.
+                {% endcomment %}
+                <!-- Cola de Instagram -->
+                <div class="tool-card card-queue">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="card-badge">
+                            {% if agendados %}
+                                <span class="badge badge-queue">{{ agendados }} agendado{{ agendados|pluralize:"s" }}</span>
+                            {% else %}
+                                <span class="badge badge-queue-vacio">Sin agendar</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="card-title">Cola de Instagram</h4>
+                        <p class="card-description">
+                            Lo que va a salir solo a Instagram, y la ventana para frenarlo antes de que salga
+                        </p>
+                        <div class="card-features">
+                            <div class="feature-item">
+                                <i class="fas fa-clock"></i>
+                                <span>
+                                    {% if agendados %}
+                                        {{ agendados }} esperando su hora
+                                    {% else %}
+                                        Nada esperando su hora
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-ban"></i>
+                                <span>Cancelar un posteo antes de que salga</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/tools/colainstagram/" class="btn btn-tool btn-queue">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span>Acceder</span>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- Animales Pendientes -->
                 <div class="tool-card card-pending">
                     <div class="card-header">
@@ -324,6 +375,10 @@
 }
 
 /* Card specific colors */
+.card-queue .card-icon {
+    background: linear-gradient(135deg, #e1306c 0%, #c13584 100%);
+}
+
 .card-pending .card-icon {
     background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
 }
@@ -358,6 +413,16 @@
 .badge-info {
     background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
     color: white;
+}
+
+.badge-queue {
+    background: linear-gradient(135deg, #e1306c 0%, #c13584 100%);
+    color: white;
+}
+
+.badge-queue-vacio {
+    background: #e9ecef;
+    color: #6c757d;
 }
 
 /* Card Body */
@@ -440,6 +505,16 @@
     transform: translateY(-2px);
     text-decoration: none;
     color: white;
+}
+
+.btn-queue {
+    background: linear-gradient(135deg, #e1306c 0%, #c13584 100%);
+    color: white;
+}
+
+.btn-queue:hover {
+    background: linear-gradient(135deg, #c13584 0%, #833ab4 100%);
+    box-shadow: 0 8px 20px rgba(225, 48, 108, 0.3);
 }
 
 .btn-pending {

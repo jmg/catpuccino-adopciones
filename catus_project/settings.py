@@ -203,6 +203,21 @@ try:
 except (TypeError, ValueError):
     MODERACION_IA_MAX_POR_DIA = 20
 
+#Posteo automatico en Instagram: al aprobar un animal, el posteo queda agendado y sale
+#solo cuando pasa la demora. Arranca APAGADO a proposito. Publicar en la cuenta de la
+#organizacion es irreversible y se ve de afuera, asi que prenderlo tiene que ser una
+#decision de alguien, no algo que pase solo en el proximo git pull. Para prenderlo:
+#"INSTAGRAM_AUTO_ACTIVO": "1" en /etc/secrets/catpuccino_adopciones.<env>.json
+INSTAGRAM_AUTO_ACTIVO = _config_bool("INSTAGRAM_AUTO_ACTIVO", False)
+
+#Minutos entre aprobar y publicar. Es la ventana que tiene el equipo para cancelar desde
+#/tools/colainstagram/, y es el unico control humano que queda: aprobado=True no
+#garantiza que alguien haya mirado, porque automatic_approve aprueba solo.
+try:
+    INSTAGRAM_AUTO_DEMORA_MINUTOS = int(app_config.get("INSTAGRAM_AUTO_DEMORA_MINUTOS") or 30)
+except (TypeError, ValueError):
+    INSTAGRAM_AUTO_DEMORA_MINUTOS = 30
+
 EMAIL_BACKEND = "sgbackend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
 
@@ -233,6 +248,22 @@ if ENV == "LOCAL":
         }
     }"""
     LOGGING = {}
+
+if ENV == "TEST":
+    #los avisos que el código manda por logger.warning son los que queremos en
+    #producción, pero en los tests no hay ningún formulario de forms_builder cargado y
+    #el signal del desplegable avisa en cada save de un animal: eran 900 líneas de ruido
+    #tapando la salida de la suite. assertLogs sigue andando, se maneja sus handlers.
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "handlers": {
+            "nulo": {"class": "logging.NullHandler"},
+        },
+        "loggers": {
+            "catus": {"handlers": ["nulo"], "level": "ERROR", "propagate": False},
+        },
+    }
 
 try:
     from .settings_local import *

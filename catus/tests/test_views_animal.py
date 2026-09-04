@@ -275,14 +275,8 @@ class MailDeAprobacionTest(TestCase):
             self.enviar(animal)
 
 
-@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="TEST")
-class RevisionAlEditarTest(AnimalViewTestCase):
-    """Editar un animal ya revisado tiene que volver a revisarlo.
-
-    Sin esto alguien podía cargar un gato de verdad, quedar aprobado, y después
-    editar la publicación para reemplazar fotos y texto por otra cosa, conservando
-    el "OK" que el equipo ve en /tools/animalespendientes/.
-    """
+class EditarAnimalTestCase(AnimalViewTestCase):
+    """POST de edición del animal, como lo manda la pantalla del rescatista."""
 
     def campos_del_formset(self, animal):
 
@@ -329,6 +323,16 @@ class RevisionAlEditarTest(AnimalViewTestCase):
 
         return revisar
 
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="TEST")
+class RevisionAlEditarTest(EditarAnimalTestCase):
+    """Editar un animal ya revisado tiene que volver a revisarlo.
+
+    Sin esto alguien podía cargar un gato de verdad, quedar aprobado, y después
+    editar la publicación para reemplazar fotos y texto por otra cosa, conservando
+    el "OK" que el equipo ve en /tools/animalespendientes/.
+    """
+
     def setUp(self):
         super().setUp()
         from catus.tests.factories import make_animal_image
@@ -352,6 +356,29 @@ class RevisionAlEditarTest(AnimalViewTestCase):
         revisar = self.editar(self.animal, zona="Otra zona")
 
         self.assertFalse(revisar.called, "una edición menor gastó una llamada paga")
+
+    def test_mover_solo_el_recorte_no_gasta_una_llamada(self):
+        """La revisión mira la foto y el texto; el recorte para Instagram no lo ve.
+
+        La condición era `any(f.has_changed())` sobre el formset y los cuatro campos del
+        recorte cuentan como cambio, así que corregirle el encuadre a una foto pagaba una
+        llamada al pedo. Y si la IA contestaba 'R', encima sacaba al animal de la cola del
+        posteo automático: por mover un cuadradito.
+        """
+
+        imagen = self.animal.get_images()[0]
+
+        revisar = self.editar(self.animal, **{
+            "animalimage_set-0-crop_x": "0.1",
+            "animalimage_set-0-crop_y": "0.0",
+            "animalimage_set-0-crop_w": "0.5",
+            "animalimage_set-0-crop_h": "0.5",
+        })
+
+        self.assertFalse(revisar.called, "cambiar el recorte gastó una llamada paga")
+
+        imagen.refresh_from_db()
+        self.assertEqual(imagen.crop_x, 0.1, "no se guardó el recorte: el test no probó nada")
 
 
 class SinPermisoTest(AnimalViewTestCase):
@@ -382,3 +409,214 @@ class SinPermisoTest(AnimalViewTestCase):
 
         self.animal.refresh_from_db()
         self.assertFalse(self.animal.aprobado)
+
+
+class NombreEscapadoAlAprobarTest(AnimalViewTestCase):
+    """La respuesta de aprobar sale como text/html en la sesión de quien aprueba.
+
+    El nombre lo escribe cualquiera que se registre y el link "Aprobar!" se abre desde
+    el mail con la sesión de alguien del equipo: sin escapar, un animal llamado
+    "<script>..." corría en el navegador del superusuario.
+    """
+
+    def aprobar(self, animal):
+
+        return self.call(AprobarView, self.admin, method="get", data={"id": animal.id})
+
+    def test_el_nombre_va_escapado(self):
+
+        animal = make_animal(nombre="<script>alert(1)</script>", cargado_por=self.duenio, aprobado=False)
+
+        cuerpo = self.aprobar(animal).content.decode()
+
+        self.assertNotIn("<script>", cuerpo, "el nombre salió sin escapar")
+        self.assertIn("&lt;script&gt;", cuerpo)
+
+    def test_tambien_va_escapado_si_ya_estaba_aprobado(self):
+
+        animal = make_animal(nombre="<script>alert(1)</script>", cargado_por=self.duenio, aprobado=True)
+
+        self.assertNotIn("<script>", self.aprobar(animal).content.decode())
+
+    def test_un_fallo_del_mail_no_pierde_la_aprobacion(self):
+        """El mail se mandaba antes de guardar: si el proveedor fallaba, el animal
+        quedaba sin aprobar y quien apretó "Aprobar!" se comía un 500."""
+
+        from unittest import mock
+
+        from catus.services.mail import MailService
+
+        with mock.patch.object(MailService, "send_mail_aprobacion", side_effect=Exception("proveedor caído")):
+            response = self.aprobar(self.animal)
+
+        self.animal.refresh_from_db()
+        self.assertTrue(self.animal.aprobado, "se perdió la aprobación porque falló el mail")
+        self.assertEqual(response.status_code, 200)
+
+
+class TopeDePedidosAInstagramTest(AnimalViewTestCase):
+    """/animal/pulldatafromig/ sale a buscar el post y hace una llamada paga a OpenAI.
+
+    El registro es abierto, así que estar logueado no es un permiso: sin tope,
+    cualquiera con una cuenta le vacía la cuenta de OpenAI al refugio con un bucle
+    de curl. El tope cuenta pedidos, no animales: siempre se pide el mismo post.
+    """
+
+    def pedir(self, user):
+
+        from unittest import mock
+
+        from catus.services.gpt import GPTService
+        from catus.views.animal import PullDataFromIg
+
+        request = self.factory.get("/animal/pulldatafromig/", {"url": "https://www.instagram.com/p/abc/"})
+        request.user = user
+
+        with mock.patch.object(GPTService, "pull_data_from_ig", return_value={"Nombre": "Willy"}) as pull:
+            response = PullDataFromIg.as_view()(request)
+
+        return response, pull
+
+    @override_settings(GPT_IG_MAX_POR_DIA=2)
+    def test_pasado_el_tope_no_se_llama_a_la_api(self):
+
+        import json
+
+        for _ in range(2):
+            self.pedir(self.duenio)
+
+        response, pull = self.pedir(self.duenio)
+
+        self.assertFalse(pull.called, "se gastó una llamada paga después del tope")
+        self.assertIn("error", json.loads(response.content.decode()))
+        self.assertEqual(response.status_code, 200, "el tope no puede ser una excepción")
+
+    @override_settings(GPT_IG_MAX_POR_DIA=2)
+    def test_debajo_del_tope_se_atiende_normalmente(self):
+
+        import json
+
+        response, pull = self.pedir(self.duenio)
+
+        self.assertTrue(pull.called)
+        self.assertEqual(json.loads(response.content.decode())["Nombre"], "Willy")
+
+    @override_settings(GPT_IG_MAX_POR_DIA=2)
+    def test_el_tope_es_de_cada_persona(self):
+
+        for _ in range(2):
+            self.pedir(self.duenio)
+
+        response, pull = self.pedir(self.intruso)
+
+        self.assertTrue(pull.called, "el tope de una persona le frenó los pedidos a otra")
+
+
+class ImagenDeInstagramAlEditarTest(EditarAnimalTestCase):
+    """La imagen del posteo lleva el nombre, la edad y el sexo quemados en el pixel.
+
+    generar_imagen_para_instagram se saltea la foto que ya tiene su image_for_instagram,
+    así que la imagen no se rehacía nunca: el rescatista corregía la edad —o reemplazaba
+    la foto— y el posteo salía igual, con los datos viejos, sin que nadie lo mirara.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        import shutil
+        import tempfile
+
+        from catus.tests.factories import make_animal_image, uploaded_photo
+
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+
+        self.addCleanup(shutil.rmtree, self.media, True)
+        self.addCleanup(self.override.disable)
+
+        self.animal.datos = "Un gatito."
+        self.animal.edad = "2 años"
+        self.animal.save()
+
+        self.imagen = make_animal_image(animal=self.animal)
+        self.imagen.image_for_instagram.save("posteo.jpg", uploaded_photo(), save=True)
+
+    def tiene_imagen_de_posteo(self):
+
+        self.imagen.refresh_from_db()
+
+        return bool(self.imagen.image_for_instagram)
+
+    def test_cambiar_la_edad_rehace_la_imagen_del_posteo(self):
+
+        self.editar(self.animal, edad="3 años")
+
+        self.assertFalse(
+            self.tiene_imagen_de_posteo(),
+            "el posteo iba a salir con la edad vieja dibujada",
+        )
+
+    def test_cambiar_el_nombre_rehace_la_imagen_del_posteo(self):
+
+        self.editar(self.animal, nombre="Pelusa")
+
+        self.assertFalse(self.tiene_imagen_de_posteo())
+
+    def test_cambiar_el_sexo_rehace_la_imagen_del_posteo(self):
+
+        self.editar(self.animal, sexo="H")
+
+        self.assertFalse(self.tiene_imagen_de_posteo())
+
+    def test_reemplazar_la_foto_rehace_su_imagen_del_posteo(self):
+        """La imagen compuesta es de la foto vieja: la nueva ni aparece en el posteo."""
+
+        from catus.tests.factories import uploaded_photo
+
+        self.editar(self.animal, **{"animalimage_set-0-image": uploaded_photo(name="otra.jpg")})
+
+        self.assertFalse(self.tiene_imagen_de_posteo())
+
+    def test_editar_solo_la_zona_no_toca_la_imagen(self):
+        """Rearmar cuesta segundos de CPU por foto y cambia el nombre del archivo."""
+
+        self.editar(self.animal, zona="Otra zona")
+
+        self.assertTrue(self.tiene_imagen_de_posteo(), "se rearmó una imagen que estaba bien")
+
+    def test_mover_solo_el_recorte_rehace_la_imagen(self):
+        """El recorte es el cuadrado que se publica: cambiarlo cambia la imagen compuesta.
+
+        No dispara la revisión con IA (eso lo prueba RevisionAlEditarTest), pero sí hay
+        que rearmar el posteo: si no, el rescatista corrige el encuadre para que no salga
+        el animal cortado y sale igual.
+        """
+
+        self.editar(self.animal, **{
+            "animalimage_set-0-crop_x": "0.1",
+            "animalimage_set-0-crop_y": "0.0",
+            "animalimage_set-0-crop_w": "0.5",
+            "animalimage_set-0-crop_h": "0.5",
+        })
+
+        self.assertFalse(self.tiene_imagen_de_posteo())
+        self.assertEqual(self.imagen.crop_x, 0.1, "no se guardó el recorte: el test no probó nada")
+
+    def test_un_animal_ya_publicado_conserva_su_imagen(self):
+        """Ese archivo es lo que se subió a Instagram.
+
+        Rearmarlo no cambia el post que ya está en la cuenta —preparar_publicaciones
+        filtra instagram_publicado=False, así que ni lo mira— y borrarlo sólo pierde el
+        registro de lo que se publicó.
+        """
+
+        self.animal.instagram_publicado = True
+        self.animal.save()
+
+        self.editar(self.animal, nombre="Pelusa")
+
+        self.assertTrue(
+            self.tiene_imagen_de_posteo(),
+            "se borró la imagen de un posteo que ya salió",
+        )

@@ -1,0 +1,87 @@
+# Crontab de producción de Catpuccino Adopciones.
+#
+# Instalar:   crontab -e   (como el usuario que corre la app) y pegar todo esto.
+# Ver:        crontab -l
+#
+# Todo pasa por ./cron.sh, que se encarga del candado (flock) y del log. Las rutas del
+# servidor se ajustan UNA sola vez, arriba de cron.sh, no acá.
+#
+# Antes de instalarlo:
+#   1. Ajustar VENV y APP en cron.sh: los que están son los de la máquina del autor.
+#   2. mkdir -p /var/log/catpuccino   (o el LOGS que hayas puesto en cron.sh)
+#   3. ./cron.sh check                para confirmar que las rutas quedaron bien.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Un mail de verdad acá hace que un fallo del cron le llegue a alguien. Vacío quiere decir
+# que lo único que queda de una corrida es su archivo en /var/log/catpuccino.
+MAILTO=""
+
+CATUS=/var/www/catpuccino-adopciones/cron.sh
+
+
+# ---------------------------------------------------------------------------
+# Posteo en Instagram
+# ---------------------------------------------------------------------------
+
+# Prepara lo agendado: le compone la imagen del posteo y lo marca listo. Mientras
+# INSTAGRAM_AUTO_ACTIVO esté apagado en el JSON de config, corta de entrada y no hace nada,
+# así que se puede instalar antes de decidir prender el posteo automático. Cada 10 min para
+# que la demora de 30 se respete sin mucho desfasaje.
+*/10 * * * * $CATUS preparar_publicaciones
+
+# Publica lo que está marcado como listo: lo que agendó el posteo automático y lo que el
+# equipo marcó a mano. Tiene topes propios (5 por corrida, 20 por día) contra el límite real
+# de Instagram, que es de 25 cada 24 h. Corrido 5 minutos para no arrancar junto al anterior.
+5,20,35,50 * * * * $CATUS publish
+
+# Comenta "ya fue adoptado" en el post de los que pasaron a adoptado.
+17 * * * * $CATUS update_status_in_ig
+
+# Completa el permalink de los que se publicaron y quedaron sin link. Pasa cuando falla el
+# pedido del permalink justo después de publicar: se prefiere perder el link antes que
+# arriesgar un post duplicado, y esto lo recupera después.
+40 4 * * * $CATUS update_post_id
+
+# Renueva el token largo de Facebook. Dura unos 60 días: semanal deja margen para que un
+# par de corridas fallidas no dejen el pipeline muerto sin que nadie se entere.
+30 3 * * 0 $CATUS refresh_token
+
+
+# ---------------------------------------------------------------------------
+# Mantenimiento
+# ---------------------------------------------------------------------------
+
+# Da y saca la aprobación automática según cuántos animales aprobados a mano tenga cada
+# rescatista. Saca también: el mínimo subió de 1 a 5 y los que ya la tenían del régimen
+# viejo la conservaban para siempre.
+15 5 * * * $CATUS automatic_approve
+
+# Achica las fotos grandes. Saltea las que ya están en tamaño, así que una corrida sin nada
+# que hacer sale barata; aun así va semanal y de madrugada, porque cuando toca reencoda.
+0 4 * * 6 $CATUS optimize_images
+
+
+# ---------------------------------------------------------------------------
+# Los que NO van acá
+# ---------------------------------------------------------------------------
+# update_estado_form  recorre TODOS los animales: es un backfill de una vez, no algo
+#                     recurrente. Correrlo a mano cuando haga falta.
+# pull_from_ig        importa posts de Instagram: lo dispara una persona, no el reloj.
+# post, test_*        comandos de prueba del autor.
+
+
+# ---------------------------------------------------------------------------
+# Rotar los logs
+# ---------------------------------------------------------------------------
+# Sin esto los .log crecen para siempre. Guardar como /etc/logrotate.d/catpuccino:
+#
+#   /var/log/catpuccino/*.log {
+#       weekly
+#       rotate 8
+#       compress
+#       missingok
+#       notifempty
+#       copytruncate
+#   }

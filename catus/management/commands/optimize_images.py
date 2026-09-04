@@ -4,6 +4,8 @@ Estaba roto de entrada: importaba save_image, que es un método de ImageService 
 no una función del módulo; llamaba a Animal.get_images() sobre la clase en vez de
 sobre cada animal; y leía image.imagen, un campo que no existe (es image).
 """
+from PIL import Image
+
 from django.core.management.base import BaseCommand
 
 from catus.models import Animal
@@ -31,6 +33,7 @@ class Command(BaseCommand):
 
         service = ImageService()
         procesadas = 0
+        salteadas = 0
         fallidas = 0
 
         for animal in animals:
@@ -40,6 +43,18 @@ class Command(BaseCommand):
                     continue
 
                 try:
+                    #el tamaño se lee del disco y no de image.image.width: leer el ancho del
+                    #campo deja el archivo cerrado y después optimize() no puede ni abrirlo
+                    with Image.open(image.image.path) as foto:
+                        tamano = foto.size
+
+                    #optimize() reencoda y guarda con nombre nuevo aunque no haya nada que
+                    #achicar: sin este chequeo cada corrida le bajaba la calidad a toda la
+                    #galería y rompía las URLs de las fotos que ya salieron por mail
+                    if not service.necesita_optimizar(tamano, options["max_width"]):
+                        salteadas += 1
+                        continue
+
                     service.optimize(image.image, max_width=options["max_width"])
                     procesadas += 1
                 except Exception as error:
@@ -48,4 +63,6 @@ class Command(BaseCommand):
                         image.id, animal.nombre, error,
                     ))
 
-        self.stdout.write("Fotos optimizadas: {}. Con error: {}.".format(procesadas, fallidas))
+        self.stdout.write("Fotos optimizadas: {}. Sin cambios: {}. Con error: {}.".format(
+            procesadas, salteadas, fallidas,
+        ))

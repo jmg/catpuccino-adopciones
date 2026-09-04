@@ -7,10 +7,10 @@ degrade mal cuando el dato no está.
 """
 from django.test import TestCase
 
-from forms_builder.forms.models import Field, FieldEntry, Form, FormEntry
+from forms_builder.forms.models import FieldEntry, Form
 
 from catus.services.adoption import AdoptionService
-from catus.tests.factories import make_animal
+from catus.tests.factories import make_animal, make_field, make_form_entry
 
 
 class AdoptionServiceTestCase(TestCase):
@@ -21,14 +21,14 @@ class AdoptionServiceTestCase(TestCase):
 
     def add_field(self, entry, label, value, field_type=1):
 
-        field = Field.objects.create(label=label, field_type=field_type)
+        field = make_field(self.form, label, field_type)
         FieldEntry.objects.create(entry=entry, field_id=field.id, value=value)
         return field
 
     def make_entry(self, campos):
         """campos: lista de (label, value) o (label, value, field_type)."""
 
-        entry = FormEntry.objects.create(form=self.form)
+        entry = make_form_entry(self.form)
         for campo in campos:
             self.add_field(entry, *campo)
         return entry
@@ -61,7 +61,7 @@ class GetFormAttrTest(AdoptionServiceTestCase):
     def test_ignora_campos_cuyo_Field_fue_borrado(self):
         """Si borran el campo del formulario, las respuestas viejas quedan huérfanas."""
 
-        entry = FormEntry.objects.create(form=self.form)
+        entry = make_form_entry(self.form)
         FieldEntry.objects.create(entry=entry, field_id=99999, value="huérfano")
         self.add_field(entry, "Email", "ana@test.com")
 
@@ -92,7 +92,7 @@ class GetAnimalObjTest(AdoptionServiceTestCase):
     def test_un_formulario_sin_respuestas_no_rompe(self):
         """Antes hacía [...][0] sobre una lista vacía: IndexError y 500."""
 
-        entry = FormEntry.objects.create(form=self.form)
+        entry = make_form_entry(self.form)
 
         self.assertIsNone(self.service.get_animal_obj(entry))
 

@@ -8,24 +8,29 @@ from django.db.models import Q
 
 class Command(BaseCommand):
 
-    def handle(self, *args, **options):
+    def animales_a_comentar(self):
+        """Los que ya se publicaron y todavía no tienen el comentario de adoptado.
 
-        account = FacebookAccount.objects.all().first()
+        Solo los adoptados: el comentario dice "Ya fue adoptado" y acá también entraban
+        los reservados, que todavía pueden no adoptarse. Y como después se guarda
+        instagram_comment_id, el comentario equivocado ya no se volvía a corregir.
+        Un reservado que después se adopte lo toma una corrida posterior.
+        """
 
-        #update the status in IG
-
-        #solo los adoptados: el comentario dice "Ya fue adoptado" y acá también entraban
-        #los reservados, que todavía pueden no adoptarse. Y como después se guarda
-        #instagram_comment_id, el comentario equivocado ya no se volvía a corregir.
-        #Un reservado que después se adopte lo toma una corrida posterior.
-        animals = Animal.objects.filter(
+        return Animal.objects.filter(
             estado="A",
             instagram_publicado=True,
             instagram_post_id__isnull=False,
             instagram_comment_id__isnull=True,
         ).order_by("-id")
 
-        for animal in animals:
+    def handle(self, *args, **options):
+
+        account = FacebookAccount.objects.all().first()
+
+        #update the status in IG
+
+        for animal in self.animales_a_comentar():
 
             try:
                 FacebookApiService.update_adoptado_comment(account, animal)

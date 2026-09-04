@@ -99,8 +99,13 @@
                                 <span class="js-crop-label">{% if image.get_crop %}Cambiar recorte{% else %}Elegir recorte{% endif %}</span>
                             </button>
 
+                            {% comment %}
+                            Acá decía "Recorte elegido a mano", pero set_suggested_crop le
+                            pone recorte a toda foto que se sube y no es cuadrada: el cartel
+                            afirmaba algo falso en la mayoría de los casos.
+                            {% endcomment %}
                             <small class="form-text text-muted js-crop-state" data-image-id="{{image.id}}">
-                                {% if image.get_crop %}Recorte elegido a mano{% else %}Recorte automático{% endif %}
+                                {% if image.get_crop %}Recorte guardado{% else %}Recorte automático{% endif %}
                             </small>
                         </div>
 

@@ -763,8 +763,31 @@
         }
 
         function updateRemoveAdded(el) {
-            $(el).parent().parent().prev().remove();
-            $(el).parent().parent().remove();
+            /*
+             * Saca la fila ENTERA, no dos nodos contados con .prev().
+             *
+             * El molde #empty_form trae los campos adentro de un <table class='no_error'>:
+             * el parser del navegador saca los <div> de la tabla pero deja adentro los
+             * <input type="hidden">. Con .prev() se iban la foto y el Delete y quedaban
+             * sueltos los cuatro hidden del recorte, así que el POST llevaba
+             * animalimage_set-N-crop_x=0.25 sin animalimage_set-N-image: el formset dejaba
+             * de tratar esa fila como vacía, la validaba y contestaba
+             * "Fotos: This field is required." de una foto que en pantalla ya no estaba,
+             * así que no había nada para corregir salvo recargar y cargar todo de nuevo.
+             * Antes del selector de recorte no pasaba: lo que quedaba suelto (-id y -animal)
+             * venía vacío y la fila se salteaba.
+             */
+            var nombre = $(el).attr('name') || '';
+            var prefijo = nombre.slice(0, nombre.lastIndexOf('-') + 1);
+
+            //el contenedor que agregó "Agregar Foto", que es hijo directo de #form-set
+            $(el).closest('#form-set > *').remove();
+
+            //y por las dudas cualquier campo de esa fila que haya quedado afuera:
+            //el prefijo lleva el guión final, así que la fila 3 no se lleva la 30
+            if (prefijo) {
+                $('#form-set').find('[name^="' + prefijo + '"]').remove();
+            }
         }
 
         function updateRemove(el) {

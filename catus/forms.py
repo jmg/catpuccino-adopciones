@@ -268,6 +268,13 @@ class CatusUserForm(ModelForm):
         if not handle:
             return handle
 
+        #el perfil manda el handle actual precargado en cada POST. Antes de que hubiera
+        #validación del lado del servidor quedaron handles con punto (cat.puccino), y
+        #revisarlos de nuevo invalidaba el form entero: esa gente no podía guardar ni la
+        #descripción por un campo que ni tocó. El que ya tenía guardado se deja pasar.
+        if self.instance.pk and handle == self.instance.handle:
+            return handle
+
         service = ValidationService()
 
         if service.clean_handle(handle) != handle:
