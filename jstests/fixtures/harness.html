@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness del selector de recorte</title>
+
+<!-- los mismos archivos que carga el sitio, servidos en las mismas rutas -->
+<link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css">
+
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+    #datos { font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+    .oculto { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Selector de recorte</h1>
+
+<!--
+  Se copia el cableado de catus/templates/tools/generarimagen.html: cuatro inputs
+  ocultos con el recorte, un botón que abre el selector, y un onSave que escribe las
+  fracciones en los inputs. Si eso cambia en el template, este harness queda viejo:
+  está anotado en jstests/README.md.
+-->
+<form id="animals-form">
+    <input type="hidden" name="crop_x_1" id="crop_x">
+    <input type="hidden" name="crop_y_1" id="crop_y">
+    <input type="hidden" name="crop_w_1" id="crop_w">
+    <input type="hidden" name="crop_h_1" id="crop_h">
+</form>
+
+<button type="button" id="abrir">Elegir recorte</button>
+<span id="estado">Recorte automático</span>
+
+<div id="datos"></div>
+
+<script src="/static/vendor/cropper/cropper.min.js"></script>
+<script src="/static/js/crop-widget.js"></script>
+<script src="/jpeg.js"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    var inputs = {
+        x: document.getElementById("crop_x"),
+        y: document.getElementById("crop_y"),
+        w: document.getElementById("crop_w"),
+        h: document.getElementById("crop_h")
+    };
+
+    var estado = document.getElementById("estado");
+
+    // lo que el test configura antes de abrir
+    var config = {width: 2000, height: 1000, orientacion: 1, nombre: "Willy",
+                  subtitulo: "2 años - Macho", posicionNombre: "Izquierda (abajo)"};
+
+    var src = null;
+
+    window.harness = {
+
+        // cuántas veces se llamó a onSave y con qué, para poder afirmar que NO se llamó
+        guardados: [],
+
+        // el marco que la persona ve, que es contra el que se calculan las fracciones
+        marcoEsperado: function () {
+            var rotada = config.orientacion === 6 || config.orientacion === 8;
+            return rotada
+                ? {width: config.height, height: config.width}
+                : {width: config.width, height: config.height};
+        },
+
+        preparar: function (opciones) {
+
+            Object.keys(opciones || {}).forEach(function (clave) {
+                config[clave] = opciones[clave];
+            });
+
+            src = window.CatusFixtures.foto(config.width, config.height, config.orientacion);
+
+            window.harness.guardados = [];
+            window.harness.escribir(opciones && opciones.crop ? opciones.crop : null);
+
+            return {width: config.width, height: config.height, orientacion: config.orientacion};
+        },
+
+        escribir: function (crop) {
+            // idéntico a lo que hace el template: asignar el número tal cual
+            inputs.x.value = crop ? crop.x : "";
+            inputs.y.value = crop ? crop.y : "";
+            inputs.w.value = crop ? crop.w : "";
+            inputs.h.value = crop ? crop.h : "";
+            estado.textContent = crop ? "Recorte guardado" : "Recorte automático";
+        },
+
+        // los valores como STRING, tal como viajarían en el POST
+        crudo: function () {
+            return {x: inputs.x.value, y: inputs.y.value, w: inputs.w.value, h: inputs.h.value};
+        },
+
+        leer: function () {
+            if (inputs.x.value === "" || inputs.w.value === "") {
+                return null;
+            }
+            return {
+                x: parseFloat(inputs.x.value),
+                y: parseFloat(inputs.y.value),
+                w: parseFloat(inputs.w.value),
+                h: parseFloat(inputs.h.value)
+            };
+        }
+    };
+
+    document.getElementById("abrir").addEventListener("click", function () {
+
+        window.CatusCrop.open({
+            src: src,
+            crop: window.harness.leer(),
+            nombre: config.nombre,
+            subtitulo: config.subtitulo,
+            posicionNombre: config.posicionNombre,
+            logoUrl: "/logo.png",
+            onSave: function (crop) {
+                window.harness.guardados.push(crop);
+                window.harness.escribir(crop);
+            }
+        });
+    });
+})();
+</script>
+
+</body>
+</html>

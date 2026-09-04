@@ -22,9 +22,27 @@ ANIMAL_FIELD_LABELS = {
 
 def _update_animal_field(tipo):
 
-    animal_field = Field.objects.filter(label=ANIMAL_FIELD_LABELS[tipo]).first()
-    if animal_field is None:
+    #esto corre en cada save de un animal, así que se traen los dos primeros de una sola
+    #consulta: alcanza para saber si hay más de uno con la misma etiqueta.
+    campos = list(Field.objects.filter(label=ANIMAL_FIELD_LABELS[tipo])[:2])
+
+    #si alguien le cambia la etiqueta al campo en /forms/, acá no se encuentra nada y el
+    #desplegable se queda congelado para siempre: los animales nuevos no aparecen y el
+    #formulario público los rechaza. Salir mudo dejaba eso sin una sola línea de log.
+    if not campos:
+        logger.warning(
+            "No se encontró el campo '%s' (%s) del formulario: el desplegable de animales queda desactualizado",
+            ANIMAL_FIELD_LABELS[tipo], tipo,
+        )
         return
+
+    if len(campos) > 1:
+        logger.warning(
+            "Hay más de un campo con la etiqueta '%s' (%s): se actualiza solo el primero",
+            ANIMAL_FIELD_LABELS[tipo], tipo,
+        )
+
+    animal_field = campos[0]
 
     #el "0" es la opción "otro animal". Concatenar con format dejaba un "0," suelto
     #cuando no hay animales, y eso agrega una opción vacía al desplegable público.

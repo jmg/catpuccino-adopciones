@@ -1,4 +1,5 @@
 import ast
+from urllib.parse import urljoin
 
 from catus.services.base import BaseService
 from catus.models import ChatGTPResponse
@@ -15,6 +16,45 @@ from pathlib2 import Path
 
 
 class GPTService(BaseService):
+
+    #códigos de redirect y cuántos seguimos como mucho. Instagram redirige de verdad
+    #(instagram.com -> www.instagram.com), asi que no alcanza con no seguir ninguno.
+    REDIRECTS = (301, 302, 303, 307, 308)
+    MAX_REDIRECTS = 3
+
+    #El pedido web espera esta llamada y el worker de produccion corta a los 30s. Sin
+    #request_timeout el SDK 0.x se queda esperando 600s: el rescatista pegaba el link y
+    #se comia un 502 en vez de un error. Lo mismo que hace ModeracionService.
+    TIMEOUT_OPENAI = 12
+
+    def _get_url_de_instagram(self, url):
+        """Pide la URL siguiendo los redirects a mano, revalidando cada salto.
+
+        requests sigue los 3xx solo y el destino no vuelve a pasar por la allowlist:
+        con un redirector abierto alcanzaba pegar un link de instagram.com para que el
+        server terminara pidiendo una direccion interna que no se ve desde afuera.
+        """
+
+        for salto in range(self.MAX_REDIRECTS + 1):
+
+            #el primer chequeo es sobre el link que pegó la persona, los siguientes
+            #sobre el destino de cada redirect
+            if not es_url_de_instagram(url):
+                raise ValueError("El link tiene que ser de un post de Instagram.")
+
+            response = requests.get(url, timeout=20, allow_redirects=False)
+
+            if response.status_code not in self.REDIRECTS:
+                return response
+
+            location = response.headers.get("Location")
+            if not location:
+                return response
+
+            #un Location relativo se resuelve contra la URL que acabamos de pedir
+            url = urljoin(url, location)
+
+        raise ValueError("No pudimos leer ese post. Puede ser privado o no existir.")
 
     def _get_html_title_and_images(self, url):
 
@@ -41,7 +81,7 @@ class GPTService(BaseService):
         if not es_url_de_instagram(url):
             raise ValueError("El link tiene que ser de un post de Instagram.")
 
-        response = requests.get(url, timeout=20)
+        response = self._get_url_de_instagram(url)
         html_code = response.content
 
         html = BeautifulSoup(html_code, 'html.parser')
@@ -68,12 +108,24 @@ class GPTService(BaseService):
 
         return data
 
-    def clean_value(self, value):
+    #formas en que el modelo dice "no sé" cuando el dato no está en el post
+    NO_VALUES = ("no", "no se", "no se especifica", "no se menciona", "no corresponde", "no especifica")
 
-        no_values = ["no", "no se", "no se especifica", "no se menciona", "no corresponde", "no especifica"]
-        for no_value in no_values:
-            if no_value in value.lower():
-                value = ""
+    #las frases largas a veces siguen ("no se especifica en el post"), las cortas no
+    NO_VALUES_LARGOS = tuple(no_value for no_value in NO_VALUES if len(no_value.split()) >= 3)
+
+    def clean_value(self, value):
+        """Vacía el valor si el modelo contestó que no sabe.
+
+        Se compara el valor entero, no por subcadena: buscando subcadenas, un perro
+        llamado Bruno o Nono se quedaba sin nombre, y el JS de la carga corta la
+        precarga completa cuando falta el nombre, asi que se perdía toda la importación.
+        """
+
+        limpio = value.strip().lower().rstrip(".")
+
+        if limpio in self.NO_VALUES or limpio.startswith(self.NO_VALUES_LARGOS):
+            return ""
 
         return value
 
@@ -208,7 +260,7 @@ class GPTService(BaseService):
             {"role": "user", "content": text},
         ]
 
-        response = openai.ChatCompletion.create(model=model, messages=messages)
+        response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=self.TIMEOUT_OPENAI)
         content = response["choices"][0]["message"]["content"]
 
         ChatGTPResponse.objects.create(

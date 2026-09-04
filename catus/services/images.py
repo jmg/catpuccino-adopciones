@@ -17,6 +17,35 @@ class ImageService():
     #tope duro para que una foto muy alargada no se guarde entera
     TOPE_LADO_LARGO = 2600
 
+    #el lienzo del posteo: 1200 de foto + 200 de marco blanco (ver generate_logo_image)
+    LADO_LIENZO_POSTEO = 1400
+
+    #add_nombre_y_edad dibuja la barra del nombre desde x=0 hasta 130 + el ancho del texto
+    MARGEN_BARRA_NOMBRE = 130
+
+    #que la barra no llegue a tocar el borde: el mismo margen que se le deja al logo
+    MARGEN_BORDE_POSTEO = 40
+
+    #los mismos tamaños que ofrece /tools/generarimagen/: la elección automática no puede
+    #terminar en un tamaño que después nadie pueda reproducir a mano desde la pantalla
+    TAMANOS_NOMBRE = (150, 125, 100, 75, 50)
+
+    #el renglón de abajo (edad y sexo) no lo ofrece ninguna pantalla, así que acá los
+    #tamaños son sólo el margen que tiene el ajuste automático para achicarlo
+    TAMANOS_EDAD_SEXO = (60, 50, 40, 30, 25)
+
+    FUENTE_NOMBRE = "impact.ttf"
+    FUENTE_EDAD_SEXO = "montserrat.ttf"
+
+    #add_nombre_y_edad escribe la edad y el sexo empezando en esta x
+    MARGEN_TEXTO_EDAD_SEXO_X = 140
+
+    #Arriba, que es donde venía cayendo el default de /tools/makeimages/ ("Izquierda").
+    #Abajo la barra del nombre se dibuja DESPUÉS del logo y sobre las mismas coordenadas:
+    #con un nombre largo le pasa por encima y el posteo sale sin logo.
+    POSICION_NOMBRE_AUTOMATICA = "Izquierda (arriba)"
+    POSICION_EDAD_SEXO_AUTOMATICA = "Izquierda (arriba)"
+
     def _ratio_para_optimizar(self, size, max_width):
         """Cuánto achicar una foto recién subida. Devuelve 1.0 si no hay que tocarla.
 
@@ -33,8 +62,10 @@ class ImageService():
             return 1.0
 
         #si la foto ya venía con el lado corto por debajo del cuadrado, se respeta:
-        #no hay nada que ganar estirándola
-        minimo_corto = min(lado_corto, self.LADO_CUADRADO_IG)
+        #no hay nada que ganar estirándola. Y el piso tampoco puede pasarse del ancho que
+        #pidieron a mano: mientras miraba sólo el cuadrado, un --max-width 600 sobre una
+        #3000x2000 devolvía 1800x1200, exactamente lo mismo que sin el flag
+        minimo_corto = min(lado_corto, self.LADO_CUADRADO_IG, max_width)
 
         ratio = min(1.0, max_width / float(lado_largo))
 
@@ -46,6 +77,16 @@ class ImageService():
             ratio = self.TOPE_LADO_LARGO / float(lado_largo)
 
         return min(ratio, 1.0)
+
+    def necesita_optimizar(self, size, max_width):
+        """¿Esta foto va a cambiar de tamaño, o no hay nada que hacerle?
+
+        optimize() siempre reencoda a JPEG 70 y siempre guarda con nombre nuevo, borrando
+        el archivo anterior: pasarle una foto que ya está en tamaño le baja la calidad una
+        vez por corrida y rompe las URLs que ya salieron por mail.
+        """
+
+        return self._ratio_para_optimizar(size, max_width) < 1.0
 
     def optimize(self, image_field, max_width):
 
@@ -60,7 +101,9 @@ class ImageService():
         ratio = self._ratio_para_optimizar(img.size, max_width)
 
         if ratio < 1.0:
-            nuevo_tamano = (max(1, int(img.size[0] * ratio)), max(1, int(img.size[1] * ratio)))
+            #truncar dejaba el lado corto un pixel abajo del cuadrado (2191 * 1200/2191 da
+            #1199.9999..., o sea 1199) y el posteo de IG volvía a armarse estirando
+            nuevo_tamano = (max(1, int(round(img.size[0] * ratio))), max(1, int(round(img.size[1] * ratio))))
             img = img.resize(nuevo_tamano, Image.ANTIALIAS)
 
         img = self.rotate(img)
@@ -237,6 +280,135 @@ class ImageService():
 
         return (0.0, offset_fraction, 1.0, side / float(preview_height))
 
+    def get_font(self, fuente, tamano):
+
+        fonts_dir = os.path.join(settings.STATICFILES_DIRS[0], "fonts")
+
+        return ImageFont.truetype(os.path.join(fonts_dir, fuente), tamano)
+
+    def ancho_del_texto(self, texto, fuente, tamano):
+        """Cuánto mide un texto en píxeles, con la fuente con la que se va a dibujar."""
+
+        return self.get_font(fuente, tamano).getsize(texto or "")[0]
+
+    def tamano_que_entra(self, texto, fuente, ancho_disponible, tamanos):
+        """El tamaño más grande, de los que se ofrecen, con el que el texto entra.
+
+        Se mide con la fuente de verdad en vez de estimar por la cantidad de letras: una
+        "i" y una "W" no ocupan lo mismo, y lo que decide si el renglón se sale del
+        lienzo es el ancho en píxeles.
+        """
+
+        for tamano in sorted(tamanos, reverse=True):
+            if self.ancho_del_texto(texto, fuente, tamano) <= ancho_disponible:
+                return tamano
+
+        #un texto absurdamente largo no entra ni con el más chico: se usa igual, porque
+        #recortarle el nombre (o la edad) al animal es peor que un renglón que se pasa
+        return min(tamanos)
+
+    def ancho_del_nombre(self, nombre, tamano):
+        """Cuánto mide el nombre en píxeles, con la fuente con la que se va a dibujar."""
+
+        return self.ancho_del_texto(nombre, self.FUENTE_NOMBRE, tamano)
+
+    def tamano_de_letra_para_el_nombre(self, nombre):
+        """El tamaño más grande, de los que ofrece la pantalla, con el que la barra entra.
+
+        Con el default de 150, "Bartolomeo Maximiliano de los Santos" mide 2356 px sobre
+        un lienzo de 1400: la barra se iba por la derecha y el nombre salía cortado.
+        Mientras las imágenes se armaban a mano no importaba —el que las generaba veía la
+        previsualización y bajaba el tamaño—, pero el cron no mira.
+        """
+
+        entra = self.LADO_LIENZO_POSTEO - self.MARGEN_BARRA_NOMBRE - self.MARGEN_BORDE_POSTEO
+
+        return self.tamano_que_entra(nombre, self.FUENTE_NOMBRE, entra, self.TAMANOS_NOMBRE)
+
+    def texto_de_edad_y_sexo(self, animal):
+        """El renglón de abajo del posteo."""
+
+        if not animal.edad:
+            return animal.get_sexo_display()
+
+        if animal.sexo == "D":
+            return u"{}".format(animal.edad)
+
+        return u"{} - {}".format(animal.edad, animal.get_sexo_display())
+
+    def tamano_de_letra_para_edad_y_sexo(self, texto):
+        """Lo mismo que para el nombre, pero para el renglón de abajo.
+
+        El ajuste cubría sólo el nombre, así que la edad seguía saliéndose: la escribe el
+        rescatista a mano y "aproximadamente 3 años y medio - Macho y Hembra" mide 1661 px
+        con los 60 fijos de siempre, sobre 1220 de lienzo útil. Se salía por la derecha y
+        no lo veía nadie, porque el posteo lo arma el cron.
+        """
+
+        entra = self.LADO_LIENZO_POSTEO - self.MARGEN_TEXTO_EDAD_SEXO_X - self.MARGEN_BORDE_POSTEO
+
+        return self.tamano_que_entra(texto, self.FUENTE_EDAD_SEXO, entra, self.TAMANOS_EDAD_SEXO)
+
+    def generar_imagen_para_instagram(self, imagen, forzar=False):
+        """Arma y guarda el image_for_instagram de una foto, sin nadie mirando.
+
+        Es la misma composición que hace /tools/makeimages/, pero con lo que ya tiene
+        guardado la foto (layout, centrado, posiciones) en vez de con lo que venga del
+        POST, y con el recorte que eligió el rescatista o, si no eligió ninguno, el que
+        propone suggest_crop().
+
+        Devuelve False si la foto ya tenía su imagen: rearmarla cuesta segundos de CPU,
+        guarda un archivo nuevo con otro nombre y deja colgada la URL que ya se le pasó a
+        Instagram.
+        """
+
+        if imagen.image_for_instagram and not forzar:
+            return False
+
+        animal = imagen.animal
+
+        crop = imagen.get_crop()
+        if crop is None:
+            crop = self.suggest_crop(imagen.image)
+
+        #el tamaño guardado es un techo, no una orden: el default del modelo son 150 y
+        #nadie los eligió, así que bajarlo cuando el nombre no entra no le pisa la decisión
+        #a nadie; al revés, un 50 elegido a mano se respeta
+        tamano = min(
+            imagen.image_font_size or max(self.TAMANOS_NOMBRE),
+            self.tamano_de_letra_para_el_nombre(animal.nombre),
+        )
+
+        posicion_nombre = imagen.image_posicion_nombre or self.POSICION_NOMBRE_AUTOMATICA
+        posicion_edad_sexo = imagen.image_posicion_edad_sexo or self.POSICION_EDAD_SEXO_AUTOMATICA
+
+        if imagen.image_layout:
+            contenido = self.generate_logo_image(
+                animal,
+                imagen.image,
+                centered=imagen.image_centered,
+                nombre_font_size=tamano,
+                posicion_nombre=posicion_nombre,
+                posicion_edad_sexo=posicion_edad_sexo,
+                crop=crop,
+            ).read()
+        else:
+            #sin layout se publica la foto tal cual, igual que en /tools/makeimages/
+            with imagen.image.open("rb") as archivo:
+                contenido = archivo.read()
+
+        imagen.image_font_size = tamano
+        imagen.image_posicion_nombre = posicion_nombre
+        imagen.image_posicion_edad_sexo = posicion_edad_sexo
+        #el recorte queda guardado: así la pantalla muestra el que se usó y la corrida
+        #siguiente no propone otro
+        imagen.set_crop(crop)
+
+        #save=True guarda de paso los campos de acá arriba: es un solo UPDATE
+        imagen.image_for_instagram.save(f'{uuid.uuid4()}.jpeg', ContentFile(contenido), save=True)
+
+        return True
+
     def generate_logo_image(self, animal, image_field, centered=True, nombre_font_size=150, posicion_nombre="Izquierda", posicion_edad_sexo="Izquierda", crop=None):
 
         img_parts_dir = os.path.join(settings.STATICFILES_DIRS[0])
@@ -275,9 +447,8 @@ class ImageService():
 
     def add_nombre_y_edad(self, animal, image, canvas_size, nombre_font_size, posicion_nombre, posicion_edad_sexo):
 
-        fonts_dir = os.path.join(settings.STATICFILES_DIRS[0], "fonts")
         draw = ImageDraw.Draw(image)
-        font = ImageFont.truetype(os.path.join(fonts_dir, "impact.ttf"), nombre_font_size)
+        font = self.get_font(self.FUENTE_NOMBRE, nombre_font_size)
 
         color_back_animal_nombre = (147, 186, 183)
         color_text_animal_nombre = (255,255,255)
@@ -321,17 +492,11 @@ class ImageService():
         #if es_plural and sexo.lower() in ["macho", "hembra"]:
         #    sexo = "{}S".format(sexo)
 
-        if animal.edad:
-            if animal.sexo == "D":
-                bottom_text = u"{}".format(animal.edad)
-            else:
-                bottom_text = u"{} - {}".format(animal.edad, animal.get_sexo_display())
-        else:
-            bottom_text = animal.get_sexo_display()
+        bottom_text = self.texto_de_edad_y_sexo(animal)
 
-        font2 = ImageFont.truetype(os.path.join(fonts_dir, "montserrat.ttf"), 60)
+        font2 = self.get_font(self.FUENTE_EDAD_SEXO, self.tamano_de_letra_para_edad_y_sexo(bottom_text))
 
-        margin_text_bottom_x = 140
+        margin_text_bottom_x = self.MARGEN_TEXTO_EDAD_SEXO_X
         if posicion_edad_sexo == "Izquierda (abajo)":
             margin_text_bottom_y = 1205
         else:

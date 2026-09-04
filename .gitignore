@@ -136,3 +136,7 @@ dump.sql
 catus/static/contrato/*
 
 catus/config/*
+# tests de navegador del selector de recorte (jstests/)
+node_modules/
+jstests/test-results/
+jstests/playwright-report/

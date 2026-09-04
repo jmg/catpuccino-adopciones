@@ -10,6 +10,7 @@ from django.contrib.auth.models import Group, User
 from django.contrib.sites.models import Site
 
 from django.utils.safestring import mark_safe
+from catus.services.instagram_auto import InstagramAutoService
 from catus.services.mail import MailService
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,40 @@ class AnimalAdmin(admin.ModelAdmin):
 
         return mark_safe(links)
 
+    def save_model(self, request, obj, form, change):
+        """El otro camino del admin: los tildes del listado y del formulario.
+
+        La acción en lote no es la única forma de aprobar desde acá: `aprobado` está en
+        list_editable, así que se aprueba (y se desaprueba) con un tilde en el listado,
+        y por ahí no pasaba nada del posteo automático.
+
+        Se mira el cambio y no el valor: agendar cada vez que se guarda un animal ya
+        aprobado le devolvería la agenda a uno que el equipo canceló a propósito.
+        """
+
+        super().save_model(request, obj, form, change)
+
+        cambiados = getattr(form, "changed_data", [])
+
+        if "aprobado" in cambiados:
+
+            if obj.aprobado:
+                InstagramAutoService().agendar(obj)
+            else:
+                #desaprobar es la forma de frenar una publicación que ya estaba en camino
+                InstagramAutoService().cancelar(obj)
+
+        #Destildar "listo para publicar" era el freno de mano del flujo viejo: ese tilde
+        #era lo único que decidía si un animal salía. Con el posteo automático dejó de
+        #frenar nada, porque la agenda vencida seguía puesta: preparar_publicaciones
+        #levantaba al animal por la agenda, le volvía a prender la marca y el posteo que el
+        #equipo creía frenado salía igual unos minutos después. cancelar() apaga la marca y
+        #la agenda juntas, que es lo que el gesto quería decir.
+        #Sólo cuando se apaga: marcar listo a mano es adelantar el posteo, no cancelarlo, y
+        #borrarle la agenda ahí lo sacaría de la cola en vez de meterlo.
+        if "instagram_listo_para_publicar" in cambiados and not obj.instagram_listo_para_publicar:
+            InstagramAutoService().cancelar(obj)
+
     def aprobar_animales(self, request, queryset):
         """
         Acción personalizada para aprobar animales seleccionados
@@ -71,6 +106,10 @@ class AnimalAdmin(admin.ModelAdmin):
             animal.aprobado = True
             animal.save()
             animales_aprobados += 1
+
+            #aprobar es lo que agenda el posteo en Instagram. El servicio se traga sus
+            #propios errores, así que un problema acá no deja la tanda a medio aprobar.
+            InstagramAutoService().agendar(animal)
 
             #un problema mandando un mail no puede dejar la tanda a medio aprobar
             try:

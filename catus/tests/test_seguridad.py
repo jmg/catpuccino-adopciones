@@ -7,11 +7,11 @@ from django.contrib.auth.models import AnonymousUser
 from django.template import Context, Template
 from django.test import RequestFactory, TestCase
 
-from forms_builder.forms.models import Field, FieldEntry, Form, FormEntry
+from forms_builder.forms.models import FieldEntry, Form
 
 from catus.models import FacebookAccount
 from catus.services.adoption import AdoptionService
-from catus.tests.factories import make_animal, make_user
+from catus.tests.factories import make_animal, make_field, make_form_entry, make_user
 
 
 class RespuestasNoConfiablesTest(TestCase):
@@ -19,16 +19,23 @@ class RespuestasNoConfiablesTest(TestCase):
     def setUp(self):
         self.service = AdoptionService()
         self.form = Form.objects.create(title="Pre Adopción")
-        self.entry = FormEntry.objects.create(form=self.form)
+        self.entry = make_form_entry(self.form)
 
     def responder(self, label, value, field_type=1):
 
-        field = Field.objects.create(label=label, field_type=field_type)
+        field = make_field(self.form, label, field_type)
         FieldEntry.objects.create(entry=self.entry, field_id=field.id, value=value)
 
     def render(self, plantilla, contexto):
 
         return Template(plantilla).render(Context(contexto))
+
+    def render_real(self, plantilla, contexto):
+        """Los templates que se usan de verdad: el |safe estaba en ellos, no en el servicio."""
+
+        from django.template.loader import render_to_string
+
+        return render_to_string(plantilla, contexto)
 
     def test_una_respuesta_de_texto_no_llega_como_html(self):
         """Antes el template la imprimía con |safe y el script corría en el navegador del admin."""
@@ -67,6 +74,43 @@ class RespuestasNoConfiablesTest(TestCase):
         _, value = self.service.get_formatted_fields(self.entry.fields.all(), photos_html=True)[0]
 
         self.assertNotIn("onerror='alert(1)", value)
+
+    def test_la_pagina_de_la_postulacion_no_imprime_la_respuesta_como_html(self):
+        """forms/form.html la imprimía con {{value|safe}} y el script corría con la sesión del admin."""
+
+        self.responder("Nombre y Apellido", 'Ana <img src=x onerror="alert(1)">')
+
+        form_attrs = self.service.get_formatted_fields(self.entry.fields.all(), photos_html=True)
+        html = self.render_real("forms/form.html", {"form_attrs": form_attrs})
+
+        #la página trae <img> propios (el logo), así que miramos el payload y no
+        #cualquier aparición de la etiqueta
+        self.assertNotIn("<img src=x", html)
+        self.assertNotIn('onerror="alert(1)"', html)
+        self.assertIn("&lt;img src=x", html, "la respuesta tiene que salir escapada, no desaparecer")
+
+    def test_el_mail_de_aviso_tampoco(self):
+        """email/form.html la imprimía con {{value|safe|linebreaks}} y el mail lo abre el equipo."""
+
+        self.responder("Nombre y Apellido", 'Ana <img src=x onerror="alert(1)">')
+
+        fields = self.service.get_formatted_fields(self.entry.fields.all())
+        html = self.render_real("email/form.html", {"fields": fields})
+
+        self.assertNotIn("<img src=x", html)
+        self.assertNotIn('onerror="alert(1)"', html)
+        self.assertIn("&lt;img src=x", html, "la respuesta tiene que salir escapada, no desaparecer")
+
+    def test_la_foto_adjunta_si_se_ve_en_la_pagina(self):
+        """El <img> de la foto lo arma el servicio, así que el template lo tiene que mostrar."""
+
+        self.responder("Foto del hogar", "gallery/casa.jpg", field_type=9)
+
+        form_attrs = self.service.get_formatted_fields(self.entry.fields.all(), photos_html=True)
+        html = self.render_real("forms/form.html", {"form_attrs": form_attrs})
+
+        self.assertIn("gallery/casa.jpg", html)
+        self.assertNotIn("&lt;img src=", html)
 
 
 class FacebookLoginTest(TestCase):
@@ -132,3 +176,41 @@ class DescripcionesEnPaginasPublicasTest(TestCase):
         #miramos el payload y no cualquier aparición de la palabra
         self.assertNotIn("javascript:alert", html)
         self.assertIn("<a>click</a>", html, "debería quedar el texto sin el link")
+
+
+class TextoDeInstagramTest(TestCase):
+    """El texto del posteo lo arma /tools/generarimagen/, que abre un superusuario.
+
+    La descripción del animal la escribe cualquiera que se registre, así que acá
+    tampoco puede llegar como HTML: un <script> en la descripción corría con la
+    sesión de quien aprueba, que puede aprobar animales y entrar como cualquier
+    rescatista.
+    """
+
+    def render_texto(self, datos):
+
+        from django.template.loader import render_to_string
+
+        animal = make_animal(nombre="Willy", datos=datos, aprobado=True)
+        return render_to_string("tools/generartexto.html", {"animal": animal})
+
+    def test_la_descripcion_conserva_el_formato(self):
+
+        html = self.render_texto("Willy es <strong>muy</strong> compañero")
+
+        self.assertIn("<strong>", html)
+
+    def test_la_descripcion_no_puede_traer_scripts(self):
+        """Iba con |safe: quedó afuera cuando se sacó el |safe del resto de las pantallas."""
+
+        html = self.render_texto('Hola <img src=x onerror="alert(1)">')
+
+        self.assertNotIn("onerror", html)
+        self.assertNotIn("<script", html)
+
+    def test_la_descripcion_no_puede_aprobar_animales_sola(self):
+        """El equipo abre esta pantalla logueado: un fetch() acá aprueba con su sesión."""
+
+        html = self.render_texto('<script>fetch("/animal/aprobar/?id=1")</script>')
+
+        self.assertNotIn("fetch(", html)

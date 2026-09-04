@@ -61,7 +61,7 @@ class OptimizeTest(ImageServiceTestCase):
         y después el posteo estiraba 675 hasta 1200: se publicaba más borroso que antes.
         """
 
-        for size in [(3024, 4032), (2000, 3000), (4032, 3024)]:
+        for size in [(3024, 4032), (2000, 3000), (4032, 3024), (3000, 2191)]:
             resultado = self.optimizada(size)
 
             self.assertGreaterEqual(
@@ -150,3 +150,109 @@ class GenerateLogoImageTest(ImageServiceTestCase):
 
         with Image.open(self.build()) as posteo:
             self.assertEqual(posteo.size, (1400, 1400))
+
+
+class EdadYSexoQueEntraTest(ImageServiceTestCase):
+    """El renglón de abajo del posteo: la edad y el sexo.
+
+    El ajuste de tamaño de letra cubría sólo el nombre, así que este renglón seguía
+    saliéndose del lienzo: la edad la escribe el rescatista a mano y "aproximadamente
+    3 años y medio - Macho y Hembra" mide 1661 px con los 60 fijos de siempre, sobre
+    1220 de ancho útil. El texto salía cortado por la derecha y no lo veía nadie,
+    porque el posteo lo arma el cron y ahí no hay previsualización que mirar.
+    """
+
+    EDAD_LARGA = "aproximadamente 3 años y medio"
+
+    #el marco blanco del lienzo: la foto va de 100 a 1300
+    BORDE_DE_LA_FOTO = 1300
+
+    def ancho_disponible(self):
+
+        return (
+            self.service.LADO_LIENZO_POSTEO
+            - self.service.MARGEN_TEXTO_EDAD_SEXO_X
+            - self.service.MARGEN_BORDE_POSTEO
+        )
+
+    def ancho_dibujado(self, texto, tamano):
+
+        return self.service.ancho_del_texto(texto, self.service.FUENTE_EDAD_SEXO, tamano)
+
+    def texto(self, **kwargs):
+
+        kwargs.setdefault("edad", self.EDAD_LARGA)
+        kwargs.setdefault("sexo", "A")
+
+        return self.service.texto_de_edad_y_sexo(make_animal(**kwargs))
+
+    def test_con_los_60_de_siempre_no_entraba(self):
+        """Si esto dejara de ser cierto, el test de acá abajo no mediría nada."""
+
+        self.assertGreater(self.ancho_dibujado(self.texto(), 60), self.ancho_disponible())
+
+    def test_una_edad_larga_entra_en_el_lienzo(self):
+
+        texto = self.texto()
+
+        tamano = self.service.tamano_de_letra_para_edad_y_sexo(texto)
+
+        self.assertLessEqual(
+            self.service.MARGEN_TEXTO_EDAD_SEXO_X + self.ancho_dibujado(texto, tamano),
+            self.service.LADO_LIENZO_POSTEO - self.service.MARGEN_BORDE_POSTEO,
+            "'{}' se sale del lienzo con letra de {}".format(texto, tamano),
+        )
+
+    def test_una_edad_corta_conserva_el_tamano_de_siempre(self):
+        """Achicar el renglón que ya entraba cambiaría el posteo de todos los animales."""
+
+        self.assertEqual(
+            self.service.tamano_de_letra_para_edad_y_sexo(self.texto(edad="2 años", sexo="M")),
+            60,
+        )
+
+    def test_un_animal_sin_edad_muestra_el_sexo(self):
+
+        self.assertEqual(self.texto(edad=None, sexo="H"), "Hembra")
+
+    def borde_derecho_del_texto(self, posteo, desde_y, hasta_y):
+        """Hasta qué x llega el texto blanco, dentro de la foto (que va de 100 a 1300)."""
+
+        pixeles = posteo.convert("RGB").load()
+
+        borde = 0
+        for y in range(desde_y, hasta_y):
+            for x in range(100, self.BORDE_DE_LA_FOTO):
+                if all(canal > 200 for canal in pixeles[x, y]):
+                    borde = max(borde, x)
+
+        return borde
+
+    def test_la_edad_no_sale_cortada_en_el_posteo(self):
+        """Medido sobre el posteo ya armado: el texto que se pasa llega hasta el borde.
+
+        La foto va sobre negro y el renglón arriba justamente para que el único blanco
+        de esa franja sea la edad: abajo a la derecha está el círculo blanco del logo,
+        que llega hasta el borde siempre y no mediría nada.
+        """
+
+        from catus.tests.factories import photo_bytes
+
+        animal = make_animal(nombre="Willy", edad=self.EDAD_LARGA, sexo="A")
+
+        posteo = self.service.generate_logo_image(
+            animal, photo_bytes(size=(1200, 1200), color=(0, 0, 0)),
+            nombre_font_size=150,
+            posicion_nombre="Izquierda (arriba)",
+            posicion_edad_sexo="Izquierda (arriba)",
+        )
+
+        #la barra del nombre termina en y=280 y el renglón de la edad arranca en 305
+        with Image.open(posteo) as imagen:
+            borde = self.borde_derecho_del_texto(imagen, 300, 390)
+
+        self.assertGreater(borde, 0, "no se encontró el renglón de la edad: el test no mide nada")
+        self.assertLess(
+            borde, self.BORDE_DE_LA_FOTO - 10,
+            "la edad llega al borde de la foto: salió cortada",
+        )

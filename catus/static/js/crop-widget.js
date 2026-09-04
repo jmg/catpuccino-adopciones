@@ -27,6 +27,10 @@
     var LOGO_CIRCLE = 330;
     var LOGO = 250;
 
+    // tamanos con los que se dibujan el nombre y el subtitulo sobre el lienzo de 1400
+    var NOMBRE_FONT = 150;
+    var SUBTITULO_FONT = 60;
+
     var STYLE_ID = "catus-crop-styles";
 
     function percent(value) {
@@ -65,6 +69,7 @@
             ".catus-crop-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;",
             "margin-top:16px;padding-top:14px;border-top:1px solid #eee;}",
             ".catus-crop-actions .btn{min-width:120px;}",
+            ".catus-crop-actions .btn[disabled]{opacity:.5;cursor:not-allowed;}",
             ".catus-crop-auto{margin-right:auto;}",
             "@media (max-width:640px){.catus-crop-side{flex:1 1 100%;}",
             ".catus-crop-actions .btn{flex:1 1 100%;min-width:0;}}"
@@ -88,6 +93,33 @@
         return node;
     }
 
+    function ajustarFuentes(post) {
+        /* Pone en pixeles el tamano de letra de la vista previa.
+         *
+         * Todo lo demas se ubica con porcentajes del lienzo de 1400, pero un font-size
+         * en porcentaje se resuelve contra el font-size del PADRE, no contra el ancho:
+         * con un padre de 14px el nombre salia de 1.7px y la barra verde quedaba del
+         * ancho de una astilla. Se calcula a mano contra el ancho real de la preview.
+         */
+
+        var ancho = post.clientWidth;
+
+        if (!ancho) {
+            return;
+        }
+
+        var bar = post.querySelector(".catus-crop-namebar");
+        var subtitle = post.querySelector(".catus-crop-subtitle");
+
+        if (bar) {
+            bar.style.fontSize = (NOMBRE_FONT * ancho / CANVAS) + "px";
+        }
+
+        if (subtitle) {
+            subtitle.style.fontSize = (SUBTITULO_FONT * ancho / CANVAS) + "px";
+        }
+    }
+
     function buildPreview(container, options) {
         /* Arma la vista previa del posteo. Devuelve el nodo donde Cropper dibuja la foto. */
 
@@ -108,7 +140,6 @@
             bar.style.height = percent(175);
             bar.style.paddingLeft = percent(105);
             bar.style.paddingRight = percent(25);
-            bar.style.fontSize = percent(150);
         }
 
         if (options.subtitulo) {
@@ -116,7 +147,6 @@
             subtitle.textContent = options.subtitulo;
             subtitle.style.top = percent(abajo ? 1205 : 305);
             subtitle.style.left = percent(140);
-            subtitle.style.fontSize = percent(60);
         }
 
         var logo = make("div", "catus-crop-logo", post);
@@ -132,17 +162,50 @@
             logo.style.display = "none";
         };
 
+        ajustarFuentes(post);
+
         return photo;
+    }
+
+    function marcoVisible(image) {
+        /* Cuanto mide la foto como se la ve, que no siempre es como esta guardada.
+         *
+         * Cropper corre con checkOrientation: baja el archivo, le resetea el byte de
+         * orientacion EXIF y se guarda la rotacion en imageData.rotate (Orientation=6
+         * -> 90, 8 -> -90), que aplica por transform. Entonces getData() devuelve el
+         * cuadro medido en el marco YA ROTADO (el que ve la persona) mientras que
+         * naturalWidth/naturalHeight siguen siendo los del archivo crudo. Dividir por el
+         * lado equivocado hacia que una foto vertical de celular (4032x3024 con
+         * Orientation=6, el caso mas comun) guardara un recorte que no era el elegido.
+         *
+         * El marco visible es tambien el que ve el server: optimize() endereza con
+         * exif_transpose antes de guardar, asi que las fracciones se aplican sobre la
+         * foto derecha. Por lo mismo el espejado (scaleX/scaleY de las orientaciones 2,
+         * 4, 5 y 7) no se corrige aca: Cropper ya muestra la foto espejada y
+         * exif_transpose la guarda igual, las coordenadas coinciden solas.
+         *
+         * Ida y vuelta con una 4032x3024 rotada 90 (marco visible 3024x4032) y el cuadro
+         * pegado abajo: getData da {x: 0, y: 1008, width: 3024, height: 3024}, que sobre
+         * 3024x4032 son las fracciones {0, 0.25, 1, 0.75}; applyFractions las multiplica
+         * por los mismos lados y devuelve {0, 1008, 3024, 3024}, el mismo cuadro.
+         */
+
+        var rotada = Math.abs(image.rotate || 0) % 180 === 90;
+
+        return {
+            width: rotada ? image.naturalHeight : image.naturalWidth,
+            height: rotada ? image.naturalWidth : image.naturalHeight
+        };
     }
 
     function toFractions(cropper) {
         /* Pasa el recorte de pixeles de la foto original a fracciones. */
 
         var data = cropper.getData(true);
-        var image = cropper.getImageData();
+        var marco = marcoVisible(cropper.getImageData());
 
-        var width = image.naturalWidth;
-        var height = image.naturalHeight;
+        var width = marco.width;
+        var height = marco.height;
 
         if (!width || !height) {
             return null;
@@ -164,9 +227,9 @@
     function applyFractions(cropper, crop) {
         /* Coloca el cuadro donde diga el recorte guardado. */
 
-        var image = cropper.getImageData();
-        var width = image.naturalWidth;
-        var height = image.naturalHeight;
+        var marco = marcoVisible(cropper.getImageData());
+        var width = marco.width;
+        var height = marco.height;
 
         if (!width || !height) {
             return;
@@ -224,6 +287,12 @@
         saveButton.type = "button";
         saveButton.textContent = "Guardar recorte";
 
+        // Cropper tarda en abrir la foto (la baja entera por XHR para leerle el EXIF y
+        // recien despues clona la imagen), y hasta que no esta listo no hay recorte para
+        // guardar: guardar null significa "recorte automatico", asi que clickear apurado
+        // le borraba a la persona el encuadre que ya tenia elegido
+        saveButton.disabled = true;
+
         var cropper = null;
 
         function close() {
@@ -253,7 +322,12 @@
         cancelButton.onclick = close;
 
         saveButton.onclick = function () {
-            var crop = cropper ? toFractions(cropper) : null;
+
+            if (!cropper) {
+                return;
+            }
+
+            var crop = toFractions(cropper);
             close();
             if (options.onSave) {
                 options.onSave(crop);
@@ -279,6 +353,7 @@
                     if (options.crop) {
                         applyFractions(cropper, options.crop);
                     }
+                    saveButton.disabled = false;
                 }
             });
         };

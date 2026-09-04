@@ -5,17 +5,18 @@ y como corre dentro del save() de Animal, tampoco puede hacer fallar la carga.
 """
 from django.test import TestCase
 
-from forms_builder.forms.models import Field
+from forms_builder.forms.models import Field, Form
 
 from catus.signals import ANIMAL_FIELD_LABELS, _update_animal_field, _update_form_field
-from catus.tests.factories import make_animal
+from catus.tests.factories import make_animal, make_field
 
 
 class SincronizarDesplegableTest(TestCase):
 
     def setUp(self):
-        self.campo_gatos = Field.objects.create(label=ANIMAL_FIELD_LABELS["G"], choices="0")
-        self.campo_perros = Field.objects.create(label=ANIMAL_FIELD_LABELS["P"], choices="0")
+        self.form = Form.objects.create(title="Pre Adopción")
+        self.campo_gatos = make_field(self.form, ANIMAL_FIELD_LABELS["G"], choices="0")
+        self.campo_perros = make_field(self.form, ANIMAL_FIELD_LABELS["P"], choices="0")
 
     def test_lista_los_gatos_en_adopcion(self):
 
@@ -53,7 +54,7 @@ class SincronizarDesplegableTest(TestCase):
     def test_no_toca_campos_que_no_son_el_del_animal(self):
         """Buscar el campo por posición podía pisarle las opciones a otro campo."""
 
-        otro = Field.objects.create(label="Nombre y Apellido", choices="")
+        otro = make_field(self.form, "Nombre y Apellido", choices="")
         make_animal(tipo="G")
 
         _update_form_field()

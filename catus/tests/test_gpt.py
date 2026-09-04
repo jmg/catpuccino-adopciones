@@ -186,3 +186,116 @@ class ParseResponseTest(TestCase):
         data = self.service.parse_response('["Willy", "Rocco"]')
 
         self.assertNotIn("Nombre", data)
+
+    def test_un_nombre_con_no_adentro_no_se_borra(self):
+        """Comparando por subcadena, un perro llamado Bruno se quedaba sin nombre.
+
+        Y el JS de la carga corta la precarga entera cuando el nombre viene vacío, asi
+        que no se perdía sólo el nombre: se perdía toda la importación del post.
+        """
+
+        data = self.service.parse_response(
+            '{"nombre": "Bruno", "tipo": "perro", "sexo": "macho", "edad": "2 años"}'
+        )
+
+        self.assertEqual(data["Nombre"], "Bruno")
+
+        for nombre in ["Bruno", "Nono", "Manolo", "Antonio", "Bonita"]:
+            self.assertEqual(self.service.clean_value(nombre), nombre, nombre)
+
+    def test_una_edad_que_dice_no_se_sigue_quedando_vacia(self):
+
+        data = self.service.parse_response(
+            '{"nombre": "Willy", "tipo": "gato", "edad": "No se especifica."}'
+        )
+
+        self.assertEqual(data["Edad"], "")
+
+        for valor in ["no", "No", "no se", "no corresponde", "No se menciona en el post."]:
+            self.assertEqual(self.service.clean_value(valor), "", valor)
+
+
+class RedirectsTest(TestCase):
+    """El destino de un redirect vuelve a pasar por la allowlist antes de pedirlo.
+
+    requests sigue los 3xx solo, asi que validar el link que pegó la persona no alcanza:
+    un redirector abierto convertía un link de instagram.com en un pedido a la red
+    interna, hecho por el server.
+    """
+
+    def _respuesta(self, status_code=200, content=b"", location=None):
+
+        respuesta = mock.Mock()
+        respuesta.status_code = status_code
+        respuesta.content = content
+        respuesta.headers = {"Location": location} if location else {}
+
+        return respuesta
+
+    def test_no_sigue_un_redirect_a_otro_host(self):
+
+        for destino in [
+            "http://169.254.169.254/latest/meta-data/",
+            "https://l.instagram.com/?u=http://169.254.169.254/",
+            "https://sitio-del-atacante.test/",
+        ]:
+            redirect = self._respuesta(302, location=destino)
+
+            with mock.patch("catus.services.gpt.requests.get", return_value=redirect) as get:
+                with self.assertRaises(ValueError, msg=destino):
+                    GPTService()._get_html_title_and_images("https://www.instagram.com/p/abc/")
+
+            #el post se pidió una vez y el destino del redirect no se pidió nunca
+            self.assertEqual(get.call_count, 1, destino)
+            self.assertFalse(get.call_args[1].get("allow_redirects", True), destino)
+
+    def test_sigue_un_redirect_dentro_de_instagram(self):
+        """instagram.com redirige a www.instagram.com: eso tiene que seguir andando."""
+
+        redirect = self._respuesta(302, location="https://www.instagram.com/p/abc/")
+        ok = self._respuesta(
+            200,
+            content=b'<html><head><meta property="og:title" content="Willy busca hogar">'
+                    b"</head><body></body></html>",
+        )
+
+        with mock.patch("catus.services.gpt.requests.get", side_effect=[redirect, ok]) as get:
+            texto, imagenes = GPTService()._get_html_title_and_images("https://instagram.com/p/abc/")
+
+        self.assertEqual(texto, "Willy busca hogar")
+        self.assertEqual(get.call_count, 2)
+
+    def test_corta_un_bucle_de_redirects(self):
+
+        redirect = self._respuesta(302, location="https://www.instagram.com/p/abc/")
+
+        with mock.patch("catus.services.gpt.requests.get", return_value=redirect) as get:
+            with self.assertRaises(ValueError):
+                GPTService()._get_html_title_and_images("https://www.instagram.com/p/abc/")
+
+        self.assertLessEqual(get.call_count, GPTService.MAX_REDIRECTS + 1)
+
+
+class TimeoutDeOpenAITest(TestCase):
+
+    def test_la_llamada_al_modelo_tiene_timeout(self):
+        """Sin request_timeout el SDK 0.x espera 600s y el worker corta a los 30: el
+        rescatista pegaba el link y se comía un 502."""
+
+        pagina = mock.Mock()
+        pagina.status_code = 200
+        pagina.headers = {}
+        pagina.content = (
+            b'<html><head><meta property="og:title" content="Willy busca hogar">'
+            b"</head><body></body></html>"
+        )
+
+        respuesta = {"choices": [{"message": {"content": '{"nombre": "Willy", "tipo": "gato"}'}}]}
+
+        with mock.patch("catus.services.gpt.requests.get", return_value=pagina):
+            with mock.patch("catus.services.gpt.openai.ChatCompletion.create", return_value=respuesta) as create:
+                data = GPTService().pull_data_from_ig("https://www.instagram.com/p/abc/")
+
+        self.assertEqual(data["Nombre"], "Willy")
+        self.assertTrue(create.call_args[1].get("request_timeout"))
+        self.assertLessEqual(create.call_args[1]["request_timeout"], 15)
