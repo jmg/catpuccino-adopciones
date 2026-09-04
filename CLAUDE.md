@@ -189,9 +189,21 @@ plus `revision_ia_motivo`, and `/tools/animalespendientes/` sorts flagged listin
 Two invariants hold the design together, and both have tests that fail if they break:
 
 - **It can never stop someone publishing an animal.** Every failure path — API down, no
-  credit, refusal (`content=None`), malformed JSON, a failed save — returns `E`, which does
-  not block anything. `E` and `R` look similar but only `R` withholds auto-approval, so a
-  parsing failure of *ours* must never be reported as suspicion of *theirs*.
+  credit, refusal (`content=None`), malformed JSON, a failed save — returns `E`, which never
+  blocks saving and never marks the listing as suspicious. `E` and `R` look similar but they
+  are not interchangeable: a parsing failure of *ours* must never be reported as suspicion of
+  *theirs*.
+
+**The review is what approves a listing** (`views/animal.py::EditView`, on create). `OK`
+auto-approves — for anyone, no track record needed — and that approval also schedules the
+Instagram post, so a listing can go from upload to the shelter's public account with nobody
+in between; the delay window in `/tools/colainstagram/` is the only human gate. `R` never
+auto-approves. `E` is *not* a verdict, so it does not approve on its own: it falls back to the
+old rule, `cargado_por.automatic_approve` (granted by the `automatic_approve` cron at 5
+hand-approved animals). That fallback is what keeps an OpenAI outage from stalling established
+rescuers without opening the door for brand-new accounts — which matters because registration
+is open. The whole matrix is pinned in `tests/test_moderacion.py::AutoAprobacionTest`;
+reverting any leg of it fails a test.
 - **The model describes, the code decides.** `PROMPT` asks only for what is visible;
   `decidir()` holds the policy. An earlier version asked the model to judge and it echoed the
   prompt's rules instead of looking, flagging 10 of 14 real gallery photos. After the split,
