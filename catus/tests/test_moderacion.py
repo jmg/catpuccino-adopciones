@@ -380,12 +380,15 @@ class AutoAprobacionTest(TestCase):
         self.override.disable()
         shutil.rmtree(self.media, ignore_errors=True)
 
-    def guardar_animal(self, respuesta_ia):
+    def guardar_animal(self, respuesta_ia, rescatista=None):
         """Da de alta un animal por la vista y devuelve lo que quedó en la base.
 
         Va por EditView a propósito. Antes esto copiaba la condición de auto-aprobación
         adentro del test, así que sacarla de la vista dejaba todo en verde igual y una
         publicación marcada como sospechosa salía publicada.
+
+        `rescatista` se pasa cuando el test necesita a alguien SIN historial: quién
+        carga el animal es justamente lo que decide varias de las reglas de acá abajo.
         """
 
         datos = {
@@ -404,7 +407,7 @@ class AutoAprobacionTest(TestCase):
         }
 
         request = self.factory.post("/animales/", datos)
-        request.user = self.rescatista
+        request.user = rescatista or self.rescatista
 
         SessionMiddleware().process_request(request)
         request.session.save()
@@ -431,6 +434,71 @@ class AutoAprobacionTest(TestCase):
 
         self.assertFalse(animal.aprobado, "una publicación marcada como sospechosa se publicó sola")
         self.assertTrue(animal.necesita_revision_humana())
+
+    def sin_historial(self):
+        """Alguien que se registró recién: nadie le aprobó nunca una publicación."""
+
+        return make_user(email="recien@catpuccino.test", automatic_approve=False)
+
+    def test_la_ia_aprueba_al_que_no_tiene_historial(self):
+        """El cambio de fondo: quien aprueba es la revisión, no el historial.
+
+        Antes hacía falta `automatic_approve`, que el cron le da al que ya tiene cinco
+        animales aprobados a mano. O sea que las primeras cinco publicaciones de cada
+        rescatista esperaban a que una persona las mirara, aunque la revisión ya hubiera
+        visto el gato en las fotos.
+        """
+
+        animal = self.guardar_animal(con_respuesta(visto(["gato"])), self.sin_historial())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_OK)
+        self.assertTrue(animal.aprobado, "la revisión dijo que estaba bien y no se publicó")
+
+    def test_al_que_no_tiene_historial_una_falla_de_la_ia_no_le_abre_la_puerta(self):
+        """'E' es que NO se pudo revisar, no un veredicto.
+
+        Es la contracara del test de abajo, y la distinción que sostiene todo esto: al
+        que ya tiene historial una caída de OpenAI no le frena la carga, pero al que
+        recién llega no se la puede abrir por el mismo motivo. Si 'E' alcanzara para
+        publicar, quedarse sin crédito en la API sería lo mismo que apagar el filtro.
+        """
+
+        animal = self.guardar_animal(con_error(), self.sin_historial())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(animal.aprobado, "se publicó sin que la revisión pudiera correr")
+
+    def test_al_que_no_tiene_historial_una_sospechosa_tampoco_le_pasa(self):
+
+        animal = self.guardar_animal(
+            con_respuesta(visto([], "Es una captura de pantalla.")), self.sin_historial(),
+        )
+
+        self.assertFalse(animal.aprobado)
+        self.assertTrue(animal.necesita_revision_humana())
+
+    def test_ni_el_historial_alcanza_para_publicar_una_sospechosa(self):
+        """El historial cubre el caso "no se pudo revisar", no el "acá hay algo raro"."""
+
+        animal = self.guardar_animal(con_respuesta(visto([], "No se ve ningún animal.")))
+
+        self.assertFalse(animal.aprobado, "el historial le ganó a un veredicto de sospecha")
+
+    def test_lo_que_aprueba_la_ia_queda_agendado_para_instagram(self):
+        """La cadena completa: acá no miró nadie, así que la demora es la única ventana.
+
+        Si el agendado no saliera de este camino, lo aprobado por la revisión nunca
+        llegaría a Instagram y el posteo automático sólo funcionaría para las
+        aprobaciones a mano, que son las que el cambio vino a sacar del medio.
+        """
+
+        with override_settings(INSTAGRAM_AUTO_ACTIVO=True):
+            animal = self.guardar_animal(con_respuesta(visto(["gato"])), self.sin_historial())
+
+        self.assertTrue(animal.aprobado)
+        self.assertIsNotNone(
+            animal.instagram_programado_para, "se aprobó sola y no quedó agendada para Instagram",
+        )
 
     def test_si_la_ia_falla_se_auto_aprueba_igual(self):
         """Una caída de OpenAI no puede frenar el flujo normal del rescatista."""

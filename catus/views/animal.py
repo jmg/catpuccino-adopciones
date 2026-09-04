@@ -296,10 +296,25 @@ class EditView(LoginRequiredMixin, BaseView):
                     #que lo mire una persona.
                     revision = ModeracionService().revisar_y_guardar(animal)
 
-                    auto_aprobar = (
+                    #Quien aprueba es la revisión, no el historial del rescatista: si vio
+                    #el animal en las fotos y el texto no es spam, la publicación sale.
+                    #Se exige OK y no "distinto de R": 'E' es que NO se pudo revisar
+                    #(API caída, sin crédito, foto ilegible) y eso no es un veredicto,
+                    #así que no alcanza para publicar sin que mire nadie.
+                    #
+                    #Cuando la revisión no pudo correr queda el criterio viejo, el
+                    #historial: al rescatista con animales ya aprobados a mano no se le
+                    #frena la carga porque OpenAI esté caída, y al que recién llega
+                    #tampoco se le abre la puerta por el mismo motivo.
+                    reviso_bien = revision == Animal.REVISION_OK
+
+                    tiene_historial = (
                         animal.cargado_por is not None
                         and animal.cargado_por.automatic_approve
-                        and revision != Animal.REVISION_REVISAR
+                    )
+
+                    auto_aprobar = reviso_bien or (
+                        revision == Animal.REVISION_ERROR and tiene_historial
                     )
 
                     if auto_aprobar:
