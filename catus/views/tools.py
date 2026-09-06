@@ -17,20 +17,26 @@ from django.db.models import Case, F, IntegerField, Prefetch, Q, Value, When
 from django.utils import timezone
 
 
-def animal_por_id(animal_id):
-    """El animal con ese id, o None si el id no es un id.
+def por_id(entidad, id_):
+    """La fila de esa entidad con ese id, o None si el id no es un id.
 
     Django castea el filtro por id a entero: con un "abc" —un bot, un fetch a mano, un
     formulario a medio armar— filter(id=...) levantaba ValueError y la pantalla contestaba
-    500 en vez del "No se encontró el animal." que ya estaba escrito abajo.
+    500 en vez del "No se encontró..." que ya estaba escrito abajo.
     """
 
     try:
-        animal_id = int(animal_id)
+        id_ = int(id_)
     except (TypeError, ValueError):
         return None
 
-    return Animal.objects.filter(id=animal_id).first()
+    return entidad.objects.filter(id=id_).first()
+
+
+def animal_por_id(animal_id):
+    """El animal con ese id, o None si el id no es un id."""
+
+    return por_id(Animal, animal_id)
 
 
 class ToolsIndexView(BaseView):
@@ -147,6 +153,23 @@ class ColaInstagramView(BaseView):
     #puede tenerlo en "", así que las dos formas cuentan como "sin problemas"
     SIN_ERROR = Q(instagram_error__isnull=True) | Q(instagram_error="")
 
+    #Lo que dice la pantalla cuando el posteo automático está apagado, que es el default:
+    #preparar_publicaciones corta de entrada y publish sólo levanta lo que NO está
+    #agendado, así que el agendado espera a dos crones que no lo van a mirar nunca.
+    POSTEO_APAGADO = "El posteo automático está apagado: ningún cron va a levantar lo agendado."
+
+    #Y lo que hay que hacer mientras tanto, que es el flujo de siempre: las imágenes se
+    #arman a mano desde /tools/generarimagen/ y ahí se marca al animal como listo.
+    A_MANO = (
+        "El posteo automático está apagado: no hay ningún cron que le arme las imágenes. "
+        "Armalas en \"Imágenes de Instagram\" y marcalo como listo para publicar."
+    )
+
+    DETALLE_AGENDADOS = "esperando su hora: hasta que salgan se pueden cancelar"
+    DETALLE_AGENDADOS_APAGADO = "esperando una hora que no los va a levantar nadie"
+    DETALLE_EN_COLA = "les toca en la próxima corrida del cron"
+    DETALLE_EN_COLA_APAGADO = "sólo sale lo que está marcado como listo para publicar"
+
     def get(self, *args, **kwargs):
 
         if not self.request.user.is_superuser:
@@ -157,31 +180,49 @@ class ColaInstagramView(BaseView):
         #se le pregunta una vez sola y se reparte entre los tres grupos
         publicables = self.los_que_el_cron_publica()
 
+        #que el pipeline automático esté andando o no cambia todo lo que esta pantalla
+        #puede prometer, así que se pregunta una vez y baja hasta las tarjetas
+        activo = self.posteo_automatico_activo()
+
         #los tres grupos van en una sola lista porque la tarjeta del animal es la misma en
         #los tres: repetida en el template es donde se cuelan las diferencias
-        return self.render_to_response({"grupos": [
-            {
-                "clave": "agendados",
-                "titulo": "Agendados",
-                "detalle": "esperando su hora: hasta que salgan se pueden cancelar",
-                "vacio": "No hay nada agendado.",
-                "animales": self.preparar(self.agendados(ahora), publicables, ahora),
-            },
-            {
-                "clave": "en_cola",
-                "titulo": "En cola",
-                "detalle": "les toca en la próxima corrida del cron",
-                "vacio": "No hay nada esperando al cron.",
-                "animales": self.preparar(self.en_cola(ahora), publicables, ahora),
-            },
-            {
-                "clave": "con_problemas",
-                "titulo": "Con problemas",
-                "detalle": "fallaron y quedaron fuera de la cola: no los levanta ningún cron",
-                "vacio": "Ninguno quedó trabado.",
-                "animales": self.preparar(self.con_problemas(), publicables, ahora),
-            },
-        ]})
+        return self.render_to_response({
+            "posteo_automatico_activo": activo,
+            "grupos": [
+                {
+                    "clave": "agendados",
+                    "titulo": "Agendados",
+                    "detalle": self.DETALLE_AGENDADOS if activo else self.DETALLE_AGENDADOS_APAGADO,
+                    "vacio": "No hay nada agendado.",
+                    "animales": self.preparar(self.agendados(ahora), publicables, ahora, activo),
+                },
+                {
+                    "clave": "en_cola",
+                    "titulo": "En cola",
+                    "detalle": self.DETALLE_EN_COLA if activo else self.DETALLE_EN_COLA_APAGADO,
+                    "vacio": "No hay nada esperando al cron.",
+                    "animales": self.preparar(self.en_cola(ahora), publicables, ahora, activo),
+                },
+                {
+                    "clave": "con_problemas",
+                    "titulo": "Con problemas",
+                    "detalle": "fallaron y quedaron fuera de la cola: no los levanta ningún cron",
+                    "vacio": "Ninguno quedó trabado.",
+                    "animales": self.preparar(self.con_problemas(ahora), publicables, ahora, activo),
+                },
+            ],
+        })
+
+    def posteo_automatico_activo(self):
+        """Si el pipeline automático está andando de verdad.
+
+        Se le pregunta al servicio que agenda en vez de mirar el setting: el flag puede
+        llegar como texto desde el JSON de config y desde una máquina de desarrollo no
+        cuenta, y esas dos reglas ya viven allá. Una copia acá diría que sí en casos en los
+        que el cron dice que no, que es justo lo que esta pantalla no puede hacer.
+        """
+
+        return InstagramAutoService().esta_activo()
 
     def post(self, *args, **kwargs):
 
@@ -233,14 +274,63 @@ class ColaInstagramView(BaseView):
         mano desde /tools/generarimagen/, donde no hay nada que preparar y sin la marca el
         cron no lo mira.
 
+        Con el posteo automático apagado esto no aplica y el botón hace otra cosa: vencer
+        la agenda ahí es sacar al animal de los dos crones para siempre.
+
         Se escribe con update() y no con save() por lo mismo que el resto del pipeline: el
         post_save de Animal reescribe el desplegable de forms_builder.
         """
 
+        #devolverle los intentos al que una corrida puede estar subiendo ahora mismo es
+        #sacarle el único candado contra el post duplicado: con el contador en cero la
+        #corrida siguiente lo reclama mientras la primera todavía sube fotos
+        if self.agoto_los_intentos(animal) and self.se_esta_publicando(animal):
+            return self.response("Se intentó publicar recién: esperá un rato o puede salir dos veces.")
+
+        if not self.posteo_automatico_activo():
+            return self.publicar_ya_a_mano(animal)
+
         campos = {"instagram_programado_para": timezone.now()}
+        campos.update(self.devolverle_los_intentos(animal))
 
         if self.tiene_las_imagenes_armadas(animal):
             campos["instagram_listo_para_publicar"] = True
+
+        return self.guardar(animal, campos)
+
+    def publicar_ya_a_mano(self, animal):
+        """"Publicar ya" con el posteo automático apagado: no hay cron al que mandarlo.
+
+        Vencer la agenda es lo que hace salir al animal cuando el pipeline está andando,
+        pero con el flag apagado lo saca de los dos crones para siempre:
+        preparar_publicaciones corta de entrada y publish sólo levanta lo que NO tiene
+        agenda. El botón dejaba al animal agendado y vencido, esperando a nadie, y la
+        pantalla seguía diciendo que iba a salir. El flag arranca apagado, así que ese era
+        el caso más común de todos.
+
+        Lo que queda es el flujo de siempre: las imágenes se arman a mano desde
+        /tools/generarimagen/ y ahí se marca listo. Por eso acá se limpia la agenda en vez
+        de vencerla —con la agenda puesta, publish no lo mira ni marcándolo a mano— y al
+        que ya tiene las imágenes armadas se lo marca de una, que es todo lo que le falta.
+        Al que no, le queda escrito qué hacer, que es lo que muestra "Con problemas".
+        """
+
+        campos = {"instagram_programado_para": None}
+        campos.update(self.devolverle_los_intentos(animal))
+
+        if self.tiene_las_imagenes_armadas(animal):
+            campos["instagram_listo_para_publicar"] = True
+        else:
+            campos["instagram_error"] = self.A_MANO
+
+        return self.guardar(animal, campos)
+
+    def guardar(self, animal, campos):
+        """El UPDATE de las acciones de la pantalla, con el candado de lo ya publicado.
+
+        Se escribe con update() y no con save() por lo mismo que el resto del pipeline: el
+        post_save de Animal reescribe el desplegable de forms_builder.
+        """
 
         actualizados = Animal.objects.filter(id=animal.id, instagram_publicado=False).update(**campos)
 
@@ -248,6 +338,46 @@ class ColaInstagramView(BaseView):
             return self.response("No se pudo publicar: fijate si ya se publicó.")
 
         return self.response("ok")
+
+    def devolverle_los_intentos(self, animal):
+        """Los campos para que el que agotó los intentos vuelva a la cola, o nada.
+
+        `publish` deja de intentar después de MAX_INTENTOS y el animal queda con la marca
+        puesta, sin agenda y sin que ningún cron lo mire nunca más: reintentar sin
+        devolverle el contador es no reintentar nada. El motivo del último fallo se borra
+        en la misma movida, que es justo cuando deja de describir lo que va a pasar.
+        """
+
+        if not self.agoto_los_intentos(animal):
+            return {}
+
+        return {"instagram_intentos": 0, "instagram_error": None}
+
+    def agoto_los_intentos(self, animal):
+        """Si `publish` ya se dio por vencido con este animal.
+
+        El número se le pregunta al comando en vez de copiarlo: es él quien deja de
+        intentar, y una copia se despega en silencio el día que el número cambie.
+        """
+
+        from catus.management.commands.publish import Command
+
+        return animal.instagram_intentos >= Command.MAX_INTENTOS
+
+    def se_esta_publicando(self, animal):
+        """Si una corrida lo reclamó hace tan poco que puede seguir subiéndolo.
+
+        Es el mismo criterio con el que `publish` se protege del post duplicado: mientras
+        no pasa su primera espera, el animal cuenta como "lo está publicando otra corrida",
+        porque un carrusel son minutos de subida.
+        """
+
+        from catus.management.commands.publish import Command
+
+        if not animal.instagram_ultimo_intento:
+            return False
+
+        return timezone.now() - animal.instagram_ultimo_intento < Command.ESPERA_BASE
 
     def tiene_las_imagenes_armadas(self, animal):
         """Si no le queda ninguna foto sin su imagen de Instagram.
@@ -301,25 +431,52 @@ class ColaInstagramView(BaseView):
             instagram_programado_para__gt=ahora,
         ).order_by("instagram_programado_para")
 
+    def q_en_la_cola_del_cron(self, ahora):
+        """Los dos caminos por los que a un animal le toca en la próxima corrida.
+
+        Al vencido sin la marca lo levanta preparar_publicaciones, que le arma las
+        imágenes y recién ahí lo marca; al marcado sin agenda lo levanta publish.
+        """
+
+        return (
+            Q(instagram_programado_para__lte=ahora)
+            | Q(instagram_programado_para__isnull=True, instagram_listo_para_publicar=True)
+        )
+
+    def q_sin_intentos(self):
+        """Q de los que ya gastaron todos los intentos que hace `publish`.
+
+        El número se le pregunta al comando, que es quien deja de intentar: una copia se
+        despega en silencio el día que el número cambie.
+        """
+
+        from catus.management.commands.publish import Command
+
+        return Q(instagram_intentos__gte=Command.MAX_INTENTOS)
+
     def en_cola(self, ahora):
         """Vencidos o marcados a mano: los levanta el cron en la próxima corrida.
 
-        Son las dos etapas del pipeline y una sola espera: al vencido sin la marca lo
-        levanta preparar_publicaciones, que le arma las imágenes y recién ahí lo marca, y
-        al marcado lo levanta publish.
+        Son las dos etapas del pipeline y una sola espera.
 
         Un agendado a futuro que además esté marcado como listo es un agendado y nada más:
         si cayera en los dos grupos, el equipo lo cancelaría en uno y lo seguiría viendo
         como que está por salir en el otro.
+
+        El que agotó los intentos no está esperando nada: `publish` lo saltea para
+        siempre. Quedaba acá diciendo que le tocaba en la próxima corrida, que es la
+        pantalla mintiendo justo sobre el que necesita que alguien lo mire.
         """
 
         return self.pendientes().filter(
-            Q(instagram_programado_para__lte=ahora)
-            | Q(instagram_programado_para__isnull=True, instagram_listo_para_publicar=True),
+            self.q_en_la_cola_del_cron(ahora),
+        ).exclude(
+            self.q_sin_intentos(),
         ).order_by("instagram_programado_para", "id")
 
-    def con_problemas(self):
-        """Los que quedaron fuera de la cola: sin agenda y sin marca, con el motivo escrito.
+    def con_problemas(self, ahora):
+        """Los que quedaron fuera de la cola, con el motivo escrito: sin agenda y sin
+        marca, o con los intentos agotados.
 
         Es el resto del pipeline y no "los que tienen un error": el error de uno que sigue
         agendado o en cola es una nota de su tarjeta, porque ahí el posteo no se frenó.
@@ -328,17 +485,17 @@ class ColaInstagramView(BaseView):
         """
 
         return self.pendientes().filter(
-            instagram_programado_para__isnull=True,
-            instagram_listo_para_publicar=False,
+            Q(instagram_programado_para__isnull=True, instagram_listo_para_publicar=False)
+            | (self.q_sin_intentos() & self.q_en_la_cola_del_cron(ahora)),
         ).order_by("-instagram_ultimo_intento", "id")
 
-    def preparar(self, animales, publicables, ahora):
+    def preparar(self, animales, publicables, ahora, activo):
         """Le cuelga a cada animal lo que la pantalla necesita y el modelo no tiene."""
 
         animales = list(animales)
 
         for animal in animales:
-            animal.no_sale = self.motivo_para_no_salir(animal, publicables)
+            animal.no_sale = self.motivo_para_no_salir(animal, publicables, activo)
             animal.falta = self.falta_para(animal, ahora)
 
         return animales
@@ -382,8 +539,20 @@ class ColaInstagramView(BaseView):
 
         return set(Command().animales_a_publicar().values_list("id", flat=True))
 
-    def motivo_para_no_salir(self, animal, publicables):
+    def motivo_para_no_salir(self, animal, publicables, activo):
         """Por qué no va a salir, o None si sí va a salir. Sólo para poder explicarlo."""
+
+        #Estos dos van antes que `publicables`, que es la cola de `publish`: esa cola dice
+        #quién tiene permiso de salir, no quién va a salir. Los intentos gastados y la
+        #agenda los mira animales_de_esta_corrida, así que preguntándole sólo a la cola la
+        #pantalla decía "está por salir" de los dos.
+        if self.agoto_los_intentos(animal):
+            return "Se dejó de intentar después de {} intentos: hay que reintentarlo a mano.".format(
+                animal.instagram_intentos,
+            )
+
+        if animal.instagram_programado_para and not activo:
+            return self.POSTEO_APAGADO
 
         if animal.id in publicables:
             return None
@@ -402,7 +571,9 @@ class ColaInstagramView(BaseView):
         #Preguntando nada más que por la etapa de publish, esta pantalla decía "No va a
         #salir" de todo lo agendado, o sea del camino feliz entero.
         #Los tres filtros de arriba son los mismos que mira preparar_publicaciones, así que
-        #si llegó hasta acá con la agenda puesta, lo va a levantar y va a salir.
+        #si llegó hasta acá con la agenda puesta, lo va a levantar y va a salir. Que el
+        #pipeline automático esté prendido ya se preguntó arriba: con el flag apagado
+        #preparar_publicaciones corta de entrada y no levanta nada.
         if animal.instagram_programado_para:
             return None
 
@@ -505,14 +676,13 @@ class MakeSingleImageView(CropMixin, BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        from catus.models import AnimalImage
-
         fonts = [150, 125, 100, 75, 50]
-        image_id = self.request.POST.get("image_id")
 
-        try:
-            imagen = AnimalImage.objects.get(id=image_id)
-        except AnimalImage.DoesNotExist:
+        #por_id y no un get() a pelo: con un image_id vacío o no numérico —el botón que
+        #se apretó antes de que cargara la galería, un bot— el filtro por id levantaba
+        #ValueError y la pantalla contestaba 500 en vez de "Imagen no encontrada."
+        imagen = por_id(AnimalImage, self.request.POST.get("image_id"))
+        if imagen is None:
             return self.response("Imagen no encontrada.")
 
         animal = imagen.animal
@@ -703,7 +873,9 @@ class SendPreguntarEmailView(BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        user = CatusUser.objects.filter(id=self.request.POST.get("user_id")).first()
+        #por_id y no filter() a pelo: con un user_id vacío o no numérico el filtro por id
+        #levantaba ValueError y esto contestaba 500 en vez de "No se encontró el usuario."
+        user = por_id(CatusUser, self.request.POST.get("user_id"))
         if user is None:
             return self.response("No se encontró el usuario.")
 

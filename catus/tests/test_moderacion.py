@@ -9,18 +9,25 @@ Dos reglas que no se pueden romper:
 import json
 import shutil
 import tempfile
+from io import StringIO
 from unittest import mock
 
+from django.contrib.admin.sites import AdminSite
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
+from django.core.management import call_command
 from django.db import connection
+from django.forms.models import modelform_factory
 from django.test import RequestFactory, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
+from catus.admin import AnimalAdmin
+from catus.management.commands.automatic_approve import Command as AutomaticApproveCommand
 from catus.models import Animal, RevisionIALlamada
 from catus.services.moderacion import ModeracionService
 from catus.tests.factories import make_animal, make_animal_image, make_user, uploaded_photo
-from catus.views.animal import EditView
+from catus.views.animal import AprobarView, EditView
 
 
 def visto(animales, descripcion="Se ve un gato.", texto_sospechoso=False, inapropiado=False):
@@ -363,8 +370,12 @@ class ArmadoDelPedidoTest(TestCase):
 
 
 @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
-class AutoAprobacionTest(TestCase):
-    """El único efecto real: frenar la auto-aprobación de una publicación sospechosa."""
+class AltaDeAnimalTestCase(TestCase):
+    """Base de los tests que dan de alta un animal de verdad, por la vista.
+
+    El override de settings va acá y lo heredan las subclases: todas necesitan la
+    revisión prendida y un MEDIA_ROOT descartable.
+    """
 
     def setUp(self):
         #el alta sube una foto de verdad: que los archivos caigan en un directorio
@@ -380,7 +391,7 @@ class AutoAprobacionTest(TestCase):
         self.override.disable()
         shutil.rmtree(self.media, ignore_errors=True)
 
-    def guardar_animal(self, respuesta_ia, rescatista=None):
+    def guardar_animal(self, respuesta_ia, rescatista=None, nombre="Willy"):
         """Da de alta un animal por la vista y devuelve lo que quedó en la base.
 
         Va por EditView a propósito. Antes esto copiaba la condición de auto-aprobación
@@ -394,7 +405,7 @@ class AutoAprobacionTest(TestCase):
         datos = {
             "tipo": "G",
             "estado": "D",
-            "nombre": "Willy",
+            "nombre": nombre,
             "edad": "2 años",
             "sexo": "M",
             "zona": "CABA",
@@ -419,10 +430,15 @@ class AutoAprobacionTest(TestCase):
         with respuesta_ia, mock.patch("catus.views.animal.MailService"):
             view.req(is_post=True)
 
-        animal = Animal.objects.filter(nombre="Willy").first()
+        animal = Animal.objects.filter(nombre=nombre).first()
         self.assertIsNotNone(animal, "el alta no guardó el animal: el POST del test quedó viejo")
 
         return animal
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class AutoAprobacionTest(AltaDeAnimalTestCase):
+    """El único efecto real: frenar la auto-aprobación de una publicación sospechosa."""
 
     def test_una_publicacion_valida_se_auto_aprueba(self):
 
@@ -507,6 +523,257 @@ class AutoAprobacionTest(TestCase):
 
         self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
         self.assertTrue(animal.aprobado, "una falla nuestra le frenó la publicación al rescatista")
+
+    def test_lo_que_aprueba_la_ia_no_cuenta_como_mirado_por_una_persona(self):
+        """La IA aprueba a cualquiera, así que sus aprobaciones no son historial.
+
+        El cron automatic_approve contaba `aprobado=True` a secas para dar la aprobación
+        automática, y desde que la revisión aprueba sola eso dejó de querer decir que lo
+        miró alguien: con cinco altas inocuas cualquiera se fabricaba el historial.
+        """
+
+        animal = self.guardar_animal(con_respuesta(visto(["gato"])), self.sin_historial())
+
+        self.assertTrue(animal.aprobado)
+        self.assertFalse(
+            animal.aprobado_por_persona,
+            "la aprobación de la IA quedó anotada como si la hubiera mirado una persona",
+        )
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class SinCupoTest(AltaDeAnimalTestCase):
+    """Quedarse sin cupo no es lo mismo que una caída de la API.
+
+    Las dos devuelven 'E', y tienen que seguir devolviéndolo: 'E' es el estado que no
+    bloquea nada. Pero la caída es ajena —para eso existe el fallback al historial, para
+    que una caída de OpenAI no le frene la carga a un rescatista conocido— y el cupo lo
+    agota el propio usuario, que es predecible y gratis: si el cupo también cayera al
+    historial, gastarlo sería la forma de apagarse la revisión a sí mismo y publicar sin
+    que mire nadie.
+    """
+
+    def agotar_el_cupo(self, usuario):
+        """Lo mismo que hace el usuario cargando y editando: cada llamada deja su fila."""
+
+        for _ in range(ModeracionService().get_limite_diario()):
+            RevisionIALlamada.objects.create(pedido_por=usuario)
+
+    def test_sin_cupo_el_historial_no_alcanza_para_aprobar(self):
+
+        self.agotar_el_cupo(self.rescatista)
+
+        #si llegara a llamar a la API el test se rompe: sin cupo no se llama
+        animal = self.guardar_animal(con_error(AssertionError("sin cupo no se llama a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(
+            animal.aprobado,
+            "gastar el cupo del día apagó la revisión: el animal se aprobó sin que lo mirara nadie",
+        )
+
+    def test_sin_cupo_el_animal_se_guarda_igual_y_no_queda_acusado(self):
+        """No aprobarlo solo no es acusarlo de nada: 'E' no puede volverse 'R'.
+
+        Una falla NUESTRA (o un tope nuestro) jamás se reporta como sospecha de ellos.
+        """
+
+        self.agotar_el_cupo(self.rescatista)
+
+        animal = self.guardar_animal(con_error(AssertionError("sin cupo no se llama a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(animal.necesita_revision_humana(), "el tope propio se anotó como sospecha")
+
+    def test_una_caida_de_la_api_si_cae_al_historial(self):
+        """La contracara, que es para lo que se hizo el fallback."""
+
+        animal = self.guardar_animal(con_error())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertTrue(animal.aprobado, "una caída de OpenAI le frenó la carga a un conocido")
+
+    def test_la_revision_apagada_tambien_cae_al_historial(self):
+        """Apagarla para todos (MODERACION_IA_ACTIVA) también da 'E' y tampoco es del
+        rescatista: el equipo tiene que poder apagar la revisión sin frenarle la carga
+        a los que ya conoce."""
+
+        with override_settings(MODERACION_IA_ACTIVA=False):
+            animal = self.guardar_animal(con_error(AssertionError("apagada y llamó a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertTrue(animal.aprobado)
+
+    def test_el_servicio_avisa_que_el_error_fue_el_cupo(self):
+        """La distinción vive en el servicio, no en el veredicto: inventar un estado
+        nuevo rompería la invariante de que todo camino de falla da 'E'."""
+
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+        self.agotar_el_cupo(self.rescatista)
+
+        service = ModeracionService()
+        estado, _ = service.revisar(animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertTrue(service.sin_cupo)
+
+    def test_una_falla_de_la_api_no_se_confunde_con_el_cupo(self):
+
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+
+        service = ModeracionService()
+        with con_error():
+            estado, _ = service.revisar(animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertFalse(
+            service.sin_cupo, "una caída de OpenAI se contó como cupo agotado y frenó la carga",
+        )
+
+    def test_el_cupo_de_una_revision_no_se_queda_pegado_en_la_siguiente(self):
+        """El servicio se instancia por llamada, pero el que lo reusa tiene que ver
+        siempre la última revisión: un flag pegado le frenaría la carga a un conocido."""
+
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+
+        service = ModeracionService()
+        service.sin_cupo = True
+
+        with con_respuesta(visto(["gato"])):
+            service.revisar(animal)
+
+        self.assertFalse(service.sin_cupo)
+
+
+@override_settings(
+    MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST", INSTAGRAM_AUTO_ACTIVO=True,
+)
+class CadenaCompletaTest(AltaDeAnimalTestCase):
+    """La cadena que dejaba evadir la revisión entera, de punta a punta.
+
+    Un usuario nuevo carga cinco animales inocuos y la IA se los aprueba (aprueba a
+    cualquiera, no pide historial); el cron automatic_approve toma esas aprobaciones
+    como "historial" y le da la aprobación automática; el usuario gasta su cupo diario
+    de revisiones, así que a partir de ahí revisar() devuelve 'E' sin llegar a llamar a
+    la API; y ese 'E' más el historial auto-aprueba todo lo que cargue. No lo miró
+    nadie: ni una persona ni la IA. Con el posteo automático prendido, eso sale a la
+    cuenta pública del refugio.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.nuevo = make_user(email="recien@catpuccino.test", automatic_approve=False)
+
+    def test_no_se_puede_fabricar_el_historial_y_despues_apagar_la_revision(self):
+
+        for numero in range(AutomaticApproveCommand.MINIMO_APROBADOS):
+            inocuo = self.guardar_animal(
+                con_respuesta(visto(["gato"])), self.nuevo, nombre="Inocuo {}".format(numero),
+            )
+            self.assertTrue(inocuo.aprobado, "la IA dejó de aprobar: la cadena arranca en otro lado")
+
+        call_command("automatic_approve", stdout=StringIO(), stderr=StringIO())
+
+        self.nuevo.refresh_from_db()
+        self.assertFalse(
+            self.nuevo.automatic_approve,
+            "cinco aprobaciones de la IA le dieron el historial que sólo dan las personas",
+        )
+
+        #el propio usuario gasta su cupo del día, cargando y editando
+        for _ in range(ModeracionService().get_limite_diario()):
+            RevisionIALlamada.objects.create(pedido_por=self.nuevo)
+
+        spam = self.guardar_animal(
+            con_error(AssertionError("sin cupo no se llama a la API")), self.nuevo, nombre="Spam",
+        )
+
+        self.assertEqual(spam.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(spam.aprobado, "se evadió la revisión entera: no lo miró ni una persona ni la IA")
+        self.assertIsNone(spam.instagram_programado_para, "y encima quedó agendado a Instagram")
+
+
+class QuienAproboTest(TestCase):
+    """Los caminos por los que aprueba una PERSONA dejan dicho que fue una persona.
+
+    Es lo único que cuenta el cron automatic_approve como historial: si alguno de estos
+    caminos deja de anotarlo, el equipo aprueba a mano y el rescatista no llega nunca a
+    la aprobación automática; y si lo anota la auto-aprobación de la IA, el historial se
+    lo fabrica cualquiera.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.equipo = make_user(email="equipo@catpuccino.test", is_superuser=True, is_staff=True)
+        self.animal = make_animal(nombre="Willy", aprobado=False)
+        self.admin = AnimalAdmin(Animal, AdminSite())
+
+    def request_del_admin(self):
+
+        request = self.factory.post("/")
+        request.user = self.equipo
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        return request
+
+    def guardar_el_tilde(self, **datos):
+        """Lo que hace el admin con el tilde del listado (`aprobado` es list_editable)."""
+
+        FormDelAnimal = modelform_factory(Animal, fields=["aprobado"])
+        form = FormDelAnimal(datos, instance=self.animal)
+        form.is_valid()
+
+        obj = form.save(commit=False)
+        self.admin.save_model(self.request_del_admin(), obj, form, change=True)
+
+        self.animal.refresh_from_db()
+
+    def test_el_link_del_mail_lo_marca(self):
+
+        request = self.factory.get("/", {"id": self.animal.id})
+        request.user = self.equipo
+
+        with mock.patch("catus.views.animal.MailService"):
+            AprobarView.as_view()(request)
+
+        self.animal.refresh_from_db()
+        self.assertTrue(self.animal.aprobado)
+        self.assertTrue(self.animal.aprobado_por_persona, "aprobó una persona y no quedó anotado")
+
+    def test_la_accion_del_admin_lo_marca(self):
+
+        with mock.patch("catus.admin.MailService"):
+            self.admin.aprobar_animales(
+                self.request_del_admin(), Animal.objects.filter(id=self.animal.id),
+            )
+
+        self.animal.refresh_from_db()
+        self.assertTrue(self.animal.aprobado)
+        self.assertTrue(self.animal.aprobado_por_persona, "aprobó una persona y no quedó anotado")
+
+    def test_el_tilde_del_listado_lo_marca(self):
+
+        self.guardar_el_tilde(aprobado="on")
+
+        self.assertTrue(self.animal.aprobado)
+        self.assertTrue(self.animal.aprobado_por_persona, "aprobó una persona y no quedó anotado")
+
+    def test_destildar_le_saca_la_marca(self):
+        """Retirar la aprobación es retirar la mirada: si la marca quedara puesta, un
+        animal desaprobado le seguiría contando como historial al rescatista."""
+
+        self.animal.aprobado = True
+        self.animal.aprobado_por_persona = True
+        self.animal.save()
+
+        self.guardar_el_tilde()
+
+        self.assertFalse(self.animal.aprobado)
+        self.assertFalse(self.animal.aprobado_por_persona)
 
 
 @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")

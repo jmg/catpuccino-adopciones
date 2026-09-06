@@ -166,12 +166,11 @@ class Command(BaseCommand):
         """Lo que queda del límite de Instagram en las últimas 24 h.
 
         Se cuenta por instagram_ultimo_intento, que lo escribe el reclamo justo antes de
-        subir, o sea que se cuentan los posteos DE ESTE COMANDO. El botón de /tools/publish/
-        publica sin pasar por acá y no deja ninguna fecha, así que sus posteos no ocupan
-        lugar: entre los dos caminos el tope real de la cuenta se puede pasar igual. Por eso
-        MAX_POR_DIA deja margen (20 de 25) en vez de apurar el límite. Contarlos de verdad
-        pide una fecha de publicación en el modelo, que hoy no existe: instagram_publicado
-        es un booleano y updated_at no se escribe cuando se guarda con update_fields.
+        subir. Lo escriben los dos caminos -el cron y el botón de /tools/publish/, que
+        reclama adentro de publish()-, así que los dos ocupan lugar. Igual MAX_POR_DIA deja
+        margen (20 de 25) en vez de apurar el límite: contarlos de verdad pide una fecha de
+        publicación en el modelo, que hoy no existe (instagram_publicado es un booleano y
+        updated_at no se escribe cuando se guarda con update_fields).
 
         Los que se publicaron antes de que existiera el campo no cuentan, pero tampoco caen
         dentro de las 24 h una vez que esto lleva un día andando.
@@ -200,12 +199,23 @@ class Command(BaseCommand):
         return min(self.ESPERA_BASE * (2 ** (intentos - 1)), self.ESPERA_MAXIMA)
 
     def le_toca(self, animal, ahora):
-        """Si ya pasó la espera que le corresponde por los intentos que lleva encima."""
+        """Si ya pasó la espera que le corresponde por los intentos que lleva encima.
+
+        La espera nunca es más corta que el reclamo de publish(): mientras ese reclamo vale,
+        el animal lo está subiendo otro. El botón de /tools/publish/ reclama pero no cuenta
+        intentos, así que sin este piso la corrida siguiente lo agarraba con intentos=0 y
+        espera 0, y encima le ocupaba un lugar de la tanda a otro que sí podía salir.
+        """
 
         if not animal.instagram_ultimo_intento:
             return True
 
-        return ahora - animal.instagram_ultimo_intento >= self.espera_por_intentos(animal.instagram_intentos)
+        espera = max(
+            self.espera_por_intentos(animal.instagram_intentos),
+            FacebookApiService.VENCIMIENTO_DEL_RECLAMO,
+        )
+
+        return ahora - animal.instagram_ultimo_intento >= espera
 
     def es_una_muestra(self):
         """En LOCAL publish() no llega a Instagram, así que la corrida es sólo una muestra.
@@ -219,10 +229,16 @@ class Command(BaseCommand):
     def reclamar(self, animal):
         """UPDATE atómico: la corrida sigue con el animal sólo si se lo quedó ella.
 
-        publish() marca instagram_publicado recién al final, después de esperar a que
-        Instagram procese cada foto —minutos con un carrusel—. Con el cron corriendo cada
-        pocos minutos, la corrida siguiente veía el mismo animal sin publicar y quedaban
-        dos posts iguales en la cuenta de la organización.
+        publish() marca instagram_publicado recién cuando Instagram contesta que el post
+        existe, o sea después de esperar a que procese cada foto —minutos con un carrusel—.
+        Con el cron corriendo cada pocos minutos, la corrida siguiente veía el mismo animal
+        sin publicar y quedaban dos posts iguales en la cuenta de la organización.
+
+        Y la cola se vuelve a mirar acá adentro, en el mismo UPDATE. La tanda se arma al
+        empezar la corrida y después se publica de a un animal por vez, así que lo que una
+        persona frenaba mientras tanto -destildar "listo para publicar" en /tools/, marcar
+        adoptado, sacarle la aprobación- salía igual: el reclamo miraba nada más la fecha
+        del último intento. Con varias fotos por animal esa ventana son minutos.
 
         Se escribe con update() y no con save() a propósito: el post_save de Animal
         reescribe el desplegable de forms_builder, y esto corre en cada intento.
@@ -231,17 +247,26 @@ class Command(BaseCommand):
         if self.es_una_muestra():
             return True
 
-        reclamados = Animal.objects.filter(
+        ahora = timezone.now()
+        vencido = ahora - FacebookApiService.VENCIMIENTO_DEL_RECLAMO
+
+        reclamados = self.animales_a_publicar().filter(
+            #mientras el reclamo esté fresco lo está subiendo otro: otra corrida o el botón
+            #de /tools/publish/, que no pasa por acá y también reclama
+            Q(instagram_ultimo_intento__isnull=True) | Q(instagram_ultimo_intento__lte=vencido),
             id=animal.id,
-            instagram_publicado=False,
-            #si otra corrida lo reclamó primero, ya no es el valor que leímos al armar la cola
-            instagram_ultimo_intento=animal.instagram_ultimo_intento,
         ).update(
-            instagram_ultimo_intento=timezone.now(),
+            instagram_ultimo_intento=ahora,
             instagram_intentos=F("instagram_intentos") + 1,
         )
 
-        return reclamados == 1
+        if reclamados != 1:
+            return False
+
+        #el reclamo ya es de esta corrida: que publish() no se lo pida de nuevo a sí mismo
+        FacebookApiService.marcar_reclamado(animal, ahora)
+
+        return True
 
     def anotar_error(self, animal, motivo):
         """El motivo queda en el animal: el stdout de un cron no lo mira nadie.
@@ -369,8 +394,12 @@ class Command(BaseCommand):
             ultimo_intento = animal.instagram_ultimo_intento
 
             if not self.reclamar(animal):
-                #otra corrida se lo llevó entre que armamos la cola y llegamos hasta acá
-                self.stdout.write("{}: lo está publicando otra corrida".format(animal.nombre))
+                #o se lo llevó otra corrida, o dejó de estar en condiciones de publicarse
+                #entre que armamos la tanda y le tocó el turno: alguien lo frenó, lo marcó
+                #adoptado o le sacó la aprobación mientras la corrida iba por otro animal
+                self.stdout.write(
+                    "{}: lo está publicando otra corrida o ya no está para publicar".format(animal.nombre),
+                )
                 continue
 
             self.stdout.write("publicando {}".format(animal.nombre))

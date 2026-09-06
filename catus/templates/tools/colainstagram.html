@@ -27,6 +27,30 @@
             </div>
 
             {% comment %}
+            El posteo automatico arranca apagado, asi que este es el caso mas comun de
+            todos, y la pantalla lo daba por prendido: mostraba "Sale en 29 minutos" y "les
+            toca en la proxima corrida" de animales que esperan a dos crones que no los van
+            a mirar nunca —preparar_publicaciones corta de entrada y publish solo levanta
+            lo que NO esta agendado—.
+            {% endcomment %}
+            {% if not posteo_automatico_activo %}
+            <div class="aviso-apagado">
+                <i class="fas fa-power-off"></i>
+                <div>
+                    <b>El posteo automático está apagado: nada de esto va a salir solo.</b>
+                    Lo agendado espera una hora que no lo va a levantar nadie. Para publicar hay
+                    que hacerlo como siempre: armar las imágenes en "Imágenes de Instagram" y
+                    marcar el animal como listo para publicar, que es lo único que sigue
+                    levantando el cron.
+                    <div class="aviso-como">
+                        Se prende poniendo <code>"INSTAGRAM_AUTO_ACTIVO": "1"</code> en el JSON de
+                        config del servidor.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% comment %}
             El orden de los grupos no es decorativo: los agendados van primero porque son
             los unicos que todavia se pueden frenar. Cuando pasan a "en cola" ya es tarde.
             {% endcomment %}
@@ -205,8 +229,19 @@
                                 <div class="cuenta-regresiva">
                                     <i class="fas fa-clock"></i>
                                     <span>
-                                        Sale en <b>{{ animal.falta }}</b>
-                                        ({{ animal.instagram_programado_para|date:"d/m/Y H:i" }})
+                                        {% comment %}
+                                        Con el posteo automatico apagado la hora sigue
+                                        estando, pero no es una cuenta regresiva: no hay
+                                        cron atras esperandola. El por que lo cuenta la
+                                        nota de arriba, que es donde va el motivo.
+                                        {% endcomment %}
+                                        {% if posteo_automatico_activo %}
+                                            Sale en <b>{{ animal.falta }}</b>
+                                            ({{ animal.instagram_programado_para|date:"d/m/Y H:i" }})
+                                        {% else %}
+                                            Agendado para el
+                                            {{ animal.instagram_programado_para|date:"d/m/Y H:i" }}
+                                        {% endif %}
                                     </span>
                                 </div>
 
@@ -393,6 +428,41 @@
 
 .stat-con_problemas .stat-number {
     color: #dc3545;
+}
+
+/* el aviso de que el pipeline automatico no esta andando: va arriba de todo y en el color
+   de las advertencias, porque cambia el significado de la pantalla entera */
+.aviso-apagado {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #fff8e1;
+    border: 2px solid #ffc107;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 30px;
+    color: #7a5b00;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.aviso-apagado i {
+    font-size: 1.2rem;
+    margin-top: 2px;
+}
+
+.aviso-como {
+    margin-top: 8px;
+    font-size: 0.82rem;
+    color: #6c757d;
+}
+
+.aviso-como code {
+    background: white;
+    border-radius: 6px;
+    padding: 2px 6px;
+    color: #a71d2a;
+    word-break: break-word;
 }
 
 .grupo {

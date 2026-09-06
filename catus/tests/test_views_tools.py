@@ -27,6 +27,19 @@ def cola_de_publish():
     return list(Command().animales_a_publicar())
 
 
+def corrida_de_publish():
+    """Lo que el cron va a publicar en la próxima corrida.
+
+    Es la cola más todo lo que el comando mira antes de subir —la agenda, los intentos
+    gastados, el cupo del día—, o sea la única pregunta que importa: ¿va a salir? Usa el
+    filtro real del comando, no una copia.
+    """
+
+    from catus.management.commands.publish import Command
+
+    return list(Command().animales_de_esta_corrida())
+
+
 def cola_de_preparar():
     """La cola del cron que arma las imágenes y deja listo. La del comando, no una copia."""
 
@@ -483,12 +496,11 @@ class AnimalesPendientesViewTest(ToolsViewTestCase):
 
 
 
-class ColaInstagramViewTest(ToolsViewTestCase):
-    """La pantalla donde el equipo ve y frena lo que Instagram está por publicar solo.
+class ColaInstagramTestCase(ToolsViewTestCase):
+    """Lo que necesitan los tests de la cola, sin ningún test adentro.
 
-    Es el único gate humano que queda: el posteo se agenda solo al aprobar, y aprobado=True
-    no quiere decir que alguien haya mirado, porque automatic_approve deja auto-aprobando
-    a cualquiera que ya tenga un animal aprobado.
+    La pantalla dice dos cosas distintas según el posteo automático esté prendido o
+    apagado, así que hay una clase por mundo y las dos arman los animales igual.
     """
 
     def setUp(self):
@@ -574,6 +586,36 @@ class ColaInstagramViewTest(ToolsViewTestCase):
         """Si la tarjeta del animal trae el botón para frenarle el posteo."""
 
         return "accionCola(this, '{}', 'cancelar')".format(animal.id) in self.abrir(self.admin).content.decode()
+
+    def agotado(self, nombre="Agotado", **kwargs):
+        """Como queda el que gastó los cinco intentos de `publish`: marcado, sin agenda y
+        con el motivo escrito. De ahí no lo levanta ningún cron nunca más."""
+
+        from catus.management.commands.publish import Command
+
+        kwargs.setdefault("instagram_listo_para_publicar", True)
+        kwargs.setdefault("instagram_programado_para", None)
+        kwargs.setdefault("instagram_intentos", Command.MAX_INTENTOS)
+        kwargs.setdefault("instagram_ultimo_intento", timezone.now() - timedelta(days=1))
+        kwargs.setdefault(
+            "instagram_error",
+            "Se dejó de intentar después de 5 intentos. Último error: Error de Instagram 100: qué sé yo",
+        )
+        return self.agendado(nombre=nombre, **kwargs)
+
+
+#El posteo automático arranca apagado y estos son los tests del pipeline andando, así que
+#lo prenden: sin esto describían un mundo que no existía —con el flag apagado los dos crones
+#ignoran lo agendado— y la pantalla les contestaba lo que contesta cuando no hay pipeline
+#detrás. El mundo apagado, que es el default, tiene su propia clase más abajo.
+@override_settings(ENV="TEST", INSTAGRAM_AUTO_ACTIVO=True)
+class ColaInstagramViewTest(ColaInstagramTestCase):
+    """La pantalla donde el equipo ve y frena lo que Instagram está por publicar solo.
+
+    Es el único gate humano que queda: el posteo se agenda solo al aprobar, y aprobado=True
+    no quiere decir que alguien haya mirado, porque automatic_approve deja auto-aprobando
+    a cualquiera que ya tenga un animal aprobado.
+    """
 
     def test_un_usuario_comun_no_entra(self):
         """Registrarse es gratis: estar logueado no es un permiso."""
@@ -927,6 +969,70 @@ class ColaInstagramViewTest(ToolsViewTestCase):
 
         self.assertIn("No va a salir", self.abrir(self.admin).content.decode())
 
+    def test_el_que_agoto_los_intentos_cae_en_con_problemas(self):
+        """`publish` deja de intentar después de MAX_INTENTOS y no lo mira nunca más.
+
+        El animal quedaba en "En cola", que dice que le toca en la próxima corrida, y con
+        la marca puesta: la pantalla mentía justo sobre el que necesita que alguien lo
+        mire, y en el grupo donde no hay nada para decidir.
+        """
+
+        animal = self.agotado()
+
+        self.assertEqual(self.grupos_con(animal), ["con_problemas"])
+        self.assertNotIn(animal, corrida_de_publish(), "el test no prueba nada: el cron todavía lo publica")
+
+    def test_el_que_agoto_los_intentos_dice_por_que_no_va_a_salir(self):
+        """La cola de `publish` dice quién tiene permiso de salir, no quién va a salir:
+        preguntándole sólo a ella, la pantalla decía que estaba por salir."""
+
+        self.agotado()
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertIn("No va a salir", cuerpo)
+        self.assertIn("Se dejó de intentar", cuerpo)
+
+    def test_reintentar_le_devuelve_los_intentos(self):
+        """Es la única forma de devolverlo a la cola desde la pantalla.
+
+        Sin devolverle el contador el botón no reintenta nada: `publish` filtra por
+        intentos < MAX_INTENTOS y lo saltea igual, corrida tras corrida.
+        """
+
+        animal = self.agotado()
+        self.con_imagen_para_instagram(animal)
+
+        self.accionar(self.admin, animal.id, "publicar_ya")
+
+        animal.refresh_from_db()
+        self.assertEqual(animal.instagram_intentos, 0)
+        self.assertIn(animal, corrida_de_publish(), "reintentar no lo devolvió a la cola del cron")
+
+    def test_reintentar_le_borra_el_motivo_viejo(self):
+        """El motivo cuenta lo que pasó la última vez: reintentando deja de describir nada."""
+
+        animal = self.agotado()
+        self.con_imagen_para_instagram(animal)
+
+        self.accionar(self.admin, animal.id, "publicar_ya")
+
+        animal.refresh_from_db()
+        self.assertFalse(animal.instagram_error)
+
+    def test_reintentar_no_le_devuelve_los_intentos_al_que_se_esta_subiendo(self):
+        """Devolverle el contador al que una corrida está subiendo ahora le saca el único
+        candado contra el post duplicado: con los intentos en cero, la corrida siguiente lo
+        reclama mientras la primera todavía sube fotos, y quedan dos posts iguales."""
+
+        animal = self.agotado(instagram_ultimo_intento=timezone.now())
+
+        response = self.accionar(self.admin, animal.id, "publicar_ya")
+
+        animal.refresh_from_db()
+        self.assertEqual(animal.instagram_intentos, 5, "le devolvió los intentos al que se está subiendo")
+        self.assertIn("dos veces", response.content.decode())
+
     def test_la_cuenta_regresiva_esta_en_castellano(self):
         """El sitio corre con USE_I18N en False, así que Django no traduce: el filtro
         timeuntil escribía "Sale en 41 minutes" en una pantalla que está toda en castellano."""
@@ -1022,3 +1128,82 @@ class ColaInstagramViewTest(ToolsViewTestCase):
             len(con_treinta_y_tres), len(con_tres),
             "la pantalla hace una consulta por animal",
         )
+
+
+@override_settings(ENV="TEST", INSTAGRAM_AUTO_ACTIVO=False)
+class ColaInstagramConElPosteoApagadoTest(ColaInstagramTestCase):
+    """La misma pantalla con el posteo automático apagado, que es como arranca.
+
+    Apagado no hay pipeline detrás de la agenda: `preparar_publicaciones` corta de entrada
+    y `publish` sólo levanta lo que NO está agendado. La pantalla daba el pipeline por
+    prendido igual, así que en el caso más común de todos decía "Sale en 29 minutos" de
+    algo que no iba a salir nunca.
+    """
+
+    def test_avisa_que_el_posteo_automatico_esta_apagado(self):
+        """Sin esto no hay forma de saber desde acá en qué mundo está el sitio."""
+
+        self.agendado()
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertIn("posteo automático está apagado", cuerpo)
+        self.assertIn("INSTAGRAM_AUTO_ACTIVO", cuerpo, "no dice cómo se prende")
+
+    def test_no_promete_una_hora_que_no_va_a_llegar(self):
+
+        self.agendado(minutos=45)
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertNotIn("Sale en", cuerpo, "prometió un posteo que no va a salir")
+        self.assertIn("No va a salir", cuerpo)
+
+    def test_lo_que_se_marca_a_mano_sigue_saliendo(self):
+        """Apagar el posteo automático no deja al equipo sin publicar: `publish` levanta
+        igual lo que se marca a mano, que es como se publicó siempre."""
+
+        animal = self.agendado(nombre="AMano", instagram_programado_para=None)
+        self.con_imagen_para_instagram(animal)
+
+        self.assertIn(animal, corrida_de_publish())
+        self.assertNotIn("No va a salir", self.abrir(self.admin).content.decode())
+
+    def test_publicar_ya_lo_deja_donde_el_cron_lo_levanta(self):
+        """El bug: "Publicar ya" vencía la agenda, y con el flag apagado eso lo saca de los
+        dos crones para siempre —`publish` sólo mira lo que no está agendado—, mientras la
+        pantalla seguía diciendo que iba a salir."""
+
+        animal = self.agendado(instagram_listo_para_publicar=False)
+        self.con_imagen_para_instagram(animal)
+
+        self.accionar(self.admin, animal.id, "publicar_ya")
+
+        animal.refresh_from_db()
+        self.assertIn(animal, corrida_de_publish(), "lo mandó a esperar a un cron apagado")
+        self.assertIsNone(animal.instagram_programado_para)
+
+    def test_publicar_ya_sin_las_imagenes_armadas_dice_que_hay_que_hacer(self):
+        """Con el flag apagado no hay ningún cron que se las arme: el que decide es el
+        equipo, así que el animal tiene que quedar donde lo ve, con el motivo escrito."""
+
+        animal = self.agendado(instagram_listo_para_publicar=False)
+        make_animal_image(animal=animal)
+
+        self.accionar(self.admin, animal.id, "publicar_ya")
+
+        animal.refresh_from_db()
+        self.assertFalse(animal.instagram_listo_para_publicar, "lo mandó a publicar a medio armar")
+        self.assertEqual(self.grupos_con(animal), ["con_problemas"])
+        self.assertIn("no hay ningún cron que le arme las imágenes", animal.instagram_error)
+
+    def test_publicar_ya_no_resucita_lo_ya_publicado(self):
+        """El post ya salió: volver a marcarlo listo es publicarlo dos veces."""
+
+        animal = self.agendado(instagram_publicado=True, instagram_listo_para_publicar=False)
+        self.con_imagen_para_instagram(animal)
+
+        self.accionar(self.admin, animal.id, "publicar_ya")
+
+        animal.refresh_from_db()
+        self.assertFalse(animal.instagram_listo_para_publicar)

@@ -68,9 +68,16 @@ class AnimalAdmin(admin.ModelAdmin):
         aprobado le devolvería la agenda a uno que el equipo canceló a propósito.
         """
 
-        super().save_model(request, obj, form, change)
-
         cambiados = getattr(form, "changed_data", [])
+
+        #El tilde también es una persona aprobando, y es de las formas más usadas. Se
+        #anota antes de guardar para que salga en el mismo save. Desaprobar limpia la
+        #marca: retirar la aprobación es retirar la mirada, y si quedara puesta ese animal
+        #le seguiría contando como historial al rescatista sin estar aprobado.
+        if "aprobado" in cambiados:
+            obj.aprobado_por_persona = obj.aprobado
+
+        super().save_model(request, obj, form, change)
 
         if "aprobado" in cambiados:
 
@@ -104,6 +111,12 @@ class AnimalAdmin(admin.ModelAdmin):
                 continue
 
             animal.aprobado = True
+
+            #acá aprueba una persona del equipo, y eso es lo que cuenta el cron
+            #automatic_approve para dar el "historial": contar cualquier animal aprobado
+            #dejó de significar "lo miró alguien" cuando la revisión automática empezó a
+            #aprobar sola.
+            animal.aprobado_por_persona = True
             animal.save()
             animales_aprobados += 1
 

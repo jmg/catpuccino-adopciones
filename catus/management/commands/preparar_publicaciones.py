@@ -144,7 +144,7 @@ class Command(BaseCommand):
         animal.instagram_programado_para = None
 
     def marcar_listo(self, animal):
-        """Lo deja en la cola de `publish` y le gasta la agenda.
+        """Lo deja en la cola de `publish` y le gasta la agenda. False si dejó de calificar.
 
         Se escribe con update() y no con save() a propósito: el post_save de Animal
         reescribe el desplegable de forms_builder, y esto corre en cada corrida.
@@ -152,16 +152,30 @@ class Command(BaseCommand):
         De paso se borra el error de la corrida anterior, que ya no describe nada. Sólo
         cuando la marca cambia: si el animal ya estaba listo, el error que tenga puesto es
         de `publish` intentando publicarlo y no es nuestro para borrar.
+
+        El UPDATE revalida la cola en el mismo tiro, y no es de más: la tanda se arma al
+        principio de la corrida y componer las imágenes de los que van antes son minutos.
+        Si en el medio alguien cancela el posteo desde /tools/ -o desaprueba el animal-, al
+        llegarle el turno se lo marcaba igual, porque acá no se volvía a mirar la base: el
+        cron le devolvía la marca a un posteo que una persona ya había frenado. Una vez que
+        alguien frena un posteo, ningún cron lo resucita solo.
         """
 
         if not animal.instagram_listo_para_publicar:
-            Animal.objects.filter(id=animal.id).update(
+
+            marcados = self.animales_a_preparar().filter(id=animal.id).update(
                 instagram_listo_para_publicar=True,
                 instagram_error=None,
             )
+
+            if not marcados:
+                return False
+
             animal.instagram_listo_para_publicar = True
 
         self.consumir_agenda(animal)
+
+        return True
 
     def anotar_error(self, animal, motivo):
         """El motivo queda en el animal: el stdout de un cron no lo lee nadie.
@@ -214,7 +228,12 @@ class Command(BaseCommand):
             self.anotar_error(animal, self.SIN_FOTOS)
             return True
 
-        self.marcar_listo(animal)
+        if not self.marcar_listo(animal):
+            #lo sacaron de la cola mientras esta corrida le armaba las imágenes: no se
+            #marca. Las imágenes quedan hechas, que es trabajo aprovechable si vuelve.
+            self.stdout.write("{}: lo frenaron mientras se preparaba: no se marca".format(animal.nombre))
+            return True
+
         self.stdout.write("{}: listo para publicar ({} imágenes nuevas)".format(animal.nombre, generadas))
 
         return True

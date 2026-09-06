@@ -47,6 +47,15 @@ class Animal(BaseEntity):
     estado = models.CharField(max_length=2, choices=settings.ANIMAL_ESTADO_CHOICES, default="D") #D: Disponible, #A: Adoptado, #R: Reservado, #E: Expirado
 
     aprobado = models.BooleanField(default=False)
+
+    #Quién aprobó, no sólo que está aprobado. El cron automatic_approve otorga el
+    #"historial" contando animales aprobados, y desde que la revisión automática aprueba
+    #sola esa cuenta incluía sus propias aprobaciones: con cinco altas inocuas —que la IA
+    #aprueba sin pedirle historial a nadie— cualquiera se ganaba la aprobación automática
+    #y, con ella, que las altas siguientes salieran solas a Instagram. Sólo lo marcan los
+    #caminos donde mira una persona: AprobarView y el admin (la acción y el tilde).
+    aprobado_por_persona = models.BooleanField(default=False)
+
     destacado = models.BooleanField(default=False)
     cargado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
 
-    help = "Marca automatic_approve en los rescatistas con suficientes animales aprobados."
+    help = "Marca automatic_approve en los rescatistas con suficientes animales aprobados a mano."
 
     #Con un solo animal aprobado alcanzaba, así que a partir del segundo el rescatista se
     #auto-aprobaba solo. Mientras publicar en Instagram era a mano no se notaba; con el
@@ -31,7 +31,16 @@ class Command(BaseCommand):
         #revisar a los que ya estaban adentro no cambiaba nada justo para los que importan.
         for user in CatusUser.objects.all():
 
-            count = Animal.objects.filter(cargado_por=user, aprobado=True).count()
+            #Sólo los que aprobó una PERSONA. Contar `aprobado=True` a secas dejó de
+            #significar "alguien lo miró" cuando la revisión automática empezó a aprobar
+            #sola: cinco altas inocuas que la IA dejaba pasar bastaban para ganarse el
+            #historial, y con el historial las altas siguientes que la revisión no pudiera
+            #mirar se aprobaban solas y salían a la cuenta del refugio. El historial tiene
+            #que querer decir que el equipo conoce a esta persona, no que la IA no
+            #encontró nada raro en sus primeras cinco fotos.
+            count = Animal.objects.filter(
+                cargado_por=user, aprobado=True, aprobado_por_persona=True,
+            ).count()
             corresponde = count >= self.MINIMO_APROBADOS
 
             if corresponde == user.automatic_approve:
@@ -39,7 +48,10 @@ class Command(BaseCommand):
 
             #esto era un print(): en un cron no lo lee nadie y no queda registro de por
             #qué un rescatista pasó a aprobación automática
-            logger.info("%s tiene %s animales aprobados", user.get_instagram() or user.email, count)
+            logger.info(
+                "%s tiene %s animales aprobados por una persona",
+                user.get_instagram() or user.email, count,
+            )
 
             user.automatic_approve = corresponde
             user.save()

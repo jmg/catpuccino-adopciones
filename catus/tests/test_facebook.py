@@ -701,6 +701,37 @@ class GetPostForTest(TestCase):
             "permalink": "https://instagr.am/p/{}".format(id),
         }
 
+    def test_no_le_saca_el_post_a_un_animal_que_ya_lo_tiene(self):
+        """Un post ya tiene dueño o no lo tiene: adivinarlo de nuevo se lo saca al otro.
+
+        Lo cobra el animal que quedó publicado=True sin post_id (un proceso muerto en el
+        medio de la subida): entra a este cron sin post, el caption de la otra Luna le
+        matchea, y se lo lleva. Después, cuando se marca adoptado, update_status_in_ig
+        comenta "¡Ya fue adoptado!" en el post de una gata que sigue buscando hogar, y la
+        que de verdad se adoptó queda apuntando a un post que no es suyo.
+        """
+
+        vieja = make_animal(nombre="Luna", instagram_publicado=True, instagram_post_id="post-de-la-vieja")
+        perdida = make_animal(nombre="Luna", instagram_publicado=True)
+
+        FacebookApiService.get_post_for([self.post("post-de-la-vieja", "Luna")], perdida)
+
+        perdida.refresh_from_db()
+        vieja.refresh_from_db()
+
+        self.assertIsNone(perdida.instagram_post_id, "le colgó el post de la otra Luna")
+        self.assertEqual(vieja.instagram_post_id, "post-de-la-vieja", "le sacaron el post a la vieja")
+
+    def test_si_el_post_no_es_de_nadie_si_se_lo_asigna(self):
+        """La contraparte: sin esto, un guard de más deja a todos sin recuperar el link."""
+
+        animal = make_animal(nombre="Willy", instagram_publicado=True)
+
+        FacebookApiService.get_post_for([self.post("post-libre", "Willy")], animal)
+
+        animal.refresh_from_db()
+        self.assertEqual(animal.instagram_post_id, "post-libre")
+
     def test_no_pisa_el_post_que_el_animal_ya_tenia(self):
         """Asignaba sin mirar si el animal ya tenía instagram_post_id.
 

@@ -384,6 +384,30 @@ class CandadoDePublicacionTest(CronDePublicacion):
 
         self.assertEqual(intentos, [animal.id], "publicó dos veces el mismo animal")
 
+    def test_lo_que_se_frena_en_el_medio_de_la_tanda_no_sale(self):
+        """La tanda se arma al empezar y se publica de a un animal por vez.
+
+        Con MAX_POR_CORRIDA=5 y varias fotos cada uno, entre que se arma la lista y le toca
+        el turno al último pasan minutos. Lo que una persona frenaba en esa ventana salía
+        igual, porque el reclamo miraba nada más la fecha del último intento: es la regla
+        de oro otra vez, ningún cron puede resucitar un posteo que alguien frenó.
+        """
+
+        primero = self.animal_listo(nombre="Willy")
+        segundo = self.animal_listo(nombre="Rocky")
+
+        def publicar_y_frenar_al_segundo(animal_a_publicar, ig_text):
+            #mientras se sube el primero, alguien destilda "listo" en el admin
+            Animal.objects.filter(id=segundo.id).update(instagram_listo_para_publicar=False)
+            return self.publicar_ok(animal_a_publicar, ig_text)
+
+        intentados = self.publicados(publicar_y_frenar_al_segundo)
+
+        self.assertEqual(intentados, ["Willy"], "publicó al que acababan de frenar")
+
+        segundo.refresh_from_db()
+        self.assertFalse(segundo.instagram_publicado)
+
     def test_el_que_esta_publicando_otra_corrida_no_entra(self):
         """El reclamo escribe instagram_ultimo_intento: mientras esté fresco, es de otra."""
 
@@ -659,11 +683,20 @@ class AutomaticApproveTest(TestCase):
         return salida.getvalue()
 
     def rescatista_con(self, aprobados, email="rescatista@catpuccino.test", **kwargs):
+        """Alguien con `aprobados` animales aprobados POR UNA PERSONA.
+
+        Que los apruebe una persona es lo que hace historial. Contar `aprobado=True` a
+        secas dejó de significar "lo miró alguien" cuando la revisión automática empezó
+        a aprobar sola: ver test_lo_que_aprobo_la_ia_no_cuenta_como_historial.
+        """
 
         user = make_user(email=email, **kwargs)
 
         for numero in range(aprobados):
-            make_animal(nombre="Willy {}".format(numero), cargado_por=user, aprobado=True)
+            make_animal(
+                nombre="Willy {}".format(numero), cargado_por=user,
+                aprobado=True, aprobado_por_persona=True,
+            )
 
         return user
 
@@ -734,6 +767,32 @@ class AutomaticApproveTest(TestCase):
         user.refresh_from_db()
         self.assertFalse(user.automatic_approve)
 
+    def test_lo_que_aprobo_la_ia_no_cuenta_como_historial(self):
+        """El agujero: la revisión automática aprueba sola, y eso daba historial.
+
+        Un usuario nuevo cargaba cinco animales inocuos, la IA se los aprobaba a los
+        cinco (aprueba a cualquiera, no pide historial) y este cron le daba la aprobación
+        automática. Con eso, cualquier alta posterior que la revisión no pudiera mirar
+        —gastar el cupo diario alcanza, y lo gasta el propio usuario— se aprobaba sola,
+        sin que la mirara ni una persona ni la IA, y salía a Instagram.
+        """
+
+        user = make_user()
+
+        for numero in range(AutomaticApproveCommand.MINIMO_APROBADOS * 2):
+            make_animal(
+                nombre="Willy {}".format(numero), cargado_por=user, aprobado=True,
+                aprobado_por_persona=False, revision_ia_estado=Animal.REVISION_OK,
+            )
+
+        self.correr()
+
+        user.refresh_from_db()
+        self.assertFalse(
+            user.automatic_approve,
+            "las aprobaciones de la IA le dieron el historial que la IA misma no pide",
+        )
+
     def test_avisa_por_logger_y_no_por_print(self):
         """Informaba con print(): en un cron no lo lee nadie y no queda registro."""
 
@@ -746,3 +805,74 @@ class AutomaticApproveTest(TestCase):
             any("aprobados" in linea for linea in registro.output),
             "no dejó registro de por qué pasó a aprobación automática",
         )
+
+
+class PadronViejoTest(TestCase):
+    """La migración que estrena `aprobado_por_persona` sobre los animales que ya estaban.
+
+    Va con los tests del cron porque lo que decide es su conteo: de lo aprobado hasta
+    hoy no hay registro de quién lo aprobó, y elegir mal el arranque le saca la
+    aprobación automática a todo el padrón de un día para el otro (y el equipo se
+    encuentra aprobando a mano lo que hoy sale solo) o se la regala al que se la fabricó
+    con la revisión automática.
+    """
+
+    def correr_la_migracion(self):
+        """Se llama a la función de datos de la migración con el registro real de
+        modelos: para este campo el estado histórico y el actual son el mismo."""
+
+        from importlib import import_module
+
+        from django.apps import apps
+
+        migracion = import_module("catus.migrations.0034_animal_aprobado_por_persona")
+        migracion.marcar_el_padron_viejo(apps, None)
+
+    def sin_el_campo(self, **kwargs):
+        """Un animal tal como queda justo después de agregar la columna."""
+
+        kwargs.setdefault("aprobado_por_persona", False)
+        return make_animal(**kwargs)
+
+    def test_el_rescatista_de_siempre_no_pierde_la_aprobacion_automatica(self):
+
+        user = make_user()
+
+        for numero in range(AutomaticApproveCommand.MINIMO_APROBADOS):
+            self.sin_el_campo(nombre="Willy {}".format(numero), cargado_por=user, aprobado=True)
+
+        self.correr_la_migracion()
+        call_command("automatic_approve", stdout=StringIO(), stderr=StringIO())
+
+        user.refresh_from_db()
+        self.assertTrue(
+            user.automatic_approve,
+            "el campo nuevo le sacó la aprobación automática a todo el padrón viejo",
+        )
+
+    def test_lo_que_ya_habia_aprobado_la_ia_no_entra(self):
+        """Son justo los que pudo haber aprobado la IA sola, que es lo que el campo vino
+        a tapar: darlos por mirados dejaría adentro al que ya se fabricó el historial."""
+
+        user = make_user()
+
+        for numero in range(AutomaticApproveCommand.MINIMO_APROBADOS):
+            self.sin_el_campo(
+                nombre="Willy {}".format(numero), cargado_por=user, aprobado=True,
+                revision_ia_estado=Animal.REVISION_OK,
+            )
+
+        self.correr_la_migracion()
+        call_command("automatic_approve", stdout=StringIO(), stderr=StringIO())
+
+        user.refresh_from_db()
+        self.assertFalse(user.automatic_approve)
+
+    def test_los_que_no_estaban_aprobados_no_se_marcan(self):
+
+        animal = self.sin_el_campo(nombre="Willy", aprobado=False)
+
+        self.correr_la_migracion()
+
+        animal.refresh_from_db()
+        self.assertFalse(animal.aprobado_por_persona)
