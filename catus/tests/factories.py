@@ -65,6 +65,19 @@ def uploaded_photo(name="foto.jpg", size=(800, 600)):
     return SimpleUploadedFile(name, photo_bytes(size).getvalue(), content_type="image/jpeg")
 
 
+def foto_cortada(name="cortada.jpg", size=(1600, 1200)):
+    """Una foto a la que le falta la segunda mitad, como una subida que se cortó.
+
+    Es el caso normal de cargar desde el celular con mala señal, y no es lo mismo que un
+    archivo que no es una imagen: la cabecera JPEG está entera, así que la validación de
+    ImageField —que usa PIL.verify() y no decodifica el scan— la da por buena.
+    """
+
+    crudo = photo_bytes(size).getvalue()
+
+    return SimpleUploadedFile(name, crudo[:len(crudo) // 2], content_type="image/jpeg")
+
+
 def make_animal_image(animal=None, size=(800, 600), **kwargs):
 
     if animal is None:

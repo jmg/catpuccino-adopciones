@@ -25,6 +25,7 @@ from django.test.utils import CaptureQueriesContext
 from catus.admin import AnimalAdmin
 from catus.management.commands.automatic_approve import Command as AutomaticApproveCommand
 from catus.models import Animal, RevisionIALlamada
+from catus.services.mail import MailService
 from catus.services.moderacion import ModeracionService
 from catus.tests.factories import make_animal, make_animal_image, make_user, uploaded_photo
 from catus.views.animal import AprobarView, EditView
@@ -391,18 +392,10 @@ class AltaDeAnimalTestCase(TestCase):
         self.override.disable()
         shutil.rmtree(self.media, ignore_errors=True)
 
-    def guardar_animal(self, respuesta_ia, rescatista=None, nombre="Willy"):
-        """Da de alta un animal por la vista y devuelve lo que quedó en la base.
+    def datos_del_alta(self, nombre="Willy"):
+        """El POST del alta, con el management form del formset y una foto de verdad."""
 
-        Va por EditView a propósito. Antes esto copiaba la condición de auto-aprobación
-        adentro del test, así que sacarla de la vista dejaba todo en verde igual y una
-        publicación marcada como sospechosa salía publicada.
-
-        `rescatista` se pasa cuando el test necesita a alguien SIN historial: quién
-        carga el animal es justamente lo que decide varias de las reglas de acá abajo.
-        """
-
-        datos = {
+        return {
             "tipo": "G",
             "estado": "D",
             "nombre": nombre,
@@ -417,7 +410,18 @@ class AltaDeAnimalTestCase(TestCase):
             "animalimage_set-0-image": uploaded_photo(),
         }
 
-        request = self.factory.post("/animales/", datos)
+    def guardar_animal(self, respuesta_ia, rescatista=None, nombre="Willy"):
+        """Da de alta un animal por la vista y devuelve lo que quedó en la base.
+
+        Va por EditView a propósito. Antes esto copiaba la condición de auto-aprobación
+        adentro del test, así que sacarla de la vista dejaba todo en verde igual y una
+        publicación marcada como sospechosa salía publicada.
+
+        `rescatista` se pasa cuando el test necesita a alguien SIN historial: quién
+        carga el animal es justamente lo que decide varias de las reglas de acá abajo.
+        """
+
+        request = self.factory.post("/animales/", self.datos_del_alta(nombre))
         request.user = rescatista or self.rescatista
 
         SessionMiddleware().process_request(request)
@@ -455,6 +459,37 @@ class AutoAprobacionTest(AltaDeAnimalTestCase):
         """Alguien que se registró recién: nadie le aprobó nunca una publicación."""
 
         return make_user(email="recien@catpuccino.test", automatic_approve=False)
+
+    def test_un_fallo_del_mail_no_le_voltea_el_alta_al_rescatista(self):
+        """send_html_email reintenta y después vuelve a lanzar (utils.py).
+
+        Con una API key vencida de SendGrid, o un 429, el alta terminaba en 500 con el
+        animal YA guardado, ya revisado, ya aprobado y ya agendado para Instagram: la
+        persona ve un error, no sabe que quedó cargado, y si vuelve a intentar carga un
+        duplicado. AprobarView y la acción del admin ya lo tenían envuelto; el alta no.
+        """
+
+        rescatista = self.sin_historial()
+
+        request = self.factory.post("/animales/", self.datos_del_alta())
+        request.user = rescatista
+
+        SessionMiddleware().process_request(request)
+        request.session.save()
+
+        view = EditView()
+        view.request = request
+
+        with con_respuesta(visto(["gato"])), mock.patch.object(
+            MailService, "send_new_animal_mail", side_effect=Exception("sendgrid caído"),
+        ):
+            #si esto levanta, el rescatista vio un 500
+            view.req(is_post=True)
+
+        animal = Animal.objects.filter(nombre="Willy").first()
+
+        self.assertIsNotNone(animal, "el alta se perdió por un fallo del mail")
+        self.assertTrue(animal.aprobado, "quedó sin aprobar por un fallo del mail")
 
     def test_la_ia_aprueba_al_que_no_tiene_historial(self):
         """El cambio de fondo: quien aprueba es la revisión, no el historial.
@@ -774,6 +809,45 @@ class QuienAproboTest(TestCase):
 
         self.assertFalse(self.animal.aprobado)
         self.assertFalse(self.animal.aprobado_por_persona)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class GuardarLaRevisionNoPisaLoDemasTest(TestCase):
+    """La revisión guarda sus tres columnas y nada más.
+
+    El animal se carga al principio del request y esto corre después de esperar hasta 8 s
+    a OpenAI y de comprimir las fotos: en esa ventana el cron `publish` puede haber
+    publicado al animal. Con un save() entero, los valores viejos que quedaron en memoria
+    le pisaban lo que el cron acababa de escribir, instagram_publicado volvía a False y la
+    corrida siguiente lo publicaba de nuevo: dos posts iguales en la cuenta de la
+    organización, que no se deshace.
+    """
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G", datos="Gatito en adopción.")
+        make_animal_image(animal=self.animal)
+
+    def test_no_le_pisa_al_cron_lo_que_acaba_de_publicar(self):
+
+        #el animal que el request tiene en memoria: todavía sin publicar
+        self.assertFalse(self.animal.instagram_publicado)
+
+        #y mientras tanto el cron lo publica
+        Animal.objects.filter(id=self.animal.id).update(
+            instagram_publicado=True,
+            instagram_post_id="post-1",
+            instagram_listo_para_publicar=False,
+            instagram_programado_para=None,
+        )
+
+        with con_respuesta(visto(["gato"])):
+            self.service.revisar_y_guardar(self.animal)
+
+        desde_la_base = Animal.objects.get(id=self.animal.id)
+        self.assertTrue(desde_la_base.instagram_publicado, "le devolvió el animal a la cola: post duplicado")
+        self.assertEqual(desde_la_base.instagram_post_id, "post-1")
+        self.assertEqual(desde_la_base.revision_ia_estado, Animal.REVISION_OK, "no guardó la revisión")
 
 
 @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")

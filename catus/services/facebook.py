@@ -208,7 +208,13 @@ class FacebookApiService:
                 raise
 
             except Exception as e:
-                error_str = str(e)
+                #show_error y no str(e): pyfb pide con urlopen, así que un error de Graph
+                #llega como HTTPError y str() da "HTTP Error 400: Bad Request", con el
+                #motivo -que viene en el cuerpo JSON- tirado a la basura. Este texto
+                #termina en instagram_error y es lo que el equipo lee en
+                #/tools/colainstagram/: sin esto, un token vencido y un tope de posteos
+                #alcanzado se ven exactamente iguales y no hay con qué decidir qué hacer.
+                error_str = cls.show_error(e)
                 if "Media ID is not available" in error_str or "does not exist" in error_str.lower():
                     raise Exception("Media container {} is not available: {}".format(creation_id, error_str))
 

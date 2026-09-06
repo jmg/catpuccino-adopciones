@@ -265,6 +265,16 @@ if ENV == "TEST":
         },
     }
 
+    #MEDIA_ROOT es <repo>/gallery, o sea las fotos DE VERDAD. Buena parte de la suite se
+    #protege con override_settings sobre un tempdir, pero las clases que se olvidan
+    #escriben ahi: eran ~49 archivos por corrida ensuciando la galeria del repo. Esto lo
+    #corta para toda la suite, incluidas las clases que se escriban mañana. El directorio
+    #queda bajo /tmp y lo limpia el sistema; los tests que igual quieran el suyo pueden
+    #seguir usando override_settings, que gana sobre esto.
+    import tempfile
+
+    MEDIA_ROOT = tempfile.mkdtemp(prefix="catus-tests-media-")
+
 try:
     from .settings_local import *
 except:

@@ -1077,6 +1077,21 @@ class ColaInstagramViewTest(ColaInstagramTestCase):
         self.assertNotIn('<script>alert', cuerpo, "el error de la API se imprimió como HTML")
         self.assertIn("&lt;script&gt;", cuerpo)
 
+    def test_el_nombre_del_animal_se_muestra_escapado(self):
+        """El nombre también lo escribe cualquiera que se registre.
+
+        Era el único de los tres textos ajenos de esta pantalla sin test: instagram_error
+        y datos ya lo tenían. Y la pantalla la abre un superusuario, o sea justo quien
+        puede aprobar animales y vincular la cuenta de Instagram.
+        """
+
+        self.agendado(nombre='<script>alert("robo la sesion")</script>')
+
+        cuerpo = self.abrir(self.admin).content.decode()
+
+        self.assertNotIn('<script>alert', cuerpo, "el nombre se imprimió como HTML")
+        self.assertIn("&lt;script&gt;", cuerpo)
+
     def test_la_descripcion_del_animal_se_muestra_sin_scripts(self):
         """datos lo escribe cualquiera que se registre, y acá lo abre un superusuario."""
 

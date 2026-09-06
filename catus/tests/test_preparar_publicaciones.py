@@ -548,6 +548,52 @@ class AgendaDeUnSoloUsoTest(PrepararPublicacionesTestCase):
         self.assertIsNone(animal.instagram_programado_para)
 
 
+class CancelarEnElMedioDeLaCorridaTest(PrepararPublicacionesTestCase):
+    """La tanda se arma al empezar; componer las imágenes de los que van antes son minutos.
+
+    Si en esa ventana una persona cancela el posteo desde /tools/, al llegarle el turno el
+    cron lo marcaba listo igual, porque `marcar_listo` no volvía a mirar la base. La regla
+    de oro: una vez que alguien frena un posteo, ningún cron lo resucita solo.
+    """
+
+    def test_lo_cancelado_mientras_corre_la_tanda_no_se_marca_listo(self):
+
+        primero = self.agendado(nombre="Willy")
+        self.con_foto(primero)
+
+        segundo = self.agendado(nombre="Rocky")
+        self.con_foto(segundo)
+
+        original = Command.generar_imagenes
+
+        def cancelar_al_segundo_mientras_compone(self_cmd, animal):
+            #mientras se compone el primero, alguien cancela el segundo desde /tools/
+            Animal.objects.filter(id=segundo.id).update(
+                instagram_programado_para=None, instagram_listo_para_publicar=False,
+            )
+            return original(self_cmd, animal)
+
+        with mock.patch.object(Command, "generar_imagenes", cancelar_al_segundo_mientras_compone):
+            self.correr()
+
+        segundo.refresh_from_db()
+        self.assertFalse(
+            segundo.instagram_listo_para_publicar,
+            "el cron le devolvió la marca a un posteo que una persona ya había cancelado",
+        )
+
+    def test_el_que_no_se_cancela_si_se_marca(self):
+        """La contraparte: un candado de más deja de preparar todo."""
+
+        animal = self.agendado(nombre="Willy")
+        self.con_foto(animal)
+
+        self.correr()
+
+        animal.refresh_from_db()
+        self.assertTrue(animal.instagram_listo_para_publicar)
+
+
 class FlagApagadoTest(PrepararPublicacionesTestCase):
     """Apagar INSTAGRAM_AUTO_ACTIVO tiene que frenar lo que ya está agendado."""
 
