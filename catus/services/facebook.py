@@ -1,6 +1,9 @@
 from ..models import Animal, FacebookAccount
 from pyfb.pyfb import Pyfb
 from django.conf import settings
+from django.db.models import Q
+from django.utils import timezone
+from datetime import timedelta
 import json
 import logging
 import requests
@@ -105,6 +108,65 @@ class FacebookApiService:
             }
 
         return account_names, instagram_account_names, account_data
+
+    #Cuánto vale un reclamo antes de darlo por muerto. Tiene que ser más largo que una
+    #publicación entera -un carrusel son once wait_for_media_ready de hasta 20 s cada uno-
+    #y es la misma ventana que la primera espera del cron (publish.ESPERA_BASE), que ya se
+    #apoyaba en esto mismo para no pisarse con otra corrida.
+    VENCIMIENTO_DEL_RECLAMO = timedelta(minutes=30)
+
+    @classmethod
+    def marcar_reclamado(cls, animal, ahora):
+        """El cron reclama al animal y recién después llama a publish(): que no se lo quite
+        a sí mismo.
+
+        Que el reclamo sea de quien llama se anota en el objeto y no en la base a propósito:
+        en la base los dos reclamos son la misma marca, y desde ahí no hay con qué
+        distinguir "lo tiene la corrida que me está llamando" de "lo tiene otro proceso".
+        """
+
+        animal._reclamo_tomado = True
+        animal.instagram_ultimo_intento = ahora
+
+    @classmethod
+    def reclamar(cls, animal):
+        """Test-and-set contra el post duplicado: devuelve (si lo ganó, lo que había antes).
+
+        El reclamo se escribe en instagram_ultimo_intento, que vence, y no en
+        instagram_publicado, que es el campo que dice que el post existe. Mientras el
+        reclamo esté fresco el animal lo está publicando otro; si el proceso se murió en el
+        medio, el reclamo se cae solo y el animal se vuelve a intentar.
+        """
+
+        ahora = timezone.now()
+        vencido = ahora - cls.VENCIMIENTO_DEL_RECLAMO
+
+        #lo que había antes del reclamo, para poder devolvérselo si no sale ningún post
+        previo = Animal.objects.filter(id=animal.id).values_list(
+            "instagram_ultimo_intento", flat=True,
+        ).first()
+
+        reclamados = Animal.objects.filter(
+            Q(instagram_ultimo_intento__isnull=True) | Q(instagram_ultimo_intento__lte=vencido),
+            id=animal.id,
+            instagram_publicado=False,
+        ).update(instagram_ultimo_intento=ahora)
+
+        if reclamados == 1:
+            animal.instagram_ultimo_intento = ahora
+
+        return reclamados == 1, previo
+
+    @classmethod
+    def soltar_el_reclamo(cls, animal, ultimo_intento):
+        """No salió ningún post: el animal tiene que volver a estar disponible ya mismo.
+
+        Se le devuelve la fecha que tenía y no la de este intento, que lo dejaría media
+        hora afuera de la cola esperando por una publicación que no existe.
+        """
+
+        Animal.objects.filter(id=animal.id).update(instagram_ultimo_intento=ultimo_intento)
+        animal.instagram_ultimo_intento = ultimo_intento
 
     #10 intentos de 2 s son ~20 s por contenedor. Eran 30 de 2 s, o sea hasta un minuto
     #por foto, y un carrusel es un contenedor por foto más uno del carrusel: con 10 fotos
@@ -215,18 +277,28 @@ class FacebookApiService:
         #dos caminos: el cron y el botón "Publicar" de /tools/publish/. El reclamo del cron
         #sólo se defiende de otra corrida del cron, así que apretar el botón mientras una
         #corrida subía las fotos del mismo animal dejaba dos posts iguales en la cuenta de
-        #la organización. Se marca publicado ANTES de tocar Graph: es un test-and-set, así
-        #que de dos que entran juntos actualiza una fila uno solo.
-        #No se toca instagram_intentos ni instagram_ultimo_intento: esos son del reclamo del
-        #cron, que ya corrió antes de llegar hasta acá, y sumarles otro intento le comería
-        #a cada animal la mitad de los reintentos y le correría el backoff.
-        reclamados = Animal.objects.filter(id=animal.id, instagram_publicado=False).update(
-            instagram_publicado=True,
-        )
+        #la organización.
+        #El reclamo se marca en instagram_ultimo_intento, que vence, y NO en
+        #instagram_publicado: escribir el campo final antes de tocar Graph también alcanzaba
+        #para el post duplicado, pero una muerte del proceso en el medio de la subida -el
+        #supervisorctl restart de deploy.sh, el corte del worker a los 30 s en
+        #/tools/publish/- dejaba al animal publicado=True sin que hubiera salido ningún
+        #post. Y así queda afuera de todas las colas, que filtran instagram_publicado=False:
+        #no se enteraba nadie nunca, el botón contestaba "ya está publicado" confirmando una
+        #publicación que no existe, y update_post_id le terminaba colgando el post de otro
+        #animal que se llama igual.
+        #No se toca instagram_intentos: ese es del reclamo del cron, y sumarle otro intento
+        #le comería a cada animal la mitad de los reintentos y le correría el backoff.
+        propio = not getattr(animal, "_reclamo_tomado", False)
+        ultimo_intento = None
 
-        if reclamados != 1:
-            logger.warning("No se publica %s: ya está publicado o lo está publicando otro", animal.nombre)
-            return "{} ya está publicado o lo está publicando otra corrida.".format(animal.nombre)
+        if propio:
+
+            ganado, ultimo_intento = cls.reclamar(animal)
+
+            if not ganado:
+                logger.warning("No se publica %s: ya está publicado o lo está publicando otro", animal.nombre)
+                return "{} ya está publicado o lo está publicando otra corrida.".format(animal.nombre)
 
         try:
             if len(images) > 1:
@@ -235,9 +307,11 @@ class FacebookApiService:
                 response_data = cls.publish_one_image(service, account, images, ig_text)
 
         except Exception as e:
-            #no salió nada: se suelta el reclamo para que el animal vuelva a la cola. Sólo
-            #instagram_publicado, que es lo único que escribió el reclamo.
-            Animal.objects.filter(id=animal.id).update(instagram_publicado=False)
+            #no salió nada: se suelta el reclamo para que el animal vuelva a la cola. El
+            #reclamo del cron no se toca: ese es su intento, es lo que arma el backoff, y el
+            #cron ya sabe devolvérselo cuando el fallo no es del animal sino de la cuenta.
+            if propio:
+                cls.soltar_el_reclamo(animal, ultimo_intento)
 
             #fallo esperado de la API: va a warning y sin exc_info, porque los eventos ERROR
             #de Sentry se llevan puesta la cookie de sesión
@@ -245,7 +319,9 @@ class FacebookApiService:
             logger.warning("No se pudo publicar %s en Instagram: %s", animal.nombre, error)
             return error
 
-        #el post ya está arriba y no se puede deshacer: se guarda antes de pedir el
+        #media_publish contestó, o sea que el post existe: éste es el único momento en el
+        #que se puede escribir instagram_publicado, que es lo que dice que hay un post.
+        #El post ya está arriba y no se puede deshacer: se guarda antes de pedir el
         #permalink. Cualquier corte entre publicar y guardar (en /tools/publish/ el worker
         #corta a los 30 s) dejaba el animal como no publicado y el cron lo volvía a
         #publicar en la corrida siguiente, duplicando el post.
@@ -585,6 +661,19 @@ class FacebookApiService:
             post = cls.buscar_post_por_nombre(posts, animal)
             if post is None:
                 logger.info("No se encontró el post de %s en la cuenta", animal.nombre)
+                return None
+
+            #el caption es una adivinanza, y un post ya tiene dueño o no lo tiene: si ese
+            #post es de otro animal, adivinarlo de nuevo se lo saca. Lo cobraba el animal
+            #que quedó publicado=True sin post_id -un proceso muerto en el medio de la
+            #subida-, que entra a este cron sin post: se llevaba el de la otra Luna, y
+            #cuando después se marcaba adoptado update_status_in_ig comentaba "¡Ya fue
+            #adoptada!" en el post de una gata que seguía buscando hogar.
+            if Animal.objects.filter(instagram_post_id=post["id"]).exclude(id=animal.id).exists():
+                logger.warning(
+                    "El post %s ya es de otro animal: no se le asigna a %s",
+                    post["id"], animal.nombre,
+                )
                 return None
 
             animal.instagram_post_id = post["id"]

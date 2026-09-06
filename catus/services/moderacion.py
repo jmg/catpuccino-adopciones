@@ -87,6 +87,18 @@ class ModeracionService():
     #el modelo trabaja a 512px con detail=low: mandar más grande no agrega información
     LADO_MAXIMO = 512
 
+    def __init__(self):
+
+        #'E' junta dos cosas que no son lo mismo: que la revisión no haya podido correr
+        #por algo ajeno (OpenAI caída, sin crédito, una foto ilegible) y que esta persona
+        #haya gastado su cupo del día. El veredicto sigue siendo 'E' para las dos, porque
+        #'E' no bloquea nada; pero quien después decide auto-aprobar por historial tiene
+        #que poder distinguirlas: el cupo lo agota el propio usuario y es predecible, así
+        #que caer al historial ahí convertía al cupo en un interruptor para apagarse la
+        #revisión a sí mismo. Vive acá y no en el veredicto para no cambiarle la firma a
+        #revisar_y_guardar, que tiene otros llamadores.
+        self.sin_cupo = False
+
     def esta_activa(self):
 
         if not getattr(settings, "MODERACION_IA_ACTIVA", False):
@@ -174,10 +186,16 @@ class ModeracionService():
         """
         from catus.models import Animal
 
+        #se limpia en cada revisión: el que pregunta por el cupo mira siempre la última
+        self.sin_cupo = False
+
         if not self.esta_activa():
+            #esto NO es quedarse sin cupo: que el servicio esté apagado para todos es
+            #ajeno al rescatista, igual que una caída, y ahí el historial sí vale
             return Animal.REVISION_ERROR, "La revisión automática está desactivada."
 
         if self.paso_el_limite(animal.cargado_por):
+            self.sin_cupo = True
             logger.warning(
                 "El usuario %s pasó el límite diario de revisiones",
                 getattr(animal.cargado_por, "id", None),

@@ -27,7 +27,12 @@ set -u
 VENV="${CATUS_VENV:-/home/jm/Envs/catus}"
 APP="${CATUS_APP:-/var/www/catpuccino-adopciones}"
 LOGS="${CATUS_LOGS:-/var/log/catpuccino}"
-export ENV="${ENV:-PRODUCTION}"
+#PROD y no PRODUCTION: es el centinela que usa catus_project/settings.py:47, y con él
+#config.py busca /etc/secrets/catpuccino_adopciones.prod.json. Con cualquier otro valor no
+#encuentra el config y read_config corta con SystemExit, o sea que TODAS las tareas del
+#cron mueren al importar settings. Para confirmar cuál es el del servidor:
+#  ls /etc/secrets/catpuccino_adopciones.*.json
+export ENV="${ENV:-PROD}"
 # ------------------------------
 
 COMANDO="${1:-}"

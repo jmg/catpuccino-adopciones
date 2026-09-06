@@ -294,7 +294,8 @@ class EditView(LoginRequiredMixin, BaseView):
                     #nunca impide guardar ni publicar por el camino normal. Lo único que
                     #cambia es que, si marca algo raro, no se auto-aprueba y queda para
                     #que lo mire una persona.
-                    revision = ModeracionService().revisar_y_guardar(animal)
+                    moderacion = ModeracionService()
+                    revision = moderacion.revisar_y_guardar(animal)
 
                     #Quien aprueba es la revisión, no el historial del rescatista: si vio
                     #el animal en las fotos y el texto no es spam, la publicación sale.
@@ -313,9 +314,17 @@ class EditView(LoginRequiredMixin, BaseView):
                         and animal.cargado_por.automatic_approve
                     )
 
-                    auto_aprobar = reviso_bien or (
-                        revision == Animal.REVISION_ERROR and tiene_historial
-                    )
+                    #...pero sólo cuando el 'E' es una falla ajena. Quedarse sin cupo
+                    #también devuelve 'E' y lo provoca el propio usuario: gastando las
+                    #revisiones del día (cargar y editar en bucle alcanza) se apagaba la
+                    #revisión a sí mismo, y a partir de ahí todo lo que cargara se
+                    #auto-aprobaba por historial sin que lo mirara nadie, ni una persona
+                    #ni la IA. Y el historial se lo podía fabricar antes con cinco altas
+                    #inocuas. El veredicto sigue siendo 'E' y no bloquea nada: lo único
+                    #que no hace es aprobar sola. Ese animal espera a que lo mire alguien.
+                    falla_ajena = revision == Animal.REVISION_ERROR and not moderacion.sin_cupo
+
+                    auto_aprobar = reviso_bien or (falla_ajena and tiene_historial)
 
                     if auto_aprobar:
                         animal.aprobado = True
@@ -373,6 +382,12 @@ class AprobarView(SuperuserRequiredMixin, BaseView):
 
         if not animal.aprobado:
             animal.aprobado = True
+
+            #acá hay una persona del equipo mirando: es lo que cuenta el cron
+            #automatic_approve para dar el "historial". Antes contaba cualquier animal
+            #aprobado, y como la revisión automática aprueba sola, el historial se lo
+            #fabricaba el propio rescatista con cinco altas que la IA dejó pasar.
+            animal.aprobado_por_persona = True
             animal.save()
 
             #aprobar es lo que agenda el posteo en Instagram. Agendar no puede hacer

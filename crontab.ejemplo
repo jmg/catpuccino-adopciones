@@ -10,6 +10,13 @@
 #   1. Ajustar VENV y APP en cron.sh: los que están son los de la máquina del autor.
 #   2. mkdir -p /var/log/catpuccino   (o el LOGS que hayas puesto en cron.sh)
 #   3. ./cron.sh check                para confirmar que las rutas quedaron bien.
+#
+#      CORRELO TAL CUAL, sin ponerle ENV= adelante. cron.sh usa ENV=PROD por default y esa
+#      es justamente la parte que hay que verificar: si el valor no es el del servidor,
+#      config.py no encuentra el JSON de /etc/secrets y TODAS las tareas mueren al
+#      importar settings. Pasarle un ENV a mano tapa el único error que este chequeo
+#      sirve para encontrar. Si falla, el mensaje dice qué archivo buscó; comparalo con
+#      lo que haya en  ls /etc/secrets/catpuccino_adopciones.*.json
 
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
