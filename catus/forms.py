@@ -150,6 +150,41 @@ class AnimalImageForm(ModelForm):
         model = AnimalImage
         fields = ('image', 'crop_x', 'crop_y', 'crop_w', 'crop_h')
 
+    def clean_image(self):
+        """Que la foto se pueda decodificar entera, no sólo que parezca una foto.
+
+        La validación de ImageField usa PIL.verify(), que mira la estructura del archivo
+        y no decodifica el scan: un JPEG cortado a la mitad —una subida interrumpida desde
+        el celular, que es lo más común— la pasa sin chistar. Reventaba después, adentro
+        de ImageService.optimize(), y para entonces EditView ya había guardado el animal y
+        la foto: el rescatista veía un 500, no se enteraba de que el animal había quedado
+        cargado, y si volvía a intentar cargaba un duplicado.
+
+        Se valida acá para que el aviso salga por get_error_messages, junto con el resto
+        de los errores del formulario, y sin dejar nada a medio guardar.
+        """
+        from PIL import Image
+
+        foto = self.cleaned_data.get("image")
+
+        #None es "no subieron nada" (el campo puede venir vacío en una fila del formset), y
+        #un ImageFieldFile sin archivo nuevo es la foto que ya estaba guardada: esa ya se
+        #decodificó cuando se subió, y volver a leerla en cada edición sale caro.
+        if not foto or not hasattr(foto, "file"):
+            return foto
+
+        try:
+            foto.file.seek(0)
+            Image.open(foto.file).load()
+        except Exception:
+            raise forms.ValidationError(
+                "Esa foto llegó cortada o no se puede abrir. Volvé a subirla."
+            )
+        finally:
+            foto.file.seek(0)
+
+        return foto
+
     def clean(self):
         """El recorte lo elige el navegador, asi que lo validamos antes de guardarlo."""
 

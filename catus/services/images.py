@@ -397,7 +397,11 @@ class ImageService():
             with imagen.image.open("rb") as archivo:
                 contenido = archivo.read()
 
-        imagen.image_font_size = tamano
+        #image_font_size NO se toca: es lo que eligió una persona en /tools/makeimages/, o
+        #el default. Guardar acá lo que decidió el ajuste automático lo volvía una orden en
+        #vez de un techo, y como la fórmula de arriba es un min(), el tamaño sólo podía
+        #bajar: al corregir un nombre largo por uno corto la letra ya no volvía a crecer,
+        #y encima el camino que rehace la imagen es justamente el de corregir el nombre.
         imagen.image_posicion_nombre = posicion_nombre
         imagen.image_posicion_edad_sexo = posicion_edad_sexo
         #el recorte queda guardado: así la pantalla muestra el que se usó y la corrida
@@ -420,7 +424,12 @@ class ImageService():
         offset = 40
         offset2 = 40
 
-        img = Image.open(image_field).convert("RGBA")
+        #self.rotate() endereza por EXIF, igual que hace suggest_crop antes de medir el
+        #recorte: sin esto las fracciones se calculaban sobre la foto derecha y se
+        #aplicaban sobre la cruda, o sea sobre el eje equivocado. Para todo lo que entró
+        #por EditView es un no-op —optimize() ya la guarda enderezada y sin EXIF—, pero
+        #una foto cargada desde el admin conserva su orientación y salía de costado.
+        img = self.rotate(Image.open(image_field)).convert("RGBA")
         logo = Image.open(os.path.join(img_parts_dir, "logo_2.png")).convert("RGBA")
         logo = logo.resize((logo_size, logo_size), Image.ANTIALIAS)
 

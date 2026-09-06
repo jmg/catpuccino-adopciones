@@ -520,7 +520,9 @@ class TopeDePublicacionesTest(CronDePublicacion):
     def test_no_pasa_el_limite_diario_de_instagram(self):
         """Los ya publicados en las últimas 24 h ocupan lugar; los de anteayer no."""
 
-        for numero in range(PublishCommand.MAX_POR_DIA):
+        #el número a mano y no PublishCommand.MAX_POR_DIA: leyendo la constante que se
+        #quiere custodiar, subirla a 500 no rompía nada y el test seguía en verde
+        for numero in range(20):
             make_animal(
                 nombre="Publicado {}".format(numero),
                 instagram_publicado=True,

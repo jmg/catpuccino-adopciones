@@ -98,14 +98,23 @@ class EditView(LoginRequiredMixin, BaseView):
         image_for_instagram lleva el nombre, la edad y el sexo quemados en el pixel, y
         generar_imagen_para_instagram se saltea la foto que ya la tiene: sin esto, el
         rescatista corregía la edad —o reemplazaba la foto— y el posteo salía igual, con
-        los datos viejos. Borrarla no frena nada: preparar_publicaciones la vuelve a armar
-        en la corrida siguiente, y publish ya sabe dejar afuera al que todavía no la tiene.
+        los datos viejos.
+
+        Y borrarlas obliga a devolver el animal a la etapa de preparación. La agenda es de
+        un solo uso: cuando preparar_publicaciones marca el animal como listo, la consume.
+        De ahí en más lo único que lo levanta es publish, que publica lo que tenga imagen
+        compuesta y no exige que las tengan todas. Editando en esa ventana —entre un cron
+        y el otro, o durante el backoff de un intento fallido— el posteo salía sin la foto
+        que el rescatista acababa de tocar; y si el cambio fue en el nombre, la edad, el
+        sexo o el tipo se invalidan todas y el animal no salía nunca más, con
+        /tools/colainstagram/ diciendo que iba a salir.
 
         Sólo mientras el posteo no salió. Después de publicado ese archivo es lo que se
         subió a Instagram: rearmarlo no cambia el post que ya está en la cuenta (el cron
         ni lo mira, preparar_publicaciones filtra instagram_publicado=False) y borrarlo
         sólo pierde el registro de lo que se publicó.
         """
+        from catus.services.instagram_auto import InstagramAutoService
 
         if animal.instagram_publicado:
             return
@@ -113,6 +122,39 @@ class EditView(LoginRequiredMixin, BaseView):
         for imagen in imagenes:
             if imagen.image_for_instagram:
                 imagen.image_for_instagram.delete(save=True)
+
+        if not animal.instagram_listo_para_publicar:
+            return
+
+        #la pregunta no es "¿borré alguna?" sino "¿le falta alguna?". Una foto AGREGADA no
+        #tiene imagen compuesta que borrar, así que mirando sólo lo que se borró el animal
+        #se quedaba listo y publish posteaba el carrusel sin la foto nueva.
+        if all(imagen.image_for_instagram for imagen in animal.get_images()):
+            return
+
+        #se apaga la marca y se vuelve a agendar, así preparar_publicaciones lo levanta y
+        #rehace lo que falta. De paso se recupera la ventana para frenarlo, que es lo que
+        #corresponde: el contenido cambió después de haber sido aprobado.
+        Animal.objects.filter(id=animal.id).update(instagram_listo_para_publicar=False)
+        animal.instagram_listo_para_publicar = False
+
+        InstagramAutoService().agendar(animal)
+
+    def avisar_del_animal_nuevo(self, animal):
+        """Le avisa al equipo del alta. Un fallo del mail no puede voltear el alta.
+
+        `send_html_email` reintenta tres veces y después vuelve a lanzar (utils.py), así
+        que una API key vencida de SendGrid o un 429 le devolvían un 500 al rescatista con
+        el animal YA guardado, ya revisado, ya aprobado y ya agendado para Instagram: la
+        persona ve un error, no sabe que quedó cargado, y si vuelve a intentar carga un
+        duplicado. Es el mismo criterio que `aprobar_animales` en admin.py y que
+        `AprobarView`, que ya lo tenían.
+        """
+
+        try:
+            MailService().send_new_animal_mail(animal)
+        except Exception:
+            logger.exception("No se pudo avisar del alta de %s", animal.id)
 
     def get_error_messages(self, animal_form, image_form_set):
         """Arma la lista de errores que ve el rescatista cuando no se puede guardar.
@@ -336,10 +378,10 @@ class EditView(LoginRequiredMixin, BaseView):
                         #que tiene el equipo para frenarlo.
                         InstagramAutoService().agendar(animal)
 
-                        MailService().send_new_animal_mail(animal)
+                        self.avisar_del_animal_nuevo(animal)
                         self.request.session["is_new_animal_approved"] = True
                     else:
-                        MailService().send_new_animal_mail(animal)
+                        self.avisar_del_animal_nuevo(animal)
                         #el mensaje que ve el rescatista es el mismo de siempre ("estamos
                         #revisando la publicación"): si el filtro se equivoca, acusar a
                         #alguien que acaba de rescatar un animal es peor que esperar a que

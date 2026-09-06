@@ -16,7 +16,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from catus.forms import AnimalForm, AnimalImageForm, RequiredImageInlineFormset
 from catus.models import Animal, AnimalImage
 from catus.services.mail import MailService
-from catus.tests.factories import make_user, photo_bytes, uploaded_photo
+from catus.tests.factories import foto_cortada, make_user, photo_bytes, uploaded_photo
 from catus.views.animal import EditView
 
 
@@ -69,6 +69,45 @@ class MensajesDeErrorTest(TestCase):
             any("foto" in mensaje.lower() for mensaje in mensajes),
             "no se avisa que falta la foto: {}".format(mensajes),
         )
+
+    def test_avisa_que_la_foto_llego_cortada(self):
+        """Una subida que se corta desde el celular pasaba la validación y reventaba después.
+
+        ImageField valida con PIL.verify(), que mira la estructura y no decodifica el
+        scan, así que un JPEG cortado a la mitad la pasa. El OSError salía recién adentro
+        de ImageService.optimize(), cuando EditView ya había guardado el animal y la foto:
+        el rescatista veía un 500, no se enteraba de que el animal había quedado cargado,
+        y si volvía a intentar cargaba un duplicado.
+        """
+
+        mensajes = self.mensajes(
+            {"nombre": "Willy", "tipo": "G", "estado": "D", "sexo": "M"},
+            formset_extra={"animalimage_set-0-image": ""},
+            files={"animalimage_set-0-image": foto_cortada()},
+            total=1,
+        )
+
+        texto = " ".join(mensajes).lower()
+        self.assertIn("cortada", texto, "no se avisa que la foto llegó cortada: {}".format(mensajes))
+
+    def test_una_foto_entera_no_da_error(self):
+        """La contraparte: si el chequeo fuera de más, no se podría cargar ninguna foto.
+
+        `get_error_messages` nunca devuelve lista vacía a propósito (ver
+        test_nunca_devuelve_una_lista_vacia), así que con todo válido contesta el mensaje
+        genérico: lo que se afirma acá es que no aparece un error sobre la foto.
+        """
+
+        mensajes = self.mensajes(
+            {"nombre": "Willy", "tipo": "G", "estado": "D", "sexo": "M"},
+            formset_extra={"animalimage_set-0-image": ""},
+            files={"animalimage_set-0-image": uploaded_photo()},
+            total=1,
+        )
+
+        texto = " ".join(mensajes).lower()
+        self.assertNotIn("cortada", texto, "una foto buena se rechazó como cortada")
+        self.assertNotIn("foto", texto, "una foto buena dio error de foto: {}".format(mensajes))
 
     def test_avisa_que_falta_el_nombre_con_la_etiqueta_del_campo(self):
 

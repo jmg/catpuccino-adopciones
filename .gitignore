@@ -140,3 +140,6 @@ catus/config/*
 node_modules/
 jstests/test-results/
 jstests/playwright-report/
+
+# worktrees que crea Claude Code para aislar agentes: son repos embebidos
+.claude/

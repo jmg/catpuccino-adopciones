@@ -63,12 +63,32 @@ class FormView(BaseView):
         if "gato" not in datos:
             datos["gato"] = estado_form.gato_id or ""
 
+        #a qué animal apuntaba ANTES de que el form toque la instancia: is_valid() corre
+        #_post_clean, que ya le escribe encima los valores del POST, así que después de
+        #esa línea estado_form.gato ya es el que mandó el atacante y no queda con qué
+        #comparar
+        gato_original_id = estado_form.gato_id
+
         estado_form_form = EstadoFormularioForm(datos, instance=estado_form)
 
         #save() sin is_valid() levanta ValueError con cualquier dato raro: 500 en vez
         #de un mensaje
         if not estado_form_form.is_valid():
             return self.json_response({"status": "error", "errores": estado_form_form.errors})
+
+        #El form expone 'gato' sobre TODOS los animales, así que el POST puede reapuntar
+        #el formulario al animal de otra persona. El chequeo estaba más abajo, cuidando
+        #la escritura del estado, y para entonces el save() ya había dejado el formulario
+        #colgado del animal ajeno: no le cambiaba el estado, pero la postulación quedaba
+        #pegada ahí, y desde ahí sigue el contrato. Acá se mira antes de guardar nada.
+        gato_destino = estado_form_form.cleaned_data.get("gato")
+
+        if gato_destino is not None and gato_destino.id != gato_original_id:
+            if not puede_editar_animal(self.request.user, gato_destino):
+                return self.json_response({
+                    "status": "error",
+                    "error": "Ese animal lo cargó otra persona: no podés mover el formulario a su publicación.",
+                })
 
         estado_form_form.save()
 

@@ -142,7 +142,10 @@ class FormViewPostRobustezTest(TestCase):
 
     def test_se_puede_cambiar_el_animal_a_proposito(self):
 
-        otro = make_animal(nombre="Otro")
+        #del mismo rescatista: mover el formulario a la publicación de OTRA persona es
+        #justo lo que no se puede, y lo cuida FormViewPermisosTest. Acá lo que se prueba
+        #es que el cambio deliberado sigue andando.
+        otro = make_animal(nombre="Otro", cargado_por=self.rescatista)
 
         self.post({"estado": "N", "gato": otro.id})
 
@@ -186,6 +189,56 @@ class FormViewPermisosTest(TestCase):
         self.assertEqual(self.animal.estado, "D", "un ajeno le marcó el animal como adoptado")
         self.assertIn(self.animal, Animal.get_all_for_adoption())
         self.assertEqual(json.loads(response.content.decode())["status"], "error")
+
+    def test_un_ajeno_no_puede_colgar_su_formulario_del_animal_de_otro(self):
+        """El chequeo estaba después del save(), y para entonces ya era tarde.
+
+        El form expone `gato` sobre TODOS los animales. El atacante manda el id del animal
+        ajeno: no le cambiaba el estado —eso sí estaba cuidado— pero el save() ya había
+        reapuntado su postulación a la publicación de otra persona, de forma permanente. Y
+        desde el EstadoFormulario sigue el contrato, que es el otro extremo del flujo.
+        """
+
+        import json
+
+        ajeno = make_user(email="ajeno@catpuccino.test")
+        mio = make_animal(nombre="Mío", estado="D", cargado_por=ajeno)
+        formulario_del_ajeno = make_estado_formulario(animal=mio, hash="mio999")
+
+        request = self.factory.post("/formularios/mio999/", {
+            "estado": "N",
+            "gato": self.animal.id,
+        })
+        request.user = ajeno
+
+        view = FormView()
+        view.request = request
+        response = view.post(form_hash="mio999")
+
+        formulario_del_ajeno.refresh_from_db()
+        self.assertEqual(
+            formulario_del_ajeno.gato_id, mio.id,
+            "le colgó su formulario a la publicación de otro",
+        )
+        self.assertEqual(json.loads(response.content.decode())["status"], "error")
+
+    def test_el_duenio_si_puede_mover_su_formulario_a_otro_animal_suyo(self):
+        """La contraparte: el rescatista se equivocó de animal al cargar y lo corrige."""
+
+        otro_mio = make_animal(nombre="Rocky", estado="D", cargado_por=self.duenio)
+
+        request = self.factory.post("/formularios/abc123/", {
+            "estado": "N",
+            "gato": otro_mio.id,
+        })
+        request.user = self.duenio
+
+        view = FormView()
+        view.request = request
+        view.post(form_hash="abc123")
+
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.gato_id, otro_mio.id)
 
     def test_un_anonimo_tampoco(self):
 

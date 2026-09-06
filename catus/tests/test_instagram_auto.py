@@ -163,8 +163,15 @@ class EntornoTest(TestCase):
     """El mismo criterio que ModeracionService: no se dispara desde una máquina de
     desarrollo, y se puede apagar desde la config sin tocar código."""
 
-    @override_settings(ENV="LOCAL")
+    @override_settings(ENV="LOCAL", INSTAGRAM_AUTO_ACTIVO=True)
     def test_en_local_no_se_agenda_nada(self):
+        """Con el flag PRENDIDO: si no, el test pasa por el flag y no por la guarda.
+
+        Sin el override, esta clase no prende INSTAGRAM_AUTO_ACTIVO (que arranca apagado),
+        así que `esta_activo()` cortaba en la primera línea y el `!= "LOCAL"` de abajo -el
+        que impide que una máquina de desarrollo agende posteos a la cuenta real- se podía
+        borrar entero con la suite en verde.
+        """
 
         animal = make_animal(nombre="Willy", aprobado=True)
 

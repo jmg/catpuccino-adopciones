@@ -328,7 +328,19 @@ class ModeracionService():
             animal.revision_ia_estado = estado
             animal.revision_ia_motivo = motivo
             animal.revision_ia_fecha = timezone.now()
-            animal.save()
+
+            #sólo las tres columnas de la revisión, que es lo único que le pertenece a
+            #esto. El animal se cargó al principio del request y esto corre después de
+            #esperar hasta 8 s a OpenAI y de comprimir las fotos: un save() entero le
+            #escribe encima los valores viejos que quedaron en memoria. Si el cron
+            #publish publicó al animal en esa ventana, le devolvía instagram_publicado a
+            #False y la corrida siguiente lo publicaba de nuevo: dos posts iguales en la
+            #cuenta de la organización, que es irreversible.
+            #save(update_fields=...) y no update(): el post_save de Animal sincroniza el
+            #desplegable de forms_builder y no se puede perder.
+            animal.save(update_fields=[
+                "revision_ia_estado", "revision_ia_motivo", "revision_ia_fecha",
+            ])
         except Exception:
             #guardar el resultado es lo de menos: el animal ya está cargado y lo que
             #no puede pasar es que esto le devuelva un error a quien lo publicó

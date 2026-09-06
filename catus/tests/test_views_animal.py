@@ -548,6 +548,49 @@ class ImagenDeInstagramAlEditarTest(EditarAnimalTestCase):
 
         return bool(self.imagen.image_for_instagram)
 
+    def test_editar_lo_que_ya_estaba_listo_lo_devuelve_a_la_cola_de_preparacion(self):
+        """Borrar la imagen no alcanza: hay que devolver el animal a la etapa anterior.
+
+        La agenda es de un solo uso — preparar_publicaciones la consume al marcar listo—,
+        así que de ahí en más lo único que levanta al animal es publish, que publica lo
+        que tenga imagen compuesta sin exigir que las tengan todas. Editando en esa
+        ventana, el posteo salía sin la foto que el rescatista acababa de tocar; y si el
+        cambio invalidaba todas, el animal no salía nunca más y /tools/colainstagram/
+        seguía diciendo que iba a salir.
+        """
+
+        Animal.objects.filter(id=self.animal.id).update(
+            aprobado=True, instagram_listo_para_publicar=True, instagram_programado_para=None,
+        )
+
+        with override_settings(INSTAGRAM_AUTO_ACTIVO=True, ENV="TEST"):
+            self.editar(self.animal, edad="3 años")
+
+        self.animal.refresh_from_db()
+
+        self.assertFalse(self.tiene_imagen_de_posteo())
+        self.assertFalse(
+            self.animal.instagram_listo_para_publicar,
+            "quedó listo para publicar y sin la imagen: el post sale incompleto",
+        )
+        self.assertIsNotNone(
+            self.animal.instagram_programado_para,
+            "no volvió a la cola de preparación: nadie le rehace la imagen",
+        )
+
+    def test_si_no_estaba_listo_editar_no_lo_agenda_de_prepo(self):
+        """La contraparte: un animal que todavía no llegó a la cola no entra por esto."""
+
+        Animal.objects.filter(id=self.animal.id).update(
+            aprobado=True, instagram_listo_para_publicar=False, instagram_programado_para=None,
+        )
+
+        with override_settings(INSTAGRAM_AUTO_ACTIVO=True, ENV="TEST"):
+            self.editar(self.animal, edad="4 años")
+
+        self.animal.refresh_from_db()
+        self.assertIsNone(self.animal.instagram_programado_para)
+
     def test_cambiar_la_edad_rehace_la_imagen_del_posteo(self):
 
         self.editar(self.animal, edad="3 años")
