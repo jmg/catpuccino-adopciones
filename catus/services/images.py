@@ -273,7 +273,8 @@ def shrink_uploaded_image(upload):
     if size > upload.size * (1 - UPLOAD_MIN_SAVING):
         return upload
     output.seek(0)
-    return InMemoryUploadedFile(output, upload.field_name, upload.name, content_type, size, None)
+    # A big upload arrives as a TemporaryUploadedFile, which has no field_name.
+    return InMemoryUploadedFile(output, getattr(upload, "field_name", None), upload.name, content_type, size, None)
 
 
 def shrink_uploads(files):
