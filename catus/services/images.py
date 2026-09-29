@@ -217,3 +217,72 @@ class ImageService():
             file = File(content_file)
             random_name = f'{uuid.uuid4()}.jpeg'
             image_field.save(random_name, file, save=False)
+
+
+# Photos attached to the adoption forms arrive straight from phones: 4000 px
+# and several MB each, with nothing that needs more than a screen's worth of
+# pixels. They are shrunk on the way in, before forms_builder stores them, so
+# the gallery stops growing by ~16 GB a year. The file keeps its name and its
+# format, since the name is what the form entry stores and links to; only
+# its bytes change, and only when that saves something.
+UPLOAD_MAX_SIDE = 1920
+UPLOAD_JPEG_QUALITY = 82
+UPLOAD_MIN_SAVING = 0.10
+
+
+def shrink_uploaded_image(upload):
+    """A smaller copy of an uploaded photo, or the upload itself when it is not
+    a photo Pillow can read (HEIC, video, PDF) or would not get smaller."""
+    from django.core.files.uploadedfile import InMemoryUploadedFile
+
+    try:
+        upload.seek(0)
+        image = Image.open(upload)
+        fmt = image.format  # by content: some .jpg are PNG or WEBP inside
+        if fmt not in ("JPEG", "MPO", "PNG", "WEBP"):
+            upload.seek(0)
+            return upload
+        image.load()
+    except Exception:
+        upload.seek(0)
+        return upload
+
+    icc = image.info.get("icc_profile")
+    extra = {"icc_profile": icc} if icc else {}
+    image = ImageOps.exif_transpose(image)  # bake the phone's rotation into the pixels
+    output = BytesIO()
+    if fmt in ("JPEG", "MPO"):  # MPO: several JPEGs in one file; the first is the photo
+        if image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+        image.thumbnail((UPLOAD_MAX_SIDE, UPLOAD_MAX_SIDE), Image.LANCZOS)
+        image.save(output, "JPEG", quality=UPLOAD_JPEG_QUALITY, optimize=True, progressive=True, **extra)
+        content_type = "image/jpeg"
+    elif fmt == "WEBP":
+        image.thumbnail((UPLOAD_MAX_SIDE, UPLOAD_MAX_SIDE), Image.LANCZOS)
+        image.save(output, "WEBP", quality=UPLOAD_JPEG_QUALITY, method=6, **extra)
+        content_type = "image/webp"
+    else:  # PNG stays PNG: transparency and exact pixels are why it is a PNG
+        if image.mode == "P":
+            image = image.convert("RGBA")
+        image.thumbnail((UPLOAD_MAX_SIDE, UPLOAD_MAX_SIDE), Image.LANCZOS)
+        image.save(output, "PNG", optimize=True, **extra)
+        content_type = "image/png"
+
+    size = output.tell()
+    upload.seek(0)
+    if size > upload.size * (1 - UPLOAD_MIN_SAVING):
+        return upload
+    output.seek(0)
+    return InMemoryUploadedFile(output, upload.field_name, upload.name, content_type, size, None)
+
+
+def shrink_uploads(files):
+    """request.FILES with every photo in it shrunk; anything else untouched."""
+    if not files:
+        return files
+    from django.utils.datastructures import MultiValueDict
+
+    shrunk = MultiValueDict()
+    for key in files:
+        shrunk.setlist(key, [shrink_uploaded_image(f) for f in files.getlist(key)])
+    return shrunk
