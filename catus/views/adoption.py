@@ -7,6 +7,7 @@ from forms_builder.forms.models import Form, Field, FieldEntry
 from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
+from catus.services.images import shrink_uploads
 
 from django.template import Context
 from django.conf import settings
@@ -95,7 +96,8 @@ class PreAdoptionView(BaseView):
     def post(self, *a, **k):
 
         post = getattr(self.request, "POST", None)
-        files = getattr(self.request, "FILES", None)
+        # Phone photos are shrunk before they are stored; see shrink_uploads.
+        files = shrink_uploads(getattr(self.request, "FILES", None))
 
         animal_id = self.request.GET.get("id")
 
