@@ -191,12 +191,57 @@ function _filter(zone, type) {
     var filterZone = $(this).data("zone").toLowerCase().indexOf(zone) !== -1 || $(this).data("name").toLowerCase().indexOf(zone) !== -1
     var filterType = $(this).data("type") == type || type == "all"
 
-    if (filterZone && filterType) {
-      $(this).parent().show();
-    } else {
-      $(this).parent().hide();
-    }
+    //qué se muestra lo decide paginar(): acá solo se marca si la tarjeta coincide
+    $(this).parent().toggleClass("no-coincide", !(filterZone && filterType));
   })
+}
+
+// La portada muestra de a 5 filas y un "Cargar más": con la lista entera nadie llegaba
+// nunca al pie. Se pagina sobre lo que dejan los filtros, así que buscar sigue
+// encontrando entre todos los animales y no solo entre los que ya se ven.
+var FILAS_POR_PAGINA = 5;
+var paginasMostradas = 1;
+
+function tarjetasPorFila() {
+  //col-md-{{cols}}: en celular va una por fila
+  var cols = parseInt($("#animal-list").data("cols"), 10) || 12;
+  if (!window.matchMedia("(min-width: 768px)").matches) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(12 / cols));
+}
+
+function paginar() {
+
+  var lista = $("#animal-list");
+  if (!lista.length) {
+    return;
+  }
+
+  var limite = paginasMostradas * FILAS_POR_PAGINA * tarjetasPorFila();
+  var coinciden = 0;
+
+  lista.children(".animal-card").each(function() {
+    var tarjeta = $(this);
+    if (tarjeta.hasClass("no-coincide")) {
+      tarjeta.hide();
+      return;
+    }
+    coinciden++;
+    tarjeta.toggle(coinciden <= limite);
+  });
+
+  //desde acá manda el JS, ya no el recorte inicial del CSS
+  lista.removeClass("paginada-inicial");
+
+  var mostrados = Math.min(coinciden, limite);
+  $("#cargar-mas-container").toggle(coinciden > limite);
+  $("#cargar-mas-cuenta").text("Mostrando " + mostrados + " de " + coinciden);
+}
+
+function cargarMas() {
+  paginasMostradas++;
+  paginar();
 }
 
 function filterAnimals() {
@@ -211,6 +256,10 @@ function filterAnimals() {
     sortAnimals(sort);
     initializeImages();
   }
+
+  //otra búsqueda arranca de nuevo por las primeras filas
+  paginasMostradas = 1;
+  paginar();
 }
 
 function sortAnimals(option) {
@@ -230,6 +279,15 @@ function sortAnimals(option) {
 $(document).ready(function() {
 
     initializeImages()
+
+    paginar()
+    $("#cargar-mas").on("click", cargarMas)
+    //cuántas tarjetas entran por fila cambia solo al cruzar los 768px (rotar una
+    //tablet); un resize común se dispara con cada scroll en el celular
+    var anchoDeEscritorio = window.matchMedia("(min-width: 768px)");
+    if (anchoDeEscritorio.addListener) {
+      anchoDeEscritorio.addListener(paginar)
+    }
 
     $("#filter-zone").on("keyup", function() {
       filterAnimals()
