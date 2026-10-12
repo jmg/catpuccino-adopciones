@@ -7,6 +7,18 @@ from catus.services.utils.render import render
 from catus.services.base import BaseService
 
 
+def puede_editar_animal(user, animal):
+    """Un animal lo maneja quien lo cargó, o alguien del equipo de Catpuccino."""
+
+    if not user or not user.is_authenticated:
+        return False
+
+    if user.is_superuser:
+        return True
+
+    return animal is not None and animal.cargado_por_id == user.id
+
+
 class BaseView(TemplateView):
 
     def render_to_response(self, context):
