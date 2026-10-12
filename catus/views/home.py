@@ -71,6 +71,14 @@ class PrivacyView(TemplateView):
 
     template_name = "home/policy.html"
     url = r"^privacidad/$"
+    extra_context = {"legal_page": "privacidad"}
+
+
+class TermsView(TemplateView):
+
+    template_name = "home/terms.html"
+    url = r"^terminos/$"
+    extra_context = {"legal_page": "terminos"}
 
 
 class SitemapView(BaseView):
