@@ -13,15 +13,28 @@ from catus.utils import send_html_email
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from threading import Thread
 
 from catus.forms import ContratoForm
+from catus.views.base import puede_editar_animal
 
 
 class EditView(TemplateView):
 
     url = [r"^formulario/(?P<estado_id>(\d*))/contrato/$"]
     is_persona = False
+
+    def dispatch(self, request, *args, **kwargs):
+
+        #la pantalla por id muestra nombre, DNI, dirección y teléfono del adoptante, y los
+        #ids son correlativos. La versión por hash (EditPersonaView) es la del adoptante,
+        #que no tiene cuenta.
+        if not self.is_persona and not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+
+        return super().dispatch(request, *args, **kwargs)
 
     def req(self, is_post=False, **kwargs):
 
@@ -38,6 +51,10 @@ class EditView(TemplateView):
         else:
             contrato = Contrato.objects.get(hash=self.kwargs.get("contrato_hash"))
             estado_form = contrato.estado_formulario
+
+        #el registro es abierto: con solo tener cuenta no alcanza para ver contratos ajenos
+        if not self.is_persona and not puede_editar_animal(self.request.user, estado_form.gato):
+            raise PermissionDenied("Este formulario es de otra persona.")
 
         gato = estado_form.gato
 
@@ -259,6 +276,10 @@ class DownloadContractView(LoginRequiredMixin, TemplateView):
     def get(self, *args, **kwargs):
 
         contrato = Contrato.objects.get(id=self.kwargs.get("contrato_id"))
+
+        if not puede_editar_animal(self.request.user, contrato.gato):
+            raise PermissionDenied("Este contrato es de otra persona.")
+
         contrato_file = os.path.join(
             settings.STATICFILES_DIRS[0],
             "contrato",
@@ -287,6 +308,10 @@ class DatosView(LoginRequiredMixin, TemplateView):
     def get(self, *args, **kwargs):
 
         estado_form = EstadoFormulario.objects.get(id=self.kwargs.get("estado_id"))
+
+        if not puede_editar_animal(self.request.user, estado_form.gato):
+            raise PermissionDenied("Este formulario es de otra persona.")
+
         contrato = Contrato.objects.get(estado_formulario=estado_form)
         gato = estado_form.gato
 
