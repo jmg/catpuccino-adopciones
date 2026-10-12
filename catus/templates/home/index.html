@@ -70,12 +70,19 @@
 <div class="row mx-1 mx-md-4 text-center">
     {% if animals %}
 
-      <div id="animal-list" class="row w-100 mx-auto mt-2">
+      <div id="animal-list" data-cols="{{cols}}" class="row w-100 mx-auto mt-2 paginada-inicial">
       {% for animal in animals %}
       <div data-id="{{animal.id}}" class="animal-card col-md-{{cols}}">
         {% include "adoption/card.html" %}
       </div>
       {% endfor %}
+      </div>
+
+      <div id="cargar-mas-container" class="w-100 text-center mt-2 mb-5" style="display: none">
+        <button id="cargar-mas" type="button" class="btn btn-primary btn-cargar-mas">
+          <i class="fa fa-paw"></i> Cargar más
+        </button>
+        <div id="cargar-mas-cuenta" class="cargar-mas-cuenta"></div>
       </div>
 
     {% else %}
@@ -304,6 +311,47 @@
 
   .post-preview:hover::after {
     transform: scaleX(1);
+  }
+
+  /* La portada muestra de a 5 filas (paginar() en index.js). Hasta que corre el JS,
+     esto evita que se pinte la lista entera y después se recorte. */
+  #animal-list.paginada-inicial > .animal-card:nth-child(n+6) {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    #animal-list.paginada-inicial > .animal-card:nth-child(n+6) {
+      display: block;
+    }
+
+    #animal-list.paginada-inicial > .animal-card:nth-child(n+16) {
+      display: none;
+    }
+  }
+
+  .btn-cargar-mas {
+    background: var(--gradient-primary);
+    border: none;
+    border-radius: 50px;
+    padding: 12px 36px;
+    font-weight: 600;
+    box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+  }
+
+  .btn-cargar-mas:hover,
+  .btn-cargar-mas:focus {
+    background: var(--gradient-primary);
+    box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+  }
+
+  .btn-cargar-mas i {
+    margin-right: 8px;
+  }
+
+  .cargar-mas-cuenta {
+    color: var(--text-light);
+    font-size: 0.9rem;
+    margin-top: 0.75rem;
   }
 </style>
 {% endblock %}
