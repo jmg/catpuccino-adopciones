@@ -1,7 +1,7 @@
-"""Photos attached to the adoption forms are shrunk before they are stored.
+"""Las fotos de los formularios de pre-adopción se achican antes de guardarse.
 
-Run with ENV=TEST (catus/config/config.test.json, sqlite):
-    ENV=TEST python manage.py test catus.test_uploads
+Corre con ENV=TEST (catus/config/config.test.json, sqlite):
+    ENV=TEST python manage.py test catus.tests.test_subidas
 """
 import io
 import shutil
@@ -15,11 +15,11 @@ from PIL import Image
 
 from catus.services.images import UPLOAD_MAX_SIDE, shrink_uploaded_image, shrink_uploads
 
-ORIENTATION = 274  # EXIF tag
+ORIENTATION = 274  # tag EXIF
 
 
 def photo(width, height, fmt="JPEG", name="foto.jpg", mode="RGB", orientation=None, quality=95):
-    """An upload holding a noisy picture: noise is what makes real photos heavy."""
+    """Una subida con una imagen con ruido: el ruido es lo que hace pesadas a las fotos reales."""
     image = Image.effect_noise((width, height), 90).convert(mode)
     out = io.BytesIO()
     kwargs = {}
@@ -40,9 +40,9 @@ def opened(upload):
     return image
 
 
-class ShrinkUploadedImageTest(SimpleTestCase):
+class AchicarFotoSubidaTest(SimpleTestCase):
 
-    def test_a_large_photo_is_shrunk_keeping_its_name_and_format(self):
+    def test_una_foto_grande_se_achica_y_conserva_nombre_y_formato(self):
         upload = photo(4000, 3000)
         shrunk = shrink_uploaded_image(upload)
 
@@ -54,19 +54,19 @@ class ShrinkUploadedImageTest(SimpleTestCase):
         self.assertEqual(max(image.size), UPLOAD_MAX_SIDE)
         self.assertEqual(image.size, (1920, 1440))
 
-    def test_the_phone_rotation_is_baked_into_the_pixels(self):
-        # Stored landscape, meant to be seen portrait (EXIF orientation 6).
+    def test_la_rotacion_del_celular_queda_en_los_pixeles(self):
+        # Guardada apaisada, para verse vertical (orientación EXIF 6).
         shrunk = shrink_uploaded_image(photo(4000, 2000, orientation=6))
 
         image = opened(shrunk)
         self.assertEqual(image.size, (960, 1920))
         self.assertNotIn(ORIENTATION, image.getexif())
 
-    def test_a_photo_that_is_already_small_is_left_alone(self):
+    def test_una_foto_que_ya_es_chica_no_se_toca(self):
         upload = photo(800, 600, quality=70)
         self.assertIs(shrink_uploaded_image(upload), upload)
 
-    def test_a_png_keeps_its_transparency(self):
+    def test_un_png_conserva_la_transparencia(self):
         upload = photo(3000, 3000, fmt="PNG", name="captura.png", mode="RGBA")
         shrunk = shrink_uploaded_image(upload)
 
@@ -76,12 +76,12 @@ class ShrinkUploadedImageTest(SimpleTestCase):
         self.assertEqual(image.mode, "RGBA")
         self.assertEqual(image.size, (1920, 1920))
 
-    def test_a_jpg_that_is_really_a_png_stays_a_png(self):
+    def test_un_jpg_que_en_realidad_es_png_sigue_siendo_png(self):
         upload = photo(3000, 2000, fmt="PNG", name="foto.jpg")
         image = opened(shrink_uploaded_image(upload))
         self.assertEqual(image.format, "PNG")
 
-    def test_what_is_not_a_readable_photo_passes_through(self):
+    def test_lo_que_no_es_una_foto_legible_pasa_igual(self):
         for name, data in [
             ("contrato.pdf", b"%PDF-1.4\n" + b"x" * 5000),
             ("foto.heic", b"\x00\x00\x00\x18ftypheic" + b"\x00" * 5000),
@@ -89,14 +89,14 @@ class ShrinkUploadedImageTest(SimpleTestCase):
         ]:
             upload = SimpleUploadedFile(name, data)
             self.assertIs(shrink_uploaded_image(upload), upload, name)
-            self.assertEqual(upload.read(), data, name)  # and it can still be read whole
+            self.assertEqual(upload.read(), data, name)  # y se sigue pudiendo leer entera
 
-    def test_a_truncated_photo_passes_through_instead_of_failing(self):
+    def test_una_foto_cortada_pasa_igual_en_vez_de_fallar(self):
         whole = photo(3000, 2000)
         upload = SimpleUploadedFile("rota.jpg", whole.read()[: whole.size // 3])
         self.assertIs(shrink_uploaded_image(upload), upload)
 
-    def test_every_field_and_every_file_survives(self):
+    def test_sobreviven_todos_los_campos_y_archivos(self):
         files = MultiValueDict({
             "field_1": [photo(4000, 3000, name="a.jpg"), photo(4000, 3000, name="b.jpg")],
             "field_2": [SimpleUploadedFile("nota.pdf", b"%PDF-1.4 hola")],
@@ -109,8 +109,8 @@ class ShrinkUploadedImageTest(SimpleTestCase):
         self.assertIsNone(shrink_uploads(None))
 
 
-class PreAdoptionFormUploadTest(TestCase):
-    """The whole path: a pre-adoption form posted with a phone photo."""
+class FormularioPreAdopcionConFotoTest(TestCase):
+    """El camino completo: un formulario de pre-adopción enviado con una foto del celular."""
 
     def setUp(self):
         self.media = tempfile.mkdtemp()
@@ -128,19 +128,19 @@ class PreAdoptionFormUploadTest(TestCase):
         self.animal = Animal.objects.create(nombre="Michi", cargado_por=owner, estado="D", tipo="G")
 
         self.form = Form.objects.create(title="Pre adopción", slug="pre-adopcion")
-        # The first field holds the animal's id: AdoptionService reads it from there.
+        # El primer campo lleva el id del animal: AdoptionService lo lee de ahí.
         self.animal_field = self.form.fields.create(label="Nombre del gato a adoptar", field_type=fields.TEXT, visible=True)
         self.name_field = self.form.fields.create(label="Nombre y Apellido", field_type=fields.TEXT, visible=True)
         self.email_field = self.form.fields.create(label="Email", field_type=fields.EMAIL, visible=True)
         self.photo_field = self.form.fields.create(label="Foto 1", field_type=fields.FILE, visible=True)
 
-    def test_the_stored_photo_is_the_shrunk_one(self):
+    def test_la_foto_guardada_es_la_achicada(self):
         from forms_builder.forms.models import FieldEntry
 
         from catus.models import EstadoFormulario
 
         upload = photo(4032, 3024, name="IMG_1234.jpg")
-        # forms_builder names each input after its field's slug.
+        # forms_builder nombra cada input con el slug de su campo.
         response = self.client.post(f"/pre-adopcion/?id={self.animal.id}", {
             self.animal_field.slug: str(self.animal.id),
             self.name_field.slug: "Ana Pérez",
@@ -150,7 +150,7 @@ class PreAdoptionFormUploadTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         entry = FieldEntry.objects.get(field_id=self.photo_field.id)
-        self.assertRegex(entry.value, r"^forms/[0-9a-f-]{36}/IMG_1234\.jpg$")  # same name
+        self.assertRegex(entry.value, r"^forms/[0-9a-f-]{36}/IMG_1234\.jpg$")  # mismo nombre
         with open(f"{self.media}/{entry.value}", "rb") as stored:
             data = stored.read()
         self.assertLess(len(data), upload.size * 0.9)
@@ -158,6 +158,6 @@ class PreAdoptionFormUploadTest(TestCase):
         self.assertEqual(image.format, "JPEG")
         self.assertEqual(image.size, (1920, 1440))
 
-        # Everything after the save still happens: the entry is filed and mailed.
+        # Lo que viene después de guardar sigue pasando: el formulario se registra y se manda por mail.
         self.assertEqual(EstadoFormulario.objects.get().gato, self.animal)
         self.assertTrue(any("pre-adopción" in m.subject for m in mail.outbox))
