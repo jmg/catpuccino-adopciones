@@ -35,4 +35,14 @@
   <changefreq>weekly</changefreq>
   <priority>0.80</priority>
 </url>
+<url>
+  <loc>https://adopciones.catpuccino.org/terminos/</loc>
+  <changefreq>yearly</changefreq>
+  <priority>0.30</priority>
+</url>
+<url>
+  <loc>https://adopciones.catpuccino.org/privacidad/</loc>
+  <changefreq>yearly</changefreq>
+  <priority>0.30</priority>
+</url>
 </urlset>
