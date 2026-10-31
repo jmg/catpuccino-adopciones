@@ -1,4 +1,5 @@
 from catus.utils import clean_html
+import html
 import uuid
 import zipfile
 from django.http import HttpResponse
@@ -314,8 +315,17 @@ class SendPreguntarEmailView(BaseView):
 
     def post(self, *args, **kwargs):
 
-        user = CatusUser.objects.get(id=self.request.POST.get("user_id"))
-        content = self.request.POST.get("content")
+        #manda un mail con el texto del POST al usuario que se le indique, desde el
+        #dominio del sitio: no pedía ni login, cualquiera mandaba cualquier cosa
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        user = CatusUser.objects.filter(id=self.request.POST.get("user_id")).first()
+        if user is None:
+            return self.response("No se encontró el usuario.")
+
+        #el texto sale de un <input> de una línea: va como texto, no como HTML
+        content = html.escape(self.request.POST.get("content") or "")
         MailService().send_mail_pregunta(user, content)
 
         return self.render_to_response({})

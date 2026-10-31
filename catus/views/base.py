@@ -1,6 +1,7 @@
 import json
 from django.views.generic import TemplateView
 from django.shortcuts import redirect
+from django.contrib.auth.mixins import UserPassesTestMixin
 from catus.models import Animal
 from django.http import HttpResponse
 from catus.services.utils.render import render
@@ -17,6 +18,28 @@ def puede_editar_animal(user, animal):
         return True
 
     return animal is not None and animal.cargado_por_id == user.id
+
+
+class SuperuserRequiredMixin(UserPassesTestMixin):
+    """Para acciones del equipo: aprobar animales, comentar, publicar en redes."""
+
+    def test_func(self):
+
+        return self.request.user.is_authenticated and self.request.user.is_superuser
+
+    def handle_no_permission(self):
+        """A quien ya está logueado le contestamos, no lo mandamos al login.
+
+        En Django 2.0 AccessMixin siempre redirige (lo de tirar PermissionDenied al
+        usuario autenticado recién llega en 2.1), así que alguien con cuenta que
+        abriera el link "Aprobar!" del mail entraba en un ida y vuelta al login sin
+        ningún mensaje. Mismo texto que usan las vistas de /tools/.
+        """
+
+        if self.request.user.is_authenticated:
+            return HttpResponse("No tenes permisos para esto.", status=403)
+
+        return super().handle_no_permission()
 
 
 class BaseView(TemplateView):
