@@ -1,3 +1,4 @@
+{% load catus_html %}
 <b>{{animal.nombre}}</b><hr>
 
 {% for img in animal.get_images %}
@@ -9,7 +10,7 @@
 <b>Cargado por:</b> {{animal.cargado_por.email}} (<a href='{{animal.cargado_por.get_instagram_link}}'>{{animal.cargado_por.get_instagram}}</a>)<br>
 <b>Sexo:</b> {{animal.get_sexo_display|default_if_none:'Desconocido'}}<br>
 <b>Edad:</b> {{animal.edad|default_if_none:'Desconocido'}}<br>
-<b>Descripcion:</b> {{animal.datos|safe}}
+<b>Descripcion:</b> {{animal.datos|html_seguro}}
 
 <hr>
 <a href="{{settings.SSL_HOST}}/animal/aprobar/?id={{animal.id}}">Aprobar!</a>
