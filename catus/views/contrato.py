@@ -1,3 +1,4 @@
+import html
 import json
 import uuid
 import os.path
@@ -14,11 +15,30 @@ from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.validators import validate_email
 from threading import Thread
 
 from catus.forms import ContratoForm
 from catus.views.base import puede_editar_animal
+
+
+def mail_del_adoptante(estado_form):
+    """El mail que el candidato dejó en su formulario (el que también arranca el
+    contrato), o None si no hay uno válido."""
+    if estado_form is None:
+        return None
+
+    respuestas = AdoptionService().get_form_attrs(estado_form.form_entry, ["Email"], exact=True) or []
+    for _label, email in respuestas:
+        email = (email or "").strip()
+        try:
+            validate_email(email)
+        except ValidationError:
+            continue
+        return email
+
+    return None
 
 
 class EditView(TemplateView):
@@ -141,11 +161,19 @@ class EditView(TemplateView):
                 post_context["status"] = "success"
 
                 if not self.is_persona and self.request.POST.get("send_email") == "1":
-                    #enviar mail al adoptante
+                    #enviar mail al adoptante. Solo al de este formulario, al mail que dejó
+                    #al postularse, y el texto como texto: el destinatario, el asunto y el
+                    #HTML salían del POST, y cualquier cuenta (el registro es abierto) mandaba
+                    #lo que quisiera a quien quisiera desde la casilla del sitio.
+                    email = mail_del_adoptante(estado_form)
+                    if not email:
+                        post_context["status"] = "fail"
+                        post_context["errors"] = "El contrato se guardó, pero el formulario no tiene un mail válido del adoptante: no se envió nada."
+                        return HttpResponse(json.dumps(post_context))
 
-                    email = self.request.POST.get("email")
-                    subject = self.request.POST.get("subject")
-                    content = self.request.POST.get("content")
+                    subject = " ".join((self.request.POST.get("subject") or "").split())[:200] \
+                        or "Catpuccino Adopciones - Contrato de adopción responsable"
+                    content = html.escape(self.request.POST.get("content") or "").replace("\n", "<br>")
 
                     consejos_file = os.path.join(settings.STATICFILES_DIRS[0], "contrato", "consejos.pdf")
                     with open(consejos_file, "rb") as f:
