@@ -1,4 +1,7 @@
 import re
+from urllib.parse import urljoin, urlparse
+
+import requests
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.utils import timezone
@@ -72,3 +75,105 @@ def clean_html(raw_html):
 def rreplace(s, old, new, occurrence):
     li = s.rsplit(old, occurrence)
     return new.join(li)
+
+
+INSTAGRAM_HOSTS = ("instagram.com", "www.instagram.com")
+
+#los CDN que sirven las fotos de los posts de Instagram (scontent-*.cdninstagram.com,
+#scontent-*.fbcdn.net): es de donde vienen las fotos que se importan de un post
+INSTAGRAM_FOTO_DOMINIOS = ("cdninstagram.com", "fbcdn.net")
+
+REDIRECTS = (301, 302, 303, 307, 308)
+
+
+def _host_https(url):
+    """El host de una URL https sin usuario ni contraseña, o None."""
+
+    if not url or not isinstance(url, str):
+        return None
+
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+    except ValueError:
+        return None
+
+    if parsed.scheme != "https" or parsed.username or parsed.password or not host:
+        return None
+
+    return host.lower().rstrip(".")
+
+
+def es_url_de_instagram(url):
+    """True si la URL es un link https de instagram.com.
+
+    La pega el rescatista y el server la va a buscar: sin este chequeo se lo podía
+    usar para pedir direcciones internas, que desde afuera no se ven.
+    """
+
+    return _host_https(url) in INSTAGRAM_HOSTS
+
+
+def es_url_de_foto_de_instagram(url):
+    """True si la URL es https y de un CDN de fotos de Instagram.
+
+    Las URLs de las fotos las manda el navegador (instagram_image). urlopen() abría
+    cualquier cosa, file:// incluido: el server leía sus propios archivos, como
+    /proc/self/environ con los secretos de los tres sitios, y los guardaba como foto.
+    """
+
+    host = _host_https(url)
+
+    return bool(host) and any(host == dominio or host.endswith("." + dominio) for dominio in INSTAGRAM_FOTO_DOMINIOS)
+
+
+class DescargaRechazada(ValueError):
+    pass
+
+
+def descargar(url, es_permitida, max_bytes, timeout=20, max_redirects=3):
+    """Baja una URL que pasa es_permitida, y lo mismo cada redirect, hasta max_bytes.
+
+    requests sigue los redirects solo y el destino no vuelve a pasar por el filtro,
+    así que se siguen a mano. timeout es por operación de red y además hay un tope
+    total, para que una respuesta que gotea no tenga ocupado al worker.
+    """
+
+    limite = time.monotonic() + timeout * 2
+
+    for _ in range(max_redirects + 1):
+
+        if not es_permitida(url):
+            raise DescargaRechazada("No se puede traer {}".format(url))
+
+        response = requests.get(url, timeout=timeout, allow_redirects=False, stream=True)
+
+        try:
+            location = response.headers.get("Location")
+            if response.status_code in REDIRECTS and location:
+                url = urljoin(url, location)
+                continue
+
+            response.raise_for_status()
+
+            try:
+                declarado = int(response.headers.get("Content-Length") or 0)
+            except ValueError:
+                declarado = 0
+
+            if declarado > max_bytes:
+                raise DescargaRechazada("{} pesa demasiado".format(url))
+
+            contenido = bytearray()
+            for parte in response.iter_content(64 * 1024):
+                contenido.extend(parte)
+                if len(contenido) > max_bytes:
+                    raise DescargaRechazada("{} pesa demasiado".format(url))
+                if time.monotonic() > limite:
+                    raise DescargaRechazada("{} tarda demasiado".format(url))
+
+            return bytes(contenido)
+        finally:
+            response.close()
+
+    raise DescargaRechazada("Demasiados redirects desde {}".format(url))

@@ -2,6 +2,7 @@ import ast
 
 from catus.services.base import BaseService
 from catus.models import ChatGTPResponse
+from catus.utils import DescargaRechazada, descargar, es_url_de_instagram
 from django.conf import settings
 import openai
 import json
@@ -14,6 +15,9 @@ from pathlib2 import Path
 
 
 class GPTService(BaseService):
+
+    #la página de un post de Instagram pesa menos de 1 MB
+    MAX_POST_BYTES = 5 * 1024 * 1024
 
     def _get_html_title_and_images(self, url):
 
@@ -37,11 +41,22 @@ class GPTService(BaseService):
         #             images.append("{}/gallery/ig/{}/{}".format(settings.SSL_HOST, code, file))
         # except:
 
-        response = requests.get(url)
-        html_code = response.content
+        #el link lo pega el rescatista y el server lo va a buscar: solo instagram.com,
+        #por https, y lo mismo cada redirect. Sin esto se le podía hacer pedir al server
+        #cualquier dirección, internas incluidas.
+        try:
+            html_code = descargar(url, es_url_de_instagram, self.MAX_POST_BYTES)
+        except DescargaRechazada:
+            raise ValueError("El link tiene que ser de un post de Instagram (https://www.instagram.com/...).")
 
         html = BeautifulSoup(html_code, 'html.parser')
         title = html.find("meta", property="og:title")
+
+        #instagram devuelve una página sin og:title cuando el post es privado, no existe
+        #o pide login: antes era un 500
+        if title is None or not title.attrs.get("content"):
+            raise ValueError("No pudimos leer ese post. Puede ser privado o no existir.")
+
         text = title.attrs["content"]
 
         images = []
@@ -179,6 +194,9 @@ class GPTService(BaseService):
         return data
 
     def pull_data_from_ig(self, url):
+
+        if not es_url_de_instagram(url):
+            raise ValueError("El link tiene que ser de un post de Instagram (https://www.instagram.com/...).")
 
         openai.organization = settings.OPENIA_API_ORG_ID
         openai.api_key = settings.OPENIA_API_KEY

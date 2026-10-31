@@ -1,3 +1,8 @@
+import logging
+from io import BytesIO
+
+import requests
+from PIL import Image
 from django.conf import settings
 from catus.services.images import ImageService
 from catus.services.mail import MailService
@@ -9,12 +14,38 @@ from catus.models import Animal, AnimalImage, CatusUser
 from catus.forms import AnimalImageForm, CatusUserForm, RequiredImageInlineFormset
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.files import File
-from urllib.request import urlopen
 from tempfile import NamedTemporaryFile
 from django.utils import timezone
 import os
 
 from catus.forms import AnimalForm
+from catus.utils import DescargaRechazada, descargar, es_url_de_foto_de_instagram
+
+logger = logging.getLogger(__name__)
+
+#una foto de un post de Instagram pesa unos cientos de KB; esto es para que una URL
+#no pueda llenar la memoria ni el disco
+MAX_FOTO_INSTAGRAM_BYTES = 15 * 1024 * 1024
+
+
+def bajar_foto_de_instagram(image_url):
+    """Los bytes de una foto de un post de Instagram, o None si no se puede.
+
+    La URL la manda el navegador: solo se va a buscar a los CDN de Instagram, por
+    https, con timeout y tope de tamaño, y lo que vuelve tiene que ser una imagen.
+    """
+
+    try:
+        contenido = descargar(image_url, es_url_de_foto_de_instagram, MAX_FOTO_INSTAGRAM_BYTES)
+        Image.open(BytesIO(contenido)).verify()
+    except DescargaRechazada as error:
+        logger.warning("Se descartó una foto de Instagram: %s", error)
+        return None
+    except (requests.RequestException, OSError, SyntaxError, ValueError) as error:
+        logger.warning("No se pudo traer la foto %s: %s", image_url, error)
+        return None
+
+    return contenido
 
 
 class EditView(LoginRequiredMixin, BaseView):
@@ -62,8 +93,12 @@ class EditView(LoginRequiredMixin, BaseView):
                     ImageService().optimize(animal_image.image, max_width=1200)
 
                 for image_url in instagram_images:
+                    contenido = bajar_foto_de_instagram(image_url)
+                    if contenido is None:
+                        continue
+
                     img_temp = NamedTemporaryFile(delete=True, dir=os.path.join(settings.MEDIA_ROOT, "gallery"))
-                    img_temp.write(urlopen(image_url).read())
+                    img_temp.write(contenido)
                     img_temp.flush()
 
                     animal_image = AnimalImage.objects.create(animal=animal)
@@ -166,7 +201,16 @@ class PullDataFromIg(LoginRequiredMixin, BaseView):
     def get(self, *a, **k):
 
         url = self.request.GET.get("url")
-        data = GPTService().pull_data_from_ig(url)
+
+        #depende de Instagram y de OpenAI: cuando algo falla, el rescatista tiene que
+        #poder seguir cargando el animal a mano
+        try:
+            data = GPTService().pull_data_from_ig(url)
+        except ValueError as error:
+            return self.json_response({"error": str(error)})
+        except Exception:
+            logger.exception("No se pudieron traer los datos de %s", url)
+            return self.json_response({"error": "No pudimos leer ese post. Cargá los datos a mano."})
 
         return self.json_response(data)
 
