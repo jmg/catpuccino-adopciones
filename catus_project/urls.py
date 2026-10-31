@@ -23,7 +23,7 @@ from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.conf import settings
 from django.contrib.auth import views as auth_views
-from catus.forms import UserLoginForm
+from catus.forms import PasswordResetForm, UserLoginForm
 
 urlpatterns = []
 
@@ -34,7 +34,8 @@ urlpatterns += [
     url(r'^forms/', include(forms_builder.forms.urls)),
 
     path('accounts/login/', auth_views.LoginView.as_view(authentication_form=UserLoginForm), name='login'),
-    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(html_email_template_name='registration/password_reset_email.html')),
+    # Its own form: Django 2.0's mails the address typed (CVE-2019-19844).
+    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(form_class=PasswordResetForm, html_email_template_name='registration/password_reset_email.html')),
     path('accounts/', include('django.contrib.auth.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -56,6 +56,21 @@ else:
     HOST = "localhost:8000"
     SSL_HOST = "http://{}".format(HOST)
 
+# TLS ends at the platform's proxy, and nginx passes its X-Forwarded-Proto on
+# (catpuccino/deploycloud/nginx.conf; /healthz sends https itself). Without this
+# request.is_secure() was always false, so the password reset links went out as
+# http://. Nothing redirects to https here (the proxy already does), so the
+# health check over plain http still gets its 200.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+if ENV not in ("LOCAL", "TEST"):
+    # Every visit arrives over https: the session and CSRF cookies never travel
+    # in clear text.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # A day of HSTS for adopciones.catpuccino.org only: no subdomains, no preload.
+    SECURE_HSTS_SECONDS = 86400
+
 # Application definition
 
 INSTALLED_APPS = [

@@ -1,9 +1,11 @@
+import unicodedata
 from catus.models import Animal, AnimalImage, CatusUser, Contrato, ContratoPersona, EstadoFormulario
 from django.forms import ModelForm, Form, ChoiceField, ImageField, PasswordInput, CharField, DateField, EmailField
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, ButtonHolder, Submit, Field
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import PasswordResetForm as DjangoPasswordResetForm
 from django.utils.safestring import mark_safe
 from django.forms import ImageField
 from django.forms.widgets import FileInput
@@ -179,6 +181,37 @@ class UserLoginForm(AuthenticationForm):
 
         for fieldname in ['username']:
             self.fields[fieldname].label = 'Email'
+
+
+def _unicode_ci_compare(s1, s2):
+    """Compare two emails ignoring case only, as Django 2.2.9/3.0.1 do (Unicode
+    Technical Report 36, 2.11.2(B)(2))."""
+    return unicodedata.normalize("NFKC", s1).casefold() == unicodedata.normalize("NFKC", s2).casefold()
+
+
+class PasswordResetForm(DjangoPasswordResetForm):
+    """Django 2.0's reset form with the fix of 2.2.9/3.0.1 (CVE-2019-19844).
+
+    Django 2.0 looks the account up with email__iexact, which MySQL
+    (utf8mb4_unicode_ci) answers ignoring accents as well, and mails the link to
+    the address that was typed: asking for victima@gmáil.com found
+    victima@gmail.com and sent its reset link to a domain anyone can buy. Only an
+    account whose own email is the typed one, up to case, gets a mail, and the
+    mail goes to the address on the account."""
+
+    def get_users(self, email):
+        email_field = CatusUser.get_email_field_name()
+        return (
+            user for user in super().get_users(email)
+            if _unicode_ci_compare(email, getattr(user, email_field) or "")
+        )
+
+    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email,
+                  html_email_template_name=None):
+        user_email = getattr(context["user"], CatusUser.get_email_field_name())
+        context = dict(context, email=user_email)
+        super().send_mail(subject_template_name, email_template_name, context, from_email, user_email,
+                          html_email_template_name=html_email_template_name)
 
 
 class CatusUserForm(ModelForm):
