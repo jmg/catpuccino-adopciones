@@ -135,7 +135,11 @@ class TeamOnlyTest(TestCase):
         self.assertIn("&lt;a href=", body)
 
     def test_the_sites_instagram_account_is_linked_only_by_the_team(self):
-        with mock.patch("catus.views.facebook.FacebookApiService") as service:
+        import importlib
+
+        # django_conventions loads the views modules itself: patch the loaded one.
+        views = importlib.import_module("catus.views.facebook")
+        with mock.patch.object(views, "FacebookApiService") as service:
             self.client.post("/facebook/login/", {"access_token": "token-ajeno"})
             self.client.force_login(self.owner)
             self.client.post("/facebook/login/", {"access_token": "token-ajeno"})
