@@ -275,14 +275,20 @@ class BaseService(object):
         startRecord = int(open_search_data.get('start',0)) # Where the data starts from (page)
         endRecord = startRecord + iDisplayLength  # where the data ends (end of page)
 
-        # Determine which columns are searchable
+        # Determine which columns are searchable. Only the view's own columns: the
+        # per-column search value used to be taken as a list of field names, so the
+        # browser picked what to filter by (gato__cargado_por__password__icontains...)
+        # and the count answered whether a guess matched.
         searchableColumns = []
-        for col, data in open_search_data["columns"].items():
-            if data["searchable"] == 'true':
-                if not data["search"].get("value"):
-                    searchableColumns.append(columnSortIndexNameMap[col])
-                else:
-                    searchableColumns = searchableColumns + data["search"].get("value").split(",")
+        for col, data in open_search_data.get("columns", {}).items():
+            if not isinstance(data, dict) or data.get("searchable") != 'true':
+                continue
+            try:
+                column = columnSortIndexNameMap.get(int(col))
+            except (TypeError, ValueError):
+                continue
+            if column:
+                searchableColumns.append(column)
 
         # Apply filtering by value sent by user
         if search:

@@ -8,7 +8,7 @@ Formulario de pre-adopción{% if animal %} para {{animal}}{% endif %}
 
 {% for field, value in fields %}
 {{ field }}:<br>
-{{ value|safe|linebreaks }}<br>
+{{ value|linebreaks }}<br>
 {% endfor %}
 
 <hr>

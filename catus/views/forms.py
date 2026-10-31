@@ -1,25 +1,42 @@
-from catus.services.base import BaseService
-
 from catus.models import EstadoFormulario
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
 from catus.services.adoption import AdoptionService
 
-from django.conf import settings
-from django.utils import timezone
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from catus.views.home import BaseView
+from catus.views.base import puede_editar_animal
 
 
-class FormView(BaseView):
+class FormView(LoginRequiredMixin, BaseView):
+    """Un formulario de pre-adopción: celular, email, dirección y respuestas del candidato.
+
+    El link con el hash lo reciben por mail el equipo y quien cargó el animal (el
+    adoptante no lo recibe nunca: su mail de "Formulario Recibido" no lo trae), y es el
+    mismo que abre el listado de /accounts/profile/. Así que es del equipo y del
+    rescatista, los dos con cuenta: estaba abierto a cualquiera que tuviera el hash, y
+    /formslist/ los entregaba todos.
+    """
 
     url = r"^formularios/(?P<form_hash>.+)/$"
+
+    def get_estado_form(self, form_hash):
+
+        estado_form = get_object_or_404(EstadoFormulario, hash=form_hash)
+
+        #el registro es abierto: con solo tener cuenta no alcanza, es de quien cargó el
+        #animal (o del equipo), con el mismo criterio que el contrato
+        if not puede_editar_animal(self.request.user, estado_form.gato):
+            raise PermissionDenied("Este formulario es de otra persona.")
+
+        return estado_form
 
     def get(self, *args, **kwargs):
 
         form_hash = kwargs.get("form_hash")
-        estado_form = get_object_or_404(EstadoFormulario, hash=form_hash)
+        estado_form = self.get_estado_form(form_hash)
 
         estado_form_form = EstadoFormularioForm(instance=estado_form)
         persona_nombre = AdoptionService().get_form_attr(estado_form.form_entry, "Nombre y Apellido")
@@ -57,95 +74,67 @@ class FormView(BaseView):
     def post(self, *args, **kwargs):
 
         form_hash = kwargs.get("form_hash")
-        estado_form = get_object_or_404(EstadoFormulario, hash=form_hash)
+        estado_form = self.get_estado_form(form_hash)
 
-        estado_form_form = EstadoFormularioForm(self.request.POST, instance=estado_form)
+        datos = self.request.POST.copy()
+
+        #'gato' es opcional en el form: si el POST no lo trae (por ejemplo cuando solo
+        #se manda el select de estado), guardar lo dejaba en None y el formulario perdía
+        #el vínculo con el animal, en silencio
+        if "gato" not in datos:
+            datos["gato"] = estado_form.gato_id or ""
+
+        #a qué animal apuntaba ANTES de que el form toque la instancia: is_valid() corre
+        #_post_clean, que ya le escribe encima los valores del POST, así que después de
+        #esa línea estado_form.gato ya es el que mandó el atacante y no queda con qué
+        #comparar
+        gato_original_id = estado_form.gato_id
+
+        estado_form_form = EstadoFormularioForm(datos, instance=estado_form)
+
+        #save() sin is_valid() levanta ValueError con cualquier dato raro: 500 en vez
+        #de un mensaje
+        if not estado_form_form.is_valid():
+            return self.json_response({"status": "error", "errores": estado_form_form.errors})
+
+        #El form expone 'gato' sobre TODOS los animales, así que el POST puede reapuntar
+        #el formulario al animal de otra persona. Acá se mira antes de guardar nada.
+        gato_destino = estado_form_form.cleaned_data.get("gato")
+
+        if gato_destino is not None and gato_destino.id != gato_original_id:
+            if not puede_editar_animal(self.request.user, gato_destino):
+                return self.json_response({
+                    "status": "error",
+                    "error": "Ese animal lo cargó otra persona: no podés mover el formulario a su publicación.",
+                })
+
         estado_form_form.save()
 
-        if estado_form.estado == "R":
-            gato = estado_form.gato
-            if gato and not gato.reservado:
-                gato.reservado = True
-                gato.save()
+        #el estado del candidato arrastra al del animal: si alguien lo reservó o lo adoptó,
+        #tiene que dejar de figurar en adopción en el sitio público. Antes se leía
+        #animal.reservado, un campo que no existe, y marcar "Reservado" era un 500.
+        estados_del_animal = {"R": "R", "A": "A"}
 
-        elif estado_form.estado == "A":
-            gato = estado_form.gato
-            if gato and gato.fecha_adopcion is None:
-                gato.fecha_adopcion = timezone.now()
-                gato.save()
+        nuevo_estado = estados_del_animal.get(estado_form.estado)
+        gato = estado_form.gato
+
+        if nuevo_estado and gato and gato.get_estado() != nuevo_estado:
+
+            if not puede_editar_animal(self.request.user, gato):
+                return self.json_response({
+                    "status": "error",
+                    "error": "Este animal lo cargó otra persona: no podés cambiarle el estado.",
+                })
+
+            gato.set_estado(nuevo_estado)
+            gato.save()
 
         return self.json_response({"status": "ok", "estado": estado_form.estado})
 
 
-class FormsView(LoginRequiredMixin, BaseView):
-
-    url = [r"^formularios/$", r"^formularios$"]
-
-    def get(self, *args, **kwargs):
-
-        forms = EstadoFormulario.objects.order_by("-fecha_ingreso")
-
-        return self.render_to_response({
-            "forms": forms,
-            "is_forms_page": True,
-        })
-
-
-class ListView(BaseView):
-
-    url = [r"^formslist/$", r"^formslist$"]
-
-    def get(self, *args, **kwargs):
-
-        def get_actions(estado_form):
-
-            actions = ""
-            if estado_form.estado == "R" or estado_form.estado == "A":
-                actions = "<a href='/formulario/{}/contrato/'><i class='fa fa-id-badge'></i> Contrato Adopción</a>".format(estado_form.id)
-
-            if estado_form.estado == "A":
-                actions += "<hr><a href='/formulario/{}/datos/'><i class='fa fa-file'></i> Datos Adopción</a>".format(estado_form.id)
-
-            return actions
-
-        def get_gato(estado_form):
-
-            gato = estado_form.get_gato()
-            return gato.nombre if gato else ""
-
-        columnIndexNameMap = {
-            0: 'id',
-            1: lambda estado_form: estado_form.get_fecha_ingreso(),
-            2: lambda estado_form: "<a href='/formularios/{}/'>{}</a>".format(estado_form.hash, estado_form.get_persona()),
-            3: get_gato,
-            4: lambda estado_form: estado_form.miembro.nombre if estado_form.miembro else "",
-            5: lambda estado_form: "<span class='badge badge-{}'>{}</span>".format(estado_form.get_estado_badge(), estado_form.get_estado_display()),
-            6: lambda estado_form: estado_form.get_tipo_display(),
-            7: lambda estado_form: estado_form.render_comments(),
-            8: lambda estado_form: self.render("forms/puntaje.html", {"estado_form": estado_form }),
-            9: lambda estado_form: "<a href='/formularios/{}/'><i class='fa fa-search'></i> Ver</a>".format(estado_form.hash),
-            10: get_actions,
-        }
-        sortIndexNameMap = {
-            0: 'id',
-            1: 'fecha_ingreso',
-            2: 'persona_nombre',
-            3: 'gato__nombre',
-            4: 'miembro__nombre',
-            5: 'estado',
-            6: 'tipo',
-            7: None,
-            8: None,
-            9: None,
-            10: None,
-        }
-
-        tipo = self.request.GET.get("type")
-        querySet = None
-
-        if tipo and tipo != "-":
-            querySet = EstadoFormulario.objects.filter(tipo=tipo.upper())
-
-        return BaseService().open_search(self.request, columnIndexNameMap, sortIndexNameMap, model=EstadoFormulario, querySet=querySet)
-
-
+#FormsView (/formularios/) y ListView (/formslist/) se sacaron, como en master: nunca
+#funcionaron (ListView llama a get_gato(), miembro y render_comments(), que este modelo
+#no tiene, y FormsView no tiene template) y nada las enlaza; el listado real es
+#/accounts/profile/#forms. Pero /formslist/ no pedía login, y aunque las filas daban
+#500, con length=0 devolvía el total y su búsqueda filtraba por nombres de campo que
+#manda el navegador: se podía adivinar cualquier dato de la base de a una letra.
