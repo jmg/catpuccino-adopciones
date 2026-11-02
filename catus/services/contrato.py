@@ -2,9 +2,43 @@ from PyPDF2 import PdfFileWriter, PdfFileReader
 import io
 import os
 from django.conf import settings
+from django.core import signing
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import textwrap
+
+# A filled-in contract holds the adopter's DNI. It stays in static/contrato/<hash>/,
+# where the volume is and where the old ones already are, but nginx does not serve
+# that folder (deploycloud/nginx.conf in the catpuccino repo): it only goes out
+# through ContratoPdfView, by a link that expires, or to a logged-in rescuer. The
+# adopter's own copy goes by mail, and their link to the form is /contrato/<hash>/.
+CONTRATO_PDF = "contrato_adopcion_responsable_completado.pdf"
+# The name the team's links asked for, inherited from feliscatus.
+CONTRATO_PDF_VIEJO = "contrato_adopcion_responsable_felis_catus_completado.pdf"
+CONTRATO_PDF_SALT = "catus.contrato.pdf"
+CONTRATO_PDF_MAX_AGE = 7 * 24 * 60 * 60
+
+
+def contrato_pdf_path(contrato):
+    """Where the filled-in contract is, or None if the adopter has not completed it."""
+    carpeta = os.path.join(settings.STATICFILES_DIRS[0], "contrato", contrato.hash)
+    for nombre in (CONTRATO_PDF, CONTRATO_PDF_VIEJO):
+        path = os.path.join(carpeta, nombre)
+        if os.path.exists(path):
+            return path
+
+    return None
+
+
+def contrato_pdf_url(contrato):
+
+    return "/contrato_adopcion/pdf/{}/".format(signing.dumps(contrato.hash, salt=CONTRATO_PDF_SALT))
+
+
+def contrato_hash_del_link(token):
+    """The contract a signed link is for. Raises signing.BadSignature if it was
+    tampered with or has expired."""
+    return signing.loads(token, salt=CONTRATO_PDF_SALT, max_age=CONTRATO_PDF_MAX_AGE)
 
 
 def add_pdf_content(existing_pdf, output, page_num, contrato, tipo):
@@ -361,7 +395,7 @@ def generate_contrato_pdf(contrato, is_test=False):
         if not os.path.exists(contracto_completado_dir):
             os.mkdir(contracto_completado_dir)
 
-        contrato_completado_file_name = "contrato_adopcion_responsable_completado.pdf"
+        contrato_completado_file_name = CONTRATO_PDF
         contrato_completado_file = os.path.join(contracto_completado_dir, contrato_completado_file_name)
     else:
         contracto_vacio_file = contrato_file_name
@@ -383,4 +417,4 @@ def generate_contrato_pdf(contrato, is_test=False):
         outputStream = f.read()
 
     if not is_test:
-        return "/static/contrato/{}/contrato_adopcion_responsable_completado.pdf".format(contrato.hash), outputStream, contrato_completado_file_name
+        return contrato_pdf_url(contrato), outputStream, contrato_completado_file_name

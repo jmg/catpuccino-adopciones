@@ -3,7 +3,9 @@ import json
 import uuid
 import os.path
 from django.views.generic import TemplateView
-from django.http import HttpResponse
+from django.core import signing
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404
 
 from catus.models import Contrato, Animal, EstadoFormulario, ContratoPersona
 from catus.forms import ContratoPersonaForm
@@ -39,6 +41,21 @@ def mail_del_adoptante(estado_form):
         return email
 
     return None
+
+
+def contrato_pdf_response(contrato):
+
+    path = contrato_pdf_path(contrato)
+    if path is None:
+        raise Http404("El adoptante todavía no completó este contrato.")
+
+    with open(path, "rb") as f:
+        response = HttpResponse(f.read(), content_type='application/pdf')
+
+    response['Content-Disposition'] = 'attachment; filename={}'.format(CONTRATO_PDF)
+    response['Cache-Control'] = 'private, no-store'
+
+    return response
 
 
 class EditView(TemplateView):
@@ -308,18 +325,21 @@ class DownloadContractView(LoginRequiredMixin, TemplateView):
         if not puede_editar_animal(self.request.user, contrato.gato):
             raise PermissionDenied("Este contrato es de otra persona.")
 
-        contrato_file = os.path.join(
-            settings.STATICFILES_DIRS[0],
-            "contrato",
-            contrato.hash,
-            "contrato_adopcion_responsable_felis_catus_completado.pdf"
-        )
+        return contrato_pdf_response(contrato)
 
-        with open(contrato_file, "rb") as f:
-            response = HttpResponse(f, content_type='application/pdf')
-            response['Content-Disposition'] = 'attachment; filename=contrato_adopcion_responsable_felis_catus_vacio.pdf'
 
-        return response
+class ContratoPdfView(TemplateView):
+
+    url = r"^contrato_adopcion/pdf/(?P<token>[^/]+)/$"
+
+    def get(self, *args, **kwargs):
+
+        try:
+            contrato_hash = contrato_hash_del_link(self.kwargs.get("token"))
+        except signing.BadSignature:
+            raise Http404("Este link no es válido o ya venció.")
+
+        return contrato_pdf_response(get_object_or_404(Contrato, hash=contrato_hash))
 
 
 class DatosView(LoginRequiredMixin, TemplateView):
