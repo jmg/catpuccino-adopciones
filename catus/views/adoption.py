@@ -1,3 +1,4 @@
+import hashlib
 import json
 import random
 import uuid
@@ -8,11 +9,22 @@ from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
 from catus.services.images import shrink_uploads
+from catus.services import throttle
+from catus.views.contrato import mail_del_adoptante
 
 from django.template import Context
 from django.conf import settings
 from django.utils import timezone
 from catus.views.home import BaseView
+
+# Anyone can post these forms, without an account or a captcha. The heaviest asks
+# for six photos (the dogs' form; the cats' for three), and a phone photo weighs
+# several MB; the view shrinks them only after they arrive. nginx.conf (catpuccino
+# repo) cuts at a little more than this, so this is what a real visitor reads.
+FORM_MAX_BYTES = 40 * 1024 * 1024
+FORM_MAX_PER_HOUR = 10          # per address: someone can apply for several animals
+RECEIPTS_MAX_PER_DAY = 5        # per mailbox: the receipt goes to whatever was typed
+HONEYPOT_FIELD = "sitio_web"    # hidden from people, see preadoption.html
 
 
 class ListView(BaseView):
@@ -52,6 +64,9 @@ class PreAdoptionView(BaseView):
 
         animals = json.dumps(animals)
         context["animals"] = animals
+        context["honeypot_field"] = HONEYPOT_FIELD
+        context["form_max_bytes"] = FORM_MAX_BYTES
+        context["form_max_mb"] = FORM_MAX_BYTES // (1024 * 1024)
 
         form = self._get_form()
         animal_id = self.request.GET.get("id")
@@ -93,7 +108,30 @@ class PreAdoptionView(BaseView):
 
         return Form.objects.all()[0]
 
+    def _rejected(self):
+        """Why this post is not even read, or None. The size comes first, so that a
+        file that is too big does not use up the visitor's attempts."""
+        files = self.request.FILES
+        if sum(upload.size for key in files for upload in files.getlist(key)) > FORM_MAX_BYTES:
+            return "Los archivos adjuntos pesan demasiado: el máximo es de {} MB en total. Probá con menos fotos o con fotos más livianas.".format(FORM_MAX_BYTES // (1024 * 1024))
+
+        who = throttle.client_ip(self.request)
+        if who and throttle.hit("adoption-form", who, 60 * 60) > FORM_MAX_PER_HOUR:
+            return "Recibimos demasiados formularios desde tu conexión. Por favor probá de nuevo en una hora."
+
+        return None
+
     def post(self, *a, **k):
+
+        form = self._get_form()
+
+        # To a bot it looks like any other submission: nothing is stored or mailed.
+        if self.request.POST.get(HONEYPOT_FIELD):
+            return BaseView.render_to_response(self, {"form": form, "is_post": True, "success": True})
+
+        rejected = self._rejected()
+        if rejected:
+            return BaseView.render_to_response(self, {"form": form, "is_post": True, "success": False, "errors": rejected})
 
         post = getattr(self.request, "POST", None)
         # Phone photos are shrunk before they are stored; see shrink_uploads.
@@ -103,7 +141,6 @@ class PreAdoptionView(BaseView):
 
         context = {"request": self.request }
 
-        form = self._get_form()
         form_for_form = FormForForm(form, Context(context), post, files)
 
         response_context = {}
@@ -208,12 +245,16 @@ class PreAdoptionView(BaseView):
         to_emails = list(set(["catpuccino.ok@gmail.com", animal.cargado_por.email]))
         send_html_email(subject, content, settings.SEND_MAIL, to_emails)
 
-        try:
-            email = AdoptionService().get_form_attr(form_entry, "Email")
-        except:
-            email = None
+        # The receipt goes to the one address the candidate gave, if it is an address:
+        # on the cats' form that field is free text. And since nothing proves it is
+        # theirs, one mailbox gets only a few, or this would mail anyone on demand.
+        email = mail_del_adoptante(estado)
 
         if not email:
+            return
+
+        mailbox = hashlib.sha256(email.lower().encode()).hexdigest()
+        if throttle.hit("adoption-receipt", mailbox, 24 * 60 * 60) > RECEIPTS_MAX_PER_DAY:
             return
 
         email_context = {

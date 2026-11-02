@@ -225,9 +225,14 @@
             <div class="section-divider"></div>
             <h3 class="preadoption-title">{{ form.title }}</h3>
 
-            <form id="adoption-form" onsubmit="showLoader(); return true;" action="{{post_url}}" method="post" {% if form_for_form.is_multipart %}enctype="multipart/form-data"{% endif %} >
+            <form id="adoption-form" onsubmit="return prepareSubmit(this);" action="{{post_url}}" method="post" {% if form_for_form.is_multipart %}enctype="multipart/form-data"{% endif %} >
                 {% csrf_token %}
                 {% bootstrap_form form_for_form %}
+
+                <div style="position: absolute; left: -9999px;" aria-hidden="true">
+                    <label for="id_{{honeypot_field}}">No completar este campo</label>
+                    <input type="text" id="id_{{honeypot_field}}" name="{{honeypot_field}}" tabindex="-1" autocomplete="off">
+                </div>
 
                 {% if form_type == "preadoption" %}
                 <div class="section-divider"></div>
@@ -842,6 +847,26 @@
         $("#terms-and-conditions").slideDown("slow");
         $("#show-terms-button").slideUp("slow");
         setCookie("{{hidden_terms_cookie}}", "0");
+    }
+
+    function prepareSubmit(form) {
+
+        // Only a bot leaves this filled in: a browser's autofill must not lose a real
+        // adopter's form, and the visitor never sees that it was dropped.
+        form.elements["{{honeypot_field}}"].value = "";
+
+        var total = 0;
+        $(form).find("input[type=file]").each(function() {
+            $.each(this.files, function(i, file) { total += file.size; });
+        });
+
+        if (total > {{form_max_bytes}}) {
+            alert("Los archivos adjuntos pesan demasiado: el máximo es de {{form_max_mb}} MB en total. Probá con menos fotos o con fotos más livianas.");
+            return false;
+        }
+
+        showLoader();
+        return true;
     }
 
     function showLoader(button) {
