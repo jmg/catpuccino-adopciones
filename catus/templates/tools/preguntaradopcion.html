@@ -19,7 +19,7 @@
         <div class="input-group pb-3">
             <input name="content" class="form-control" style="width: 800px;" value="Hola! Te quería consultar si {{user.animals_names}} sigue{% if user.is_plural %}n{% endif %} en adopción. Muchas gracias!"/>
             <div class="input-group-append">
-                <button type="button" style="height: 38px;" onclick="copyClipBoard(this, '{{user.user.get_instagram_link}}')" class="btn btn-primary">Copiar</button>
+                <button type="button" style="height: 38px;" onclick="copyClipBoard(this)" class="btn btn-primary">Copiar</button>
             </div>
         </div>
 
@@ -127,7 +127,7 @@
 
 <script src="https://unpkg.com/htmx.org@1.9.2"></script>
 <script>
-    function copyClipBoard(btn, url) {
+    function copyClipBoard(btn) {
 
         var copyText = $(btn).parent().parent().find('input')
 

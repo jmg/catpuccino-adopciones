@@ -3,6 +3,8 @@
 Run with ENV=TEST (catus/config/config.test.json, sqlite):
     ENV=TEST python manage.py test catus.test_animales
 """
+import html
+import re
 from unittest import mock
 
 from django.core import mail
@@ -118,6 +120,29 @@ class TeamOnlyTest(TestCase):
 
         self.owner = CatusUser.objects.create(username="refugio", email="refugio@example.com")
         self.team = CatusUser.objects.create_superuser("equipo@example.com", password="x")
+
+    def test_a_rescuers_instagram_never_lands_in_the_teams_javascript(self):
+        # The browser decodes &#39; inside onclick="...", so escaping alone did not
+        # keep `');alert(1);//`, set as Instagram at sign-up, from running.
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from catus.models import Animal
+
+        payload = "');alert(document.domain);//"
+        self.owner.instagram = payload
+        self.owner.save()
+        Animal.objects.create(nombre="Michi", cargado_por=self.owner, estado="D", tipo="G", aprobado=True,
+                              fecha_ingreso=timezone.now() - timedelta(days=60))
+
+        self.client.force_login(self.team)
+        page = html.unescape(self.client.get("/tools/preguntaradopcion/").content.decode())
+
+        self.assertIn("Copiar", page)
+        self.assertIn('onclick="copyClipBoard(this)"', page)
+        for handler in re.findall(r'\son\w+="([^"]*)"', page):
+            self.assertNotIn("alert(document.domain)", handler)
 
     def test_the_ask_mail_is_the_teams_and_goes_as_text(self):
         data = {"user_id": self.owner.id, "content": "<a href='https://phish.example'>Entrá acá</a>"}
