@@ -166,7 +166,7 @@ class SignupForm(UserCreationForm):
         self.fields["password1"].label = _("Contraseña")
         self.fields["password2"].label = _("Confimar contraseña")
 
-        self.fields["password1"].help_text = ""
+        self.fields["password1"].help_text = _("Al menos 8 caracteres, no solo números, y que no se parezca a tu mail ni sea una contraseña común.")
         self.fields["password2"].help_text = _("Por favor ingresá la misma contraseña nuevamente.")
 
         self.fields["instagram"].help_text = _("Para etiquetarte cuando subamos posts a nuestro Instagram.")
