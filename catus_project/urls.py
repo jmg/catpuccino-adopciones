@@ -14,16 +14,22 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path, re_path
 
 from django_conventions import UrlsManager
 import catus.views as app_root
 import forms_builder.forms.urls
-from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.conf import settings
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import logout, views as auth_views
+from django.shortcuts import redirect
 from catus.forms import PasswordResetForm, UserLoginForm
+
+
+def logout_view(request):
+    # The "Salir" links are plain GETs, which Django 5.0's LogoutView refuses.
+    logout(request)
+    return redirect(settings.LOGOUT_REDIRECT_URL)
 
 urlpatterns = []
 
@@ -31,11 +37,12 @@ UrlsManager(urlpatterns, app_root)
 
 urlpatterns += [
     path(settings.ADMIN_URL, admin.site.urls),
-    url(r'^forms/', include(forms_builder.forms.urls)),
+    re_path(r'^forms/', include(forms_builder.forms.urls)),
 
     path('accounts/login/', auth_views.LoginView.as_view(authentication_form=UserLoginForm), name='login'),
-    # Its own form: Django 2.0's mails the address typed (CVE-2019-19844).
+    # Its own form, from when Django's (2.0) mailed the address typed (CVE-2019-19844).
     path('accounts/password_reset/', auth_views.PasswordResetView.as_view(form_class=PasswordResetForm, html_email_template_name='registration/password_reset_email.html')),
+    path('accounts/logout/', logout_view, name='logout'),
     path('accounts/', include('django.contrib.auth.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -12,8 +12,10 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('forms', '__latest__'),
-        ('auth', '__latest__'),
+        # What were the latest when this ran (Django 2.0); '__latest__' would
+        # now name later ones, applied after this.
+        ('forms', '0002_auto_20160418_0120'),
+        ('auth', '0009_alter_user_last_name_max_length'),
     ]
 
     operations = [

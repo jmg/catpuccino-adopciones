@@ -1,0 +1,7 @@
+# Known vulnerabilities in the image that deploys accept for now, one pip-audit
+# ID per line (anything after the ID is a note). catpuccino/deploycloud/scan.sh,
+# which build.sh runs before every upload, fails on any vulnerability not
+# listed here.
+#
+# Add an ID only with a reason and the version that fixes it, and remove it
+# when that upgrade ships.

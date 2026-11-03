@@ -8,6 +8,13 @@ import os.path
 from io import BytesIO
 
 
+def text_size(font, text):
+    """What FreeTypeFont.getsize gave before Pillow 10 removed it: the
+    bottom-right corner of the text's box, from the drawing origin."""
+    left, top, right, bottom = font.getbbox(text)
+    return right, bottom
+
+
 class ImageService():
 
     def optimize(self, image_field, max_width):
@@ -26,7 +33,7 @@ class ImageService():
             hsize = int((float(img.size[1]) * float(wpercent)))
 
             print (max_width, hsize)
-            img = img.resize((max_width, hsize), Image.ANTIALIAS)
+            img = img.resize((max_width, hsize), Image.LANCZOS)
 
         img = self.rotate(img)
 
@@ -75,7 +82,7 @@ class ImageService():
 
         img = Image.open(image_field).convert("RGBA")
         logo = Image.open(os.path.join(img_parts_dir, "logo_2.png")).convert("RGBA")
-        logo = logo.resize((logo_size, logo_size), Image.ANTIALIAS)
+        logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
         is_horizontal_image = img.size[0] > img.size[1]
 
         if is_horizontal_image:
@@ -83,13 +90,13 @@ class ImageService():
             wpercent = (base_size / float(img.size[1]))
             hsize = int((float(img.size[0]) * float(wpercent)))
 
-            img = img.resize((hsize, base_size), Image.ANTIALIAS)
+            img = img.resize((hsize, base_size), Image.LANCZOS)
         else:
             #vertical image
             wpercent = (base_size / float(img.size[0]))
             hsize = int((float(img.size[1]) * float(wpercent)))
 
-            img = img.resize((base_size, hsize), Image.ANTIALIAS)
+            img = img.resize((base_size, hsize), Image.LANCZOS)
 
         #cut image to square (centered)
         img_centered_start_y = 0
@@ -152,7 +159,7 @@ class ImageService():
         elif nombre_font_size == 50:
             back_margin = 15
 
-        animal_name_len, animal_name_height = font.getsize(animal.nombre)
+        animal_name_len, animal_name_height = text_size(font, animal.nombre)
 
         if posicion_nombre == "Izquierda (abajo)":
             position_text_name_y_end = 1160
@@ -208,7 +215,7 @@ class ImageService():
             hsize = int((float(img.size[1]) * float(wpercent)))
 
             print (base_width, hsize)
-            img = img.resize((base_width, hsize), Image.ANTIALIAS)
+            img = img.resize((base_width, hsize), Image.LANCZOS)
 
             output = self.save_image(img)
             output.seek(0)

@@ -1,4 +1,4 @@
-from PyPDF2 import PdfFileWriter, PdfFileReader
+from pypdf import PdfReader, PdfWriter
 import io
 import os
 from django.conf import settings
@@ -38,12 +38,20 @@ def contrato_pdf_url(contrato):
 def contrato_hash_del_link(token):
     """The contract a signed link is for. Raises signing.BadSignature if it was
     tampered with or has expired."""
-    return signing.loads(token, salt=CONTRATO_PDF_SALT, max_age=CONTRATO_PDF_MAX_AGE)
+    try:
+        return signing.loads(token, salt=CONTRATO_PDF_SALT, max_age=CONTRATO_PDF_MAX_AGE)
+    except signing.SignatureExpired:
+        raise
+    except signing.BadSignature:
+        # Links mailed before the move to Django 5.2 (2026-11) are signed with
+        # SHA-1, as Django 2.0 signed; they keep working until they expire.
+        signer = signing.TimestampSigner(salt=CONTRATO_PDF_SALT, algorithm="sha1")
+        return signer.unsign_object(token, max_age=CONTRATO_PDF_MAX_AGE)
 
 
 def add_pdf_content(existing_pdf, output, page_num, contrato, tipo):
 
-    page = existing_pdf.getPage(page_num)
+    page = existing_pdf.pages[page_num]
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
 
@@ -56,17 +64,17 @@ def add_pdf_content(existing_pdf, output, page_num, contrato, tipo):
         else:
             set_page_1_content(can, contrato)
     if page_num == 2:
-        output.addPage(page)
+        output.add_page(page)
         return
     if page_num == 3:
         set_page_3_content(can, contrato)
 
     can.save()
 
-    new_pdf = PdfFileReader(packet)
+    new_pdf = PdfReader(packet)
 
-    page.mergePage(new_pdf.getPage(0))
-    output.addPage(page)
+    page.merge_page(new_pdf.pages[0])
+    output.add_page(page)
 
 
 def write_lines(can, text, offset, chars_lim, _x, _y):
@@ -401,8 +409,8 @@ def generate_contrato_pdf(contrato, is_test=False):
         contracto_vacio_file = contrato_file_name
         contrato_completado_file = "contrato_2.pdf"
 
-    existing_pdf = PdfFileReader(open(contracto_vacio_file, "rb"))
-    output = PdfFileWriter()
+    existing_pdf = PdfReader(open(contracto_vacio_file, "rb"))
+    output = PdfWriter()
 
     add_pdf_content(existing_pdf, output, 0, contrato, tipo)
     add_pdf_content(existing_pdf, output, 1, contrato, tipo)

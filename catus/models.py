@@ -19,8 +19,14 @@ class BaseEntity(models.Model):
 
     def __init__(self, *args, **kwargs):
 
+        # A row read from the database comes with every field positionally:
+        # its dates stay as they are (Django 2.0 dropped these defaults then,
+        # Django 5 refuses a field given both ways).
+        given = {f.name for f in self._meta.concrete_fields[:len(args)]}
         now = timezone.now()
-        kwargs.update(created_at=kwargs.get("created_at",now), updated_at=kwargs.get("updated_at",now))
+        for name in ("created_at", "updated_at"):
+            if name not in given:
+                kwargs.setdefault(name, now)
         models.Model.__init__(self, *args, **kwargs)
 
     class Meta:

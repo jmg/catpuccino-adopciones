@@ -43,14 +43,15 @@ class PasswordResetTest(TestCase):
     def reset(self, email, **headers):
         return self.client.post("/accounts/password_reset/", {"email": email}, **headers)
 
-    def test_djangos_own_form_would_mail_the_accented_domain(self):
-        # The lookup above reproduces the hole: Django 2.0's form sends the link
-        # to whatever was typed.
+    def test_djangos_own_form_mails_the_account_not_what_was_typed(self):
+        # The lookup above reproduces the hole, which Django 2.0's form had (it
+        # sent the link to whatever was typed) and 5.2's does not: the link goes
+        # to the account's own address, as with catus.forms.PasswordResetForm.
         form = DjangoPasswordResetForm({"email": "victima@gmáil.com"})
         self.assertTrue(form.is_valid())
         form.save(domain_override="adopciones.catpuccino.org")
 
-        self.assertEqual([m.to for m in mail.outbox], [["victima@gmáil.com"]])
+        self.assertEqual([m.to for m in mail.outbox], [["victima@gmail.com"]])
 
     def test_an_accented_lookalike_gets_nothing(self):
         # The form takes it (it looks sent, as for any address) and mails nothing.

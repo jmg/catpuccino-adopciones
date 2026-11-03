@@ -14,11 +14,6 @@ import os
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
-try:
-    import pymysql
-    pymysql.install_as_MySQLdb()
-except ImportError:
-    pass
 
 ENV = os.environ.get("ENV", "LOCAL")
 DEBUG = ENV == "LOCAL"
@@ -71,6 +66,14 @@ if ENV not in ("LOCAL", "TEST"):
     # A day of HSTS for adopciones.catpuccino.org only: no subdomains, no preload.
     SECURE_HSTS_SECONDS = 86400
 
+# Headers as Django 2.0 sent them. Django 3.0 made frames DENY (the contract
+# downloads go through a hidden iframe of the site), 3.1 added a same-origin
+# Referrer-Policy, and 4.0 a Cross-Origin-Opener-Policy that cuts the Facebook
+# login popup off from the page that opened it.
+X_FRAME_OPTIONS = "SAMEORIGIN"
+SECURE_REFERRER_POLICY = None
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -83,12 +86,31 @@ INSTALLED_APPS = [
     'forms_builder.forms',
     'bootstrap4',
     'crispy_forms',
+    'crispy_bootstrap4',
     'django.contrib.sites',
 
     "catus",
 ]
 SITE_ID = 1
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap4'
 CRISPY_TEMPLATE_PACK = 'bootstrap4'
+# The classes django-crispy-forms 1.x gave fields, which the site's CSS styles:
+# its converters, and the form-control on selects that crispy-bootstrap4 now
+# leaves out (the animal form's selects lost their size and border).
+# django-bootstrap4's fields without the <br> its newer versions put before a
+# file input (catus/renderers.py).
+BOOTSTRAP4 = {
+    "field_renderers": {
+        "default": "catus.renderers.FieldRenderer",
+        "inline": "bootstrap4.renderers.InlineFieldRenderer",
+    },
+}
+CRISPY_CLASS_CONVERTERS = {
+    "textinput": "textinput textInput",
+    "fileinput": "fileinput fileUpload",
+    "passwordinput": "textinput textInput",
+    "select": "select form-control",
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -138,6 +160,9 @@ DATE_INPUT_FORMATS = ('%d/%m/%Y', )
 WSGI_APPLICATION = 'catus_project.wsgi.application'
 
 
+# Integer ids, as the tables have (Django 3.2 made new models' ids 64-bit).
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
@@ -168,8 +193,6 @@ LANGUAGE_CODE = 'es-ar'
 TIME_ZONE = 'America/Argentina/Buenos_Aires'
 
 USE_I18N = False
-
-USE_L10N = True
 
 USE_TZ = True
 

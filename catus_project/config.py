@@ -1,14 +1,14 @@
 import json
 from os import environ
 
-from pathlib2 import Path
+from pathlib import Path
 
 
 def config_paths(env, root_path=None, file_name=None):
     """Build tuple of Paths to the ejson and json files for this environment.
 
     :return: ejson_path, config_json_path, config_override_path
-    :rtype: (pathlib2.Path, pathlib2.Path, pathlib2.Path)
+    :rtype: (pathlib.Path, pathlib.Path, pathlib.Path)
     """
     if env in [ "LOCAL" , "TEST"]:
         config_dir = Path(__file__)

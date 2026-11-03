@@ -115,7 +115,9 @@ class EditView(LoginRequiredMixin, BaseView):
                     img_temp.flush()
 
                     animal_image = AnimalImage.objects.create(animal=animal)
-                    animal_image.image.save(img_temp.name, File(img_temp))
+                    # By its name: Django 3.2+ refuses a path (the file lands in the
+                    # same folder, MEDIA_ROOT/gallery, as before).
+                    animal_image.image.save(os.path.basename(img_temp.name), File(img_temp))
                     animal_image.save()
                     ImageService().optimize(animal_image.image, max_width=1200)
 

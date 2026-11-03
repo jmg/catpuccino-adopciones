@@ -11,7 +11,7 @@ import instaloader
 import requests
 from bs4 import BeautifulSoup
 import os.path
-from pathlib2 import Path
+from pathlib import Path
 
 
 class GPTService(BaseService):

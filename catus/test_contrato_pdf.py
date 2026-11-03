@@ -96,6 +96,16 @@ class ContractPdfTest(TestCase):
 
         self.assertIsThePdf(self.client.get(service.contrato_pdf_url(self.contrato)))
 
+    def test_a_link_mailed_before_django_52_still_opens(self):
+        # Django 2.0 signed with SHA-1, 5.2 with SHA-256: the links already in
+        # mailboxes keep working until they expire, and only for this contract.
+        self.write_pdf()
+        sha1 = signing.TimestampSigner(salt=service.CONTRATO_PDF_SALT, algorithm="sha1")
+
+        self.assertIsThePdf(self.client.get("/contrato_adopcion/pdf/{}/".format(sha1.sign_object(self.contrato.hash))))
+        other = signing.TimestampSigner(salt="otra-cosa", algorithm="sha1").sign_object(self.contrato.hash)
+        self.assertEqual(self.client.get("/contrato_adopcion/pdf/{}/".format(other)).status_code, 404)
+
     def test_only_a_link_signed_for_this_opens_it(self):
         self.write_pdf()
         url = service.contrato_pdf_url(self.contrato)
