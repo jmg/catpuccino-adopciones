@@ -33,9 +33,11 @@ SECRET_KEY = app_config.get("DJANGO_SECRET_KEY")
 if ENV != "LOCAL":
     ALLOWED_HOSTS = ["adopciones.catpuccino.org"]
 
-    # Configure Sentry for production only
+    # Configure Sentry for production only. The DSN is the platform's Jentry
+    # project's (SENTRY_DSN); the config's, a sentry.io project from the
+    # droplet, only counts without it.
     sentry_sdk.init(
-        dsn=app_config.get("SENTRY_DSN"),
+        dsn=os.environ.get("SENTRY_DSN") or app_config.get("SENTRY_DSN"),
         integrations=[DjangoIntegration()],
         traces_sample_rate=0.1,  # Capture 10% of transactions for performance monitoring
         send_default_pii=True,   # Send personally identifiable information
