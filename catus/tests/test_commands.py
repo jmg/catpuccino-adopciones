@@ -702,15 +702,19 @@ class AutomaticApproveTest(TestCase):
 
         return user
 
-    def test_un_solo_animal_aprobado_no_alcanza(self):
-        """Alcanzaba con uno, así que del segundo en adelante se aprobaban solos.
-
-        Con el posteo automático eso es publicar en la cuenta de la organización sin que
-        nadie haya mirado nunca más de una publicación de ese rescatista, y cualquiera se
-        registra solo.
-        """
+    def test_con_un_animal_aprobado_por_una_persona_alcanza(self):
+        """La regla que eligió el equipo: con uno aprobado por una persona alcanza."""
 
         user = self.rescatista_con(1)
+
+        self.correr()
+
+        user.refresh_from_db()
+        self.assertTrue(user.automatic_approve)
+
+    def test_sin_ninguno_aprobado_no_la_recibe(self):
+
+        user = self.rescatista_con(0)
 
         self.correr()
 
@@ -727,23 +731,22 @@ class AutomaticApproveTest(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.automatic_approve)
 
-    def test_al_que_ya_la_tenia_y_no_llega_al_minimo_se_la_saca(self):
-        """Subir el mínimo no servía de nada para los que ya estaban adentro.
+    def test_nunca_se_la_saca_a_nadie(self):
+        """Sacarla es decisión del equipo, desde el admin.
 
-        El comando sólo miraba `automatic_approve=False`, así que todo el padrón viejo
-        —que la había recibido cuando alcanzaba con UN animal aprobado— se la quedaba para
-        siempre. Justo los que importan: con el posteo automático, aprobado=True agenda la
-        publicación en la cuenta de la organización.
+        Con el mínimo en cinco y la revocación, la primera corrida le sacó la aprobación
+        automática a 329 rescatistas, y como corre cada hora deshacía el tilde que el
+        equipo pusiera a mano.
         """
 
-        user = self.rescatista_con(1)
-        user.automatic_approve = True
-        user.save()
+        a_mano = self.rescatista_con(0, email="a-mano@catpuccino.test")
+        a_mano.automatic_approve = True
+        a_mano.save()
 
         self.correr()
 
-        user.refresh_from_db()
-        self.assertFalse(user.automatic_approve, "conservó la aprobación automática con 1 animal")
+        a_mano.refresh_from_db()
+        self.assertTrue(a_mano.automatic_approve, "el cron deshizo el tilde que puso el equipo")
 
     def test_al_que_la_tiene_y_sigue_llegando_no_se_le_toca(self):
         """La contraparte: revocar de más le rompe el flujo al equipo todos los días."""

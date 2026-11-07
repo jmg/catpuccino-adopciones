@@ -10,64 +10,43 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
 
-    help = "Marca automatic_approve en los rescatistas con suficientes animales aprobados a mano."
+    help = "Marca automatic_approve en los rescatistas con algún animal aprobado por una persona. Nunca la saca."
 
-    #Con un solo animal aprobado alcanzaba, así que a partir del segundo el rescatista se
-    #auto-aprobaba solo. Mientras publicar en Instagram era a mano no se notaba; con el
-    #posteo automático, aprobado=True agenda el posteo, y eso es publicar en la cuenta de
-    #la organización sin que nadie haya mirado nunca más de una publicación suya.
-    #Cinco aprobadas a mano son suficientes para conocer a alguien y siguen siendo pocas
-    #semanas de uso: el que carga uno solo y prueba suerte no llega.
-    MINIMO_APROBADOS = 5
+    #La regla de siempre, elegida de nuevo por el equipo el 7/11/2026: con un animal
+    #aprobado por una persona alcanza. El merge de master la había subido a cinco y
+    #revocaba a los que no llegaban: en la primera corrida le sacó la aprobación
+    #automática a 329 rescatistas, y como corre cada hora deshacía en menos de una hora
+    #el tilde que el equipo pusiera a mano en el admin.
+    MINIMO_APROBADOS = 1
 
     def handle(self, *args, **options):
 
         nuevos = 0
-        revocados = 0
 
-        #se miran TODOS, no sólo los que no la tienen. El mínimo se subió de 1 a 5, pero
-        #el que ya tenía la marca la conservaba para siempre: como se otorgaba con un solo
-        #animal aprobado, prácticamente todo el padrón viejo entraba. Subir el número sin
-        #revisar a los que ya estaban adentro no cambiaba nada justo para los que importan.
-        for user in CatusUser.objects.all():
+        #Solo se mira a los que no la tienen: la marca nunca se saca acá. Sacarla es una
+        #decisión del equipo (el tilde del admin), y este cron no la puede pisar.
+        for user in CatusUser.objects.filter(automatic_approve=False):
 
-            #Sólo los que aprobó una PERSONA. Contar `aprobado=True` a secas dejó de
-            #significar "alguien lo miró" cuando la revisión automática empezó a aprobar
-            #sola: cinco altas inocuas que la IA dejaba pasar bastaban para ganarse el
-            #historial, y con el historial las altas siguientes que la revisión no pudiera
-            #mirar se aprobaban solas y salían a la cuenta del refugio. El historial tiene
-            #que querer decir que el equipo conoce a esta persona, no que la IA no
-            #encontró nada raro en sus primeras cinco fotos.
+            #Solo cuentan los que aprobó una PERSONA. Con la revisión automática prendida
+            #la IA aprueba sola, y contar `aprobado=True` a secas dejaba fabricarse el
+            #historial con un alta inocua que la IA dejara pasar. Con la revisión apagada
+            #todo lo aprobado lo aprobó una persona, así que es la regla de siempre.
             count = Animal.objects.filter(
                 cargado_por=user, aprobado=True, aprobado_por_persona=True,
             ).count()
-            corresponde = count >= self.MINIMO_APROBADOS
 
-            if corresponde == user.automatic_approve:
+            if count < self.MINIMO_APROBADOS:
                 continue
 
             #esto era un print(): en un cron no lo lee nadie y no queda registro de por
             #qué un rescatista pasó a aprobación automática
             logger.info(
-                "%s tiene %s animales aprobados por una persona",
+                "%s pasa a aprobación automática: tiene %s animales aprobados por una persona",
                 user.get_instagram() or user.email, count,
             )
 
-            user.automatic_approve = corresponde
+            user.automatic_approve = True
             user.save()
+            nuevos += 1
 
-            if corresponde:
-                nuevos += 1
-                logger.info("%s pasa a aprobación automática", user.get_instagram() or user.email)
-            else:
-                revocados += 1
-                #no es un castigo y se revierte solo: cuando llegue a MINIMO_APROBADOS
-                #animales aprobados a mano, la corrida siguiente se la devuelve
-                logger.info(
-                    "%s vuelve a aprobación manual: tiene %s de los %s que hacen falta",
-                    user.get_instagram() or user.email, count, self.MINIMO_APROBADOS,
-                )
-
-        self.stdout.write("Pasan a aprobación automática: {}. Vuelven a manual: {}.".format(
-            nuevos, revocados,
-        ))
+        self.stdout.write("Pasan a aprobación automática: {}.".format(nuevos))
