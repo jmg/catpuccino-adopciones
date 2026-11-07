@@ -82,6 +82,58 @@ class FacebookApiService:
         expire_in = cls.get_expires_in(data)
         return data["access_token"], expire_in
 
+    #Versión de Graph para lo que se pide con requests. A la v4.0 de arriba Meta la
+    #redirige sola a la más vieja que sigue viva.
+    GRAPH = "https://graph.facebook.com/v21.0"
+
+    @classmethod
+    def graph_get(cls, path, **params):
+
+        response = requests.get("{}/{}".format(cls.GRAPH, path), params=params, timeout=20)
+        data = response.json()
+
+        if "error" in data:
+            raise Exception(data["error"].get("message") or data["error"])
+
+        return data
+
+    @classmethod
+    def get_page_token(cls, user_token, page_id):
+        """El token de la página de Facebook a la que está vinculado el Instagram.
+
+        Sacado de un token de usuario de larga duración, el de la página no vence. El de
+        usuario vence a los 60 días, y así se cortó la publicación en enero de 2026 sin
+        que nadie se enterara. Crear el posteo, publicarlo y comentar lo aceptan igual.
+        """
+
+        data = cls.graph_get(page_id, fields="access_token", access_token=user_token)
+
+        if not data.get("access_token"):
+            raise Exception("Facebook no devolvió el token de la página {}".format(page_id))
+
+        return data["access_token"]
+
+    @classmethod
+    def debug_token(cls, token):
+        """Lo que Facebook dice del token: si vale, de qué tipo es y cuándo vence.
+
+        Es el "data" de /debug_token. expires_at y data_access_expires_at son timestamps,
+        y un expires_at 0 quiere decir que no vence.
+        """
+
+        app_token = "{}|{}".format(settings.FACEBOOK_APP_ID, settings.FACEBOOK_APP_SECRET)
+
+        return cls.graph_get("debug_token", input_token=token, access_token=app_token).get("data") or {}
+
+    @classmethod
+    def check_instagram(cls, account):
+        """Le pregunta a Instagram por la cuenta con el token guardado. Devuelve el
+        usuario de Instagram, o lanza si con ese token ya no se puede."""
+
+        data = cls.graph_get(account.business_account_id, fields="username", access_token=account.facebook_token)
+
+        return data.get("username")
+
     def get_instagram_accounts(self):
 
         account_names = []

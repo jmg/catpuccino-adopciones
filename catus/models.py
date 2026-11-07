@@ -550,7 +550,8 @@ class FacebookAccount(BaseEntity):
     full_name = models.CharField(max_length=255, null=True, blank=True)
     remote_id = models.CharField(max_length=255, null=True, blank=True)
 
-    facebook_token = models.CharField(max_length=255, null=True, blank=True)
+    #el de la página (views/facebook.py): hoy mide ~210, y Facebook ya los alargó antes
+    facebook_token = models.CharField(max_length=1000, null=True, blank=True)
     facebook_token_expire_at = models.DateTimeField(null=True, blank=True)
     business_account_id = models.CharField(max_length=255, null=True, blank=True)
     instagram_account_id = models.CharField(max_length=255, null=True, blank=True)

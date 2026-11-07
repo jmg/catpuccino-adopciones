@@ -1,3 +1,5 @@
+from django.utils.html import escape
+
 from catus.utils import send_html_email, rreplace
 from catus.services.base import BaseService
 from catus.models import Animal
@@ -14,6 +16,24 @@ class MailService(BaseService):
 
         subject = "Catpuccino Adopciones - Nuevo Ingreso"
         content = self.render("email/new_animal.html", {"animal": animal, "settings": settings})
+
+        send_html_email(subject, content, settings.SEND_MAIL, ["catpuccino.ok@gmail.com"])
+
+    def send_aviso_instagram(self, problemas, link):
+        """Le avisa al equipo que hay que volver a conectar Instagram (refresh_token)."""
+
+        if settings.ENV == "LOCAL":
+            return
+
+        subject = "Catpuccino Adopciones - Hay que volver a conectar Instagram"
+        items = "".join("<li>{}</li>".format(escape(problema)) for problema in problemas)
+        content = (
+            "<p>El sitio no va a poder publicar ni comentar en Instagram hasta que alguien "
+            "del equipo vuelva a conectar la cuenta:</p><ul>{}</ul>"
+            "<p>Para arreglarlo: entrá con un usuario del equipo a "
+            "<a href=\"{link}\">{link}</a>, apretá <b>Iniciar sesión con Facebook</b> y "
+            "elegí solo la página de Catpuccino.</p>"
+        ).format(items, link=escape(link))
 
         send_html_email(subject, content, settings.SEND_MAIL, ["catpuccino.ok@gmail.com"])
 
