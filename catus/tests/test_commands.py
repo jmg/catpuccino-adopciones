@@ -732,7 +732,7 @@ class AutomaticApproveTest(TestCase):
         self.assertTrue(user.automatic_approve)
 
     def test_nunca_se_la_saca_a_nadie(self):
-        """Sacarla es decisión del equipo, desde el admin.
+        """Lo que el equipo tilda a mano queda.
 
         Con el mínimo en cinco y la revocación, la primera corrida le sacó la aprobación
         automática a 329 rescatistas, y como corre cada hora deshacía el tilde que el

@@ -23,8 +23,11 @@ class Command(BaseCommand):
 
         nuevos = 0
 
-        #Solo se mira a los que no la tienen: la marca nunca se saca acá. Sacarla es una
-        #decisión del equipo (el tilde del admin), y este cron no la puede pisar.
+        #Solo se mira a los que no la tienen: este cron nunca la saca, así que lo que el
+        #equipo tilda a mano en el admin queda. Lo contrario no: si el equipo se la saca
+        #a alguien que tiene un animal aprobado por una persona, la corrida siguiente se
+        #la vuelve a dar (es la regla de siempre). Para frenar a alguien hay que
+        #desactivarle la cuenta.
         for user in CatusUser.objects.filter(automatic_approve=False):
 
             #Solo cuentan los que aprobó una PERSONA. Con la revisión automática prendida
