@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from socket import IP_DROP_MEMBERSHIP
 from catus.models import *
 from catus.services.facebook import FacebookApiService
 from .base import BaseView, SuperuserRequiredMixin

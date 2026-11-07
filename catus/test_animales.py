@@ -24,14 +24,16 @@ class AnimalPermissionsTest(TestCase):
         self.animal = Animal.objects.create(nombre="Michi", cargado_por=self.owner, estado="D", tipo="G", datos="Mimosa")
 
     def edit(self, nombre):
-        # A photo URL that is not Instagram's: the form saves, nothing is fetched.
-        return self.client.post("/animales/{}/".format(self.animal.id), {
-            "tipo": "G", "estado": "D", "nombre": nombre, "edad": "2 años", "sexo": "H", "zona": "CABA",
-            "datos": "Mimosa",
-            "animalimage_set-TOTAL_FORMS": "0", "animalimage_set-INITIAL_FORMS": "0",
-            "animalimage_set-MIN_NUM_FORMS": "0", "animalimage_set-MAX_NUM_FORMS": "1000",
-            "instagram_image": ["https://example.com/foto.jpg"],
-        })
+        # An imported Instagram photo stands for the animal's photos (an animal needs
+        # one to save); the download is mocked, so nothing is fetched.
+        with mock.patch("catus.views.animal.bajar_foto_de_instagram", return_value=None):
+            return self.client.post("/animales/{}/".format(self.animal.id), {
+                "tipo": "G", "estado": "D", "nombre": nombre, "edad": "2 años", "sexo": "H", "zona": "CABA",
+                "datos": "Mimosa",
+                "animalimage_set-TOTAL_FORMS": "0", "animalimage_set-INITIAL_FORMS": "0",
+                "animalimage_set-MIN_NUM_FORMS": "0", "animalimage_set-MAX_NUM_FORMS": "1000",
+                "instagram_image": ["https://scontent.cdninstagram.com/v/foto.jpg"],
+            })
 
     def test_another_account_cannot_open_or_edit_it(self):
         self.client.force_login(self.stranger)

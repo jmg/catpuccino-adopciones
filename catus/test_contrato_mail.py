@@ -58,7 +58,7 @@ class ContractMailTest(TestCase):
         data = {
             "gato_nombre": "Michi", "gato_color": "Negro", "gato_sexo": "M",
             "gato_fecha_nacimiento": "01/01/2025", "gato_edad": "1 año",
-            "miembro_felis_catus_nombre": "Refugio", "send_email": "1",
+            "miembro_adopcion_nombre": "Refugio", "send_email": "1",
         }
         data.update(extra)
         views = contrato_views()

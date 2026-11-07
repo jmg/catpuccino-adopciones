@@ -145,7 +145,9 @@ class ImportPhotosTest(TestCase):
         with mock.patch("catus.utils.requests.get") as get:
             response = self.post(["file://" + secret, "http://127.0.0.1:8888/", "https://example.com/x.jpg"])
 
-        self.assertEqual(response.status_code, 302)
+        # None of them is from Instagram's CDN, so none counts as the animal's photo:
+        # the form comes back asking for one, and nothing was fetched.
+        self.assertEqual(response.status_code, 200)
         get.assert_not_called()
         self.assertEqual(self.animal.animalimage_set.count(), 0)
 

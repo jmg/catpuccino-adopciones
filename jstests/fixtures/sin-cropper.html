@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness sin Cropper</title>
+</head>
+<body>
+
+<!--
+  El mismo botón pero SIN cropper.min.js: pasa de verdad cuando el CDN o el estático
+  no cargan. El selector tiene que avisar y no romper la pantalla de carga del animal.
+-->
+<button type="button" id="abrir">Elegir recorte</button>
+
+<script src="/static/js/crop-widget.js"></script>
+<script src="/jpeg.js"></script>
+
+<script>
+window.avisos = [];
+window.alert = function (mensaje) { window.avisos.push(mensaje); };
+window.errores = [];
+window.addEventListener("error", function (evento) { window.errores.push(String(evento.message)); });
+
+document.getElementById("abrir").addEventListener("click", function () {
+    window.CatusCrop.open({
+        src: window.CatusFixtures.foto(800, 600, 1),
+        crop: null,
+        nombre: "Willy",
+        onSave: function () { window.avisos.push("NO DEBERIA GUARDAR"); }
+    });
+});
+</script>
+
+</body>
+</html>

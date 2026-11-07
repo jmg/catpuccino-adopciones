@@ -1,11 +1,13 @@
 import unicodedata
 from catus.models import Animal, AnimalImage, CatusUser, Contrato, ContratoPersona, EstadoFormulario
+from catus.utils import clean_crop
 from django.forms import ModelForm, Form, ChoiceField, ImageField, PasswordInput, CharField, DateField, EmailField
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, ButtonHolder, Submit, Field
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.forms import PasswordResetForm as DjangoPasswordResetForm
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.forms import ImageField
 from django.forms.widgets import FileInput
@@ -93,58 +95,146 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 class ImagePreviewWidget(FileInput):
 
     def render(self, name, value, attrs=None, **kwargs):
-        input_html = super().render(name, value, attrs=None, **kwargs)
+        #pasar attrs=None descartaba el id que arma Django, así que el input quedaba
+        #sin id: la etiqueta no lo apuntaba y el JS (por ejemplo el selector de
+        #recorte para Instagram) no podía encontrarlo.
+        input_html = super().render(name, value, attrs=attrs, **kwargs)
         if value:
             try:
-                img_html = mark_safe("<img style='max-width: 100%; width: 100%; margin-top: 10px;' src='/{}'/>".format(value))
+                img_html = mark_safe("<img style='max-width: 100%; width: 100%; margin-top: 10px;' src='/{}'/>".format(escape(value)))
             except:
                 img_html = ""
         else:
             img_html = ""
-        return '{}{}'.format(input_html, img_html)
+        return mark_safe('{}{}'.format(input_html, img_html))
+
+
+class CropField(CharField):
+    """Una fracción del recorte, que escribe el selector y no la persona.
+
+    Va como texto a propósito: si llegara un valor raro queremos ignorarlo, no que
+    invalide el formulario y no se pueda guardar el animal por culpa de un recorte.
+    """
+
+    def has_changed(self, initial, data):
+        """Compara números, no un float contra su texto.
+
+        Django compara el valor inicial (un float que sale del modelo) contra el
+        string del POST sin convertir, así que "0.25" != 0.25 y los cuatro campos
+        figuraban SIEMPRE como modificados. Con eso, guardar un animal sin tocar
+        las fotos devolvía todas como cambiadas y se recomprimían y renombraban,
+        rompiendo las URLs que ya habían salido por mail.
+        """
+
+        def numero(valor):
+            if valor in (None, ""):
+                return None
+            try:
+                return float(valor)
+            except (TypeError, ValueError):
+                return valor
+
+        return numero(initial) != numero(data)
 
 
 class AnimalImageForm(ModelForm):
 
     image = ImageField(label='Fotos', widget=ImagePreviewWidget)
 
+    CROP_FIELDS = ('crop_x', 'crop_y', 'crop_w', 'crop_h')
+
+    crop_x = CropField(required=False, widget=forms.HiddenInput())
+    crop_y = CropField(required=False, widget=forms.HiddenInput())
+    crop_w = CropField(required=False, widget=forms.HiddenInput())
+    crop_h = CropField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = AnimalImage
-        fields = ('image', )
+        fields = ('image', 'crop_x', 'crop_y', 'crop_w', 'crop_h')
+
+    def clean_image(self):
+        """Que la foto se pueda decodificar entera, no sólo que parezca una foto.
+
+        La validación de ImageField usa PIL.verify(), que mira la estructura del archivo
+        y no decodifica el scan: un JPEG cortado a la mitad —una subida interrumpida desde
+        el celular, que es lo más común— la pasa sin chistar. Reventaba después, adentro
+        de ImageService.optimize(), y para entonces EditView ya había guardado el animal y
+        la foto: el rescatista veía un 500, no se enteraba de que el animal había quedado
+        cargado, y si volvía a intentar cargaba un duplicado.
+
+        Se valida acá para que el aviso salga por get_error_messages, junto con el resto
+        de los errores del formulario, y sin dejar nada a medio guardar.
+        """
+        from PIL import Image
+
+        foto = self.cleaned_data.get("image")
+
+        #None es "no subieron nada" (el campo puede venir vacío en una fila del formset), y
+        #un ImageFieldFile sin archivo nuevo es la foto que ya estaba guardada: esa ya se
+        #decodificó cuando se subió, y volver a leerla en cada edición sale caro.
+        if not foto or not hasattr(foto, "file"):
+            return foto
+
+        try:
+            foto.file.seek(0)
+            Image.open(foto.file).load()
+        except Exception:
+            raise forms.ValidationError(
+                "Esa foto llegó cortada o no se puede abrir. Volvé a subirla."
+            )
+        finally:
+            foto.file.seek(0)
+
+        return foto
+
+    def clean(self):
+        """El recorte lo elige el navegador, asi que lo validamos antes de guardarlo."""
+
+        cleaned_data = super().clean()
+
+        crop = clean_crop([cleaned_data.get(field) for field in self.CROP_FIELDS])
+
+        for index, field in enumerate(self.CROP_FIELDS):
+            cleaned_data[field] = crop[index] if crop else None
+
+        return cleaned_data
 
 
 class RequiredImageInlineFormset(forms.models.BaseInlineFormSet):
-    """ Makes inline fields required """
+    """Un animal publicado tiene que quedar siempre con al menos una foto."""
 
     def clean(self):
-        # get forms that actually have valid data
-        count = 0
-        delete_checked = 0
+        """Cuenta cuántas fotos quedan después de guardar, no cuántas vinieron.
+
+        La versión anterior solo miraba el caso de tener exactamente una foto, así
+        que con dos o más se podían tildar todas para eliminar y el animal quedaba
+        publicado sin ninguna.
+        """
+
+        quedan = 0
+
         for form in self.forms:
             try:
-                if form.cleaned_data:
-                    count += 1
-                    if form.cleaned_data['DELETE']:
-                        delete_checked += 1
-                    if not form.cleaned_data['DELETE']:
-                        delete_checked -= 1
+                cleaned_data = form.cleaned_data
             except AttributeError:
-                # annoyingly, if a subform is invalid Django explicity raises
-                # an AttributeError for cleaned_data
-                pass
+                #si un subform es inválido, Django levanta AttributeError acá
+                continue
 
-        # Case no images uploaded
-        if count < 1:
-            self.raise_error()
+            if not cleaned_data or cleaned_data.get("DELETE"):
+                continue
 
-        # Case one image added and another deleted
-        if delete_checked > 0 and AnimalImage.objects.filter(animal=self.instance).count() == 1:
+            #cuenta una foto ya guardada que no se borra, o una nueva que se sube
+            if cleaned_data.get("id") is not None or cleaned_data.get("image"):
+                quedan += 1
+
+        if quedan < 1:
             self.raise_error()
 
     def raise_error(self):
-        msg = "Al menos una foto del animal es requerida"
-        self.errors.append((msg))
-        raise forms.ValidationError(msg)
+        #self.errors es una lista de dicts (uno por form). Meterle un string suelto
+        #rompia a quien despues quisiera leer los errores para mostrarlos.
+        #ValidationError desde clean() ya deja el mensaje en non_form_errors().
+        raise forms.ValidationError("Al menos una foto del animal es requerida")
 
 
 class SignupForm(UserCreationForm):
@@ -232,6 +322,37 @@ class CatusUserForm(ModelForm):
         self.fields["title"].label = _("Título de tu perfil")
         self.fields["description"].label = _("Descripción de tu perfil")
 
+    def clean_handle(self):
+        """El handle es la URL pública del perfil, así que no puede repetirse.
+
+        La pantalla lo chequea por AJAX mientras se escribe, pero eso es solo una
+        ayuda visual: si dos personas quedaban con el mismo handle, /<handle>/
+        devolvía 500 para las dos.
+        """
+
+        from catus.services.validation import ValidationService
+
+        handle = self.cleaned_data.get("handle")
+        if not handle:
+            return handle
+
+        #el perfil manda el handle actual precargado en cada POST. Antes de que hubiera
+        #validación del lado del servidor quedaron handles con punto (cat.puccino), y
+        #revisarlos de nuevo invalidaba el form entero: esa gente no podía guardar ni la
+        #descripción por un campo que ni tocó. El que ya tenía guardado se deja pasar.
+        if self.instance.pk and handle == self.instance.handle:
+            return handle
+
+        service = ValidationService()
+
+        if service.clean_handle(handle) != handle:
+            raise forms.ValidationError("Usá solo letras, números y guión bajo.")
+
+        if not service.esta_libre(handle, self.instance):
+            raise forms.ValidationError("Ese link ya está en uso. Probá con otro.")
+
+        return handle
+
 
 class ContratoForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, ModelForm):
 
@@ -239,7 +360,7 @@ class ContratoForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, ModelForm):
 
         model = Contrato
         exclude = ["contrato_aceptado", "contrato_fecha", "adoptante", "hash", "gato", "estado_formulario", "email_enviado", "created_at", "updated_at"]
-        fields_required = ["gato_nombre", "gato_color", "gato_fecha_nacimiento", "gato_edad", "miembro_felis_catus_nombre"]
+        fields_required = ["gato_nombre", "gato_color", "gato_fecha_nacimiento", "gato_edad", "miembro_adopcion_nombre"]
         date_picker = ["gato_fecha_nacimiento", "gato_vacunacion_antirabica_fecha", "gato_vacunacion_triple_1_dosis_fecha", "gato_vacunacion_triple_2_dosis_fecha", "gato_castrado_fecha", "gato_desparasitado_fecha", "gato_pipeta_antipulgas_fecha", "gato_castracion_fecha_futura", "gato_desparasitado_fecha_2", "perro_vacunacion_quintuple_1_dosis_fecha", "perro_vacunacion_quintuple_2_dosis_fecha", "perro_vacunacion_sextuple_1_dosis_fecha"]
 
         labels = {

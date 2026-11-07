@@ -233,6 +233,44 @@ FACEBOOK_APP_SECRET = app_config.get("FACEBOOK_APP_SECRET")
 OPENIA_API_KEY = app_config.get("OPENIA_API_KEY")
 OPENIA_API_ORG_ID = app_config.get("OPENIA_API_ORG_ID")
 
+
+def _config_bool(clave, por_defecto=True):
+    """read_config convierte todo a string, asi que "0"/"false" llegan como texto."""
+
+    valor = app_config.get(clave)
+    if valor is None:
+        return por_defecto
+
+    return str(valor).strip().lower() not in ("0", "false", "no", "")
+
+
+#Revision automatica de las publicaciones. Se puede apagar desde la config sin tocar
+#codigo; si no hay OPENIA_API_KEY queda inactiva sola.
+MODERACION_IA_ACTIVA = _config_bool("MODERACION_IA_ACTIVA", True)
+MODERACION_IA_MODELO = app_config.get("MODERACION_IA_MODELO") or "gpt-4o-mini"
+
+#tope de revisiones por persona por dia: acota lo que puede gastar alguien que se
+#registre solo para hacer subir la factura. 0 lo desactiva.
+try:
+    MODERACION_IA_MAX_POR_DIA = int(app_config.get("MODERACION_IA_MAX_POR_DIA") or 20)
+except (TypeError, ValueError):
+    MODERACION_IA_MAX_POR_DIA = 20
+
+#Posteo automatico en Instagram: al aprobar un animal, el posteo queda agendado y sale
+#solo cuando pasa la demora. Arranca APAGADO a proposito. Publicar en la cuenta de la
+#organizacion es irreversible y se ve de afuera, asi que prenderlo tiene que ser una
+#decision de alguien, no algo que pase solo en el proximo git pull. Para prenderlo:
+#"INSTAGRAM_AUTO_ACTIVO": "1" en /etc/secrets/catpuccino_adopciones.<env>.json
+INSTAGRAM_AUTO_ACTIVO = _config_bool("INSTAGRAM_AUTO_ACTIVO", False)
+
+#Minutos entre aprobar y publicar. Es la ventana que tiene el equipo para cancelar desde
+#/tools/colainstagram/, y es el unico control humano que queda: aprobado=True no
+#garantiza que alguien haya mirado, porque automatic_approve aprueba solo.
+try:
+    INSTAGRAM_AUTO_DEMORA_MINUTOS = int(app_config.get("INSTAGRAM_AUTO_DEMORA_MINUTOS") or 30)
+except (TypeError, ValueError):
+    INSTAGRAM_AUTO_DEMORA_MINUTOS = 30
+
 EMAIL_BACKEND = "sgbackend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
 
@@ -263,6 +301,32 @@ if ENV == "LOCAL":
         }
     }"""
     LOGGING = {}
+
+if ENV == "TEST":
+    #los avisos que el código manda por logger.warning son los que queremos en
+    #producción, pero en los tests no hay ningún formulario de forms_builder cargado y
+    #el signal del desplegable avisa en cada save de un animal: eran 900 líneas de ruido
+    #tapando la salida de la suite. assertLogs sigue andando, se maneja sus handlers.
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "handlers": {
+            "nulo": {"class": "logging.NullHandler"},
+        },
+        "loggers": {
+            "catus": {"handlers": ["nulo"], "level": "ERROR", "propagate": False},
+        },
+    }
+
+    #MEDIA_ROOT es <repo>/gallery, o sea las fotos DE VERDAD. Buena parte de la suite se
+    #protege con override_settings sobre un tempdir, pero las clases que se olvidan
+    #escriben ahi: eran ~49 archivos por corrida ensuciando la galeria del repo. Esto lo
+    #corta para toda la suite, incluidas las clases que se escriban mañana. El directorio
+    #queda bajo /tmp y lo limpia el sistema; los tests que igual quieran el suyo pueden
+    #seguir usando override_settings, que gana sobre esto.
+    import tempfile
+
+    MEDIA_ROOT = tempfile.mkdtemp(prefix="catus-tests-media-")
 
 try:
     from .settings_local import *

@@ -506,13 +506,26 @@
 
         $.post(location.href, data, function(response) {
             if (response.status == "success") {
+
+                // #link-adoptante solo existe en la pantalla del equipo. Para el
+                // adoptante esto daba TypeError justo después de guardar, así que nunca
+                // llegaba a ver su contrato ni sabía si había salido bien.
+                var copyText = document.getElementById("link-adoptante");
+
+                if (!copyText) {
+                    $.info("¡Listo! Guardamos tus datos. Ya podés descargar el contrato.");
+                    if (response.contrato_url) {
+                        window.location.href = response.contrato_url;
+                    }
+                    return;
+                }
+
                 if (sendEmail) {
                     $.info("Contrato enviado al adoptante correctamente!");
                 } else {
                     $.info("Guardado y copiado link para el adoptante!");
                 }
 
-                var copyText = document.getElementById("link-adoptante");
                 copyText.select();
                 copyText.setSelectionRange(0, 99999);
                 document.execCommand("copy");

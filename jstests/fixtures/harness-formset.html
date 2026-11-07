@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness del recorte en el formset de fotos</title>
+
+<!-- los mismos archivos que carga el sitio, servidos en las mismas rutas -->
+<link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css">
+
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+    .row { display: block; }
+    .photo-container { border: 1px solid #ddd; padding: 8px; margin-bottom: 10px; }
+    .form-group { margin-bottom: 10px; }
+    .form-text { display: block; font-size: 12px; color: #777; }
+    img { max-width: 220px; display: block; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Fotos del animal</h1>
+
+<!--
+  El HTML que rodea al JS del formset de catus/templates/animal/edit.html. El JS NO se
+  copia: se carga al final del archivo desde el template de verdad.
+
+  El otro harness (harness.html) modela tools/generarimagen.html, que tiene UN solo
+  recorte. Este modela el formset: varias filas con indices dinamicos, que es donde
+  aparecen los bugs de "el boton de una fila escribe en la de al lado" y de "la fila
+  que se agrega despues no queda enganchada".
+
+  El HTML de las filas NO esta inventado: es lo que devuelve
+  {% bootstrap_form form %} sobre AnimalImageForm, copiado tal cual de
+
+      ENV=TEST python -c "... Template('{% bootstrap_form form %}').render(...)"
+
+  con el indice reemplazado. Lo unico agregado es el <img>, que en el sitio lo pone
+  ImagePreviewWidget cuando la foto ya existe, y el data-foto para poder cargarle
+  desde el test una foto de verdad en vez de una URL de /gallery.
+
+  Lo que sigue siendo copia, y por eso se puede desincronizar, es este HTML: si edit.html
+  cambia los ids del formset, el molde #empty_form o donde cuelga el <img> de la foto, hay
+  que actualizarlo. Esta anotado en jstests/README.md.
+-->
+
+<!-- campos del animal que el selector lee para la vista previa -->
+<div class="form-group">
+    <label for="id_nombre">Nombre</label>
+    <input type="text" name="nombre" id="id_nombre" value="Willy">
+</div>
+<div class="form-group">
+    <label for="id_edad">Edad</label>
+    <input type="text" name="edad" id="id_edad" value="2 años">
+</div>
+<div class="form-group">
+    <label for="id_sexo">Sexo</label>
+    <select name="sexo" id="id_sexo">
+        <option value="M" selected>Macho</option>
+        <option value="H">Hembra</option>
+    </select>
+</div>
+
+<form id="animal-form" method="post" enctype="multipart/form-data">
+
+    <input type="hidden" name="animalimage_set-TOTAL_FORMS" value="3" id="id_animalimage_set-TOTAL_FORMS">
+    <input type="hidden" name="animalimage_set-INITIAL_FORMS" value="3" id="id_animalimage_set-INITIAL_FORMS">
+    <input type="hidden" name="animalimage_set-MIN_NUM_FORMS" value="0" id="id_animalimage_set-MIN_NUM_FORMS">
+    <input type="hidden" name="animalimage_set-MAX_NUM_FORMS" value="1000" id="id_animalimage_set-MAX_NUM_FORMS">
+
+    <div id="show-photos-button" class="text-center" style="display: none">
+        <button type="button" class="btn btn-primary show-photos-btn" onclick="$('#form-set-container').slideDown(); $(this).hide()">
+            Ver Fotos (3)
+        </button>
+    </div>
+
+    <div id="form-set-container">
+        <h3>Fotografías</h3>
+        <div id="form-set" class="row">
+
+            <!-- fila 0: foto ya cargada, CON recorte elegido (el que escribio el server) -->
+            <div class="col-md-6 photo-container"><div class="form-group"><label for="id_animalimage_set-0-image">Fotos</label><input type="file" name="animalimage_set-0-image" class="form-control-file" title="" id="id_animalimage_set-0-image" /><img data-foto="1" alt=""/></div>
+<input type="hidden" name="animalimage_set-0-crop_x" id="id_animalimage_set-0-crop_x" value="0.05" />
+<input type="hidden" name="animalimage_set-0-crop_y" id="id_animalimage_set-0-crop_y" value="0.1" />
+<input type="hidden" name="animalimage_set-0-crop_w" id="id_animalimage_set-0-crop_w" value="0.4" />
+<input type="hidden" name="animalimage_set-0-crop_h" id="id_animalimage_set-0-crop_h" value="0.8" />
+<input type="hidden" name="animalimage_set-0-id" id="id_animalimage_set-0-id" value="10" />
+<div class="form-group"><div class="form-check"><input type="checkbox" name="animalimage_set-0-DELETE" class="form-check-input" id="id_animalimage_set-0-DELETE" /><label class="form-check-label" for="id_animalimage_set-0-DELETE">Delete</label></div></div>
+<input type="hidden" name="animalimage_set-0-animal" id="id_animalimage_set-0-animal" value="1" /></div>
+
+            <!-- fila 1: foto ya cargada, SIN recorte: es la que tocan los tests -->
+            <div class="col-md-6 photo-container"><div class="form-group"><label for="id_animalimage_set-1-image">Fotos</label><input type="file" name="animalimage_set-1-image" class="form-control-file" title="" id="id_animalimage_set-1-image" /><img data-foto="1" alt=""/></div>
+<input type="hidden" name="animalimage_set-1-crop_x" id="id_animalimage_set-1-crop_x" />
+<input type="hidden" name="animalimage_set-1-crop_y" id="id_animalimage_set-1-crop_y" />
+<input type="hidden" name="animalimage_set-1-crop_w" id="id_animalimage_set-1-crop_w" />
+<input type="hidden" name="animalimage_set-1-crop_h" id="id_animalimage_set-1-crop_h" />
+<input type="hidden" name="animalimage_set-1-id" id="id_animalimage_set-1-id" value="11" />
+<div class="form-group"><div class="form-check"><input type="checkbox" name="animalimage_set-1-DELETE" class="form-check-input" id="id_animalimage_set-1-DELETE" /><label class="form-check-label" for="id_animalimage_set-1-DELETE">Delete</label></div></div>
+<input type="hidden" name="animalimage_set-1-animal" id="id_animalimage_set-1-animal" value="1" /></div>
+
+            <!-- fila 2: foto ya cargada, CON recorte elegido (el otro centinela) -->
+            <div class="col-md-6 photo-container"><div class="form-group"><label for="id_animalimage_set-2-image">Fotos</label><input type="file" name="animalimage_set-2-image" class="form-control-file" title="" id="id_animalimage_set-2-image" /><img data-foto="1" alt=""/></div>
+<input type="hidden" name="animalimage_set-2-crop_x" id="id_animalimage_set-2-crop_x" value="0.55" />
+<input type="hidden" name="animalimage_set-2-crop_y" id="id_animalimage_set-2-crop_y" value="0.05" />
+<input type="hidden" name="animalimage_set-2-crop_w" id="id_animalimage_set-2-crop_w" value="0.4" />
+<input type="hidden" name="animalimage_set-2-crop_h" id="id_animalimage_set-2-crop_h" value="0.8" />
+<input type="hidden" name="animalimage_set-2-id" id="id_animalimage_set-2-id" value="12" />
+<div class="form-group"><div class="form-check"><input type="checkbox" name="animalimage_set-2-DELETE" class="form-check-input" id="id_animalimage_set-2-DELETE" /><label class="form-check-label" for="id_animalimage_set-2-DELETE">Delete</label></div></div>
+<input type="hidden" name="animalimage_set-2-animal" id="id_animalimage_set-2-animal" value="1" /></div>
+
+        </div>
+
+        <div class="text-center">
+            <button type="button" id="add_more" class="btn btn-primary add-photo-btn">
+                Agregar Foto
+            </button>
+        </div>
+
+        <!-- la fila de plantilla del formset, con __prefix__ sin reemplazar -->
+        <div id="empty_form" style="display:none">
+            <div class="col-md-12">
+                <table class='no_error'><div class="form-group"><label for="id_animalimage_set-__prefix__-image">Fotos</label><input type="file" name="animalimage_set-__prefix__-image" class="form-control-file" title="" id="id_animalimage_set-__prefix__-image" /></div>
+<input type="hidden" name="animalimage_set-__prefix__-crop_x" id="id_animalimage_set-__prefix__-crop_x" />
+<input type="hidden" name="animalimage_set-__prefix__-crop_y" id="id_animalimage_set-__prefix__-crop_y" />
+<input type="hidden" name="animalimage_set-__prefix__-crop_w" id="id_animalimage_set-__prefix__-crop_w" />
+<input type="hidden" name="animalimage_set-__prefix__-crop_h" id="id_animalimage_set-__prefix__-crop_h" />
+<input type="hidden" name="animalimage_set-__prefix__-id" id="id_animalimage_set-__prefix__-id" />
+<div class="form-group"><div class="form-check"><input type="checkbox" name="animalimage_set-__prefix__-DELETE" class="form-check-input" id="id_animalimage_set-__prefix__-DELETE" /><label class="form-check-label" for="id_animalimage_set-__prefix__-DELETE">Delete</label></div></div>
+<input type="hidden" name="animalimage_set-__prefix__-animal" id="id_animalimage_set-__prefix__-animal" /></table>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script src="/static/vendor/jquery/jquery.min.js"></script>
+<script src="/static/vendor/cropper/cropper.min.js"></script>
+<script src="/static/js/crop-widget.js"></script>
+<script src="/jpeg.js"></script>
+
+<script>
+/*
+ * Andamio del harness: lo que en el sitio ponen otros archivos y que acá no vale la
+ * pena arrastrar entero.
+ *
+ *  - $.alert / $.info salen de static/js/index.js y son alertify. Se reemplazan por
+ *    un anotador para poder afirmar qué se le dijo a la persona.
+ *  - tinymce lo carga el template desde /static/js/tinymce/, que no está en el repo. Como
+ *    el JS que se prueba es ahora el del template ENTERO, su $(document).ready() llama a
+ *    tinymce.init() antes de llegar al formset: sin este doble, tira ReferenceError y de
+ *    ahí para abajo no se engancha nada (incluido todo el recorte).
+ *  - las fotos ya cargadas: en el sitio ImagePreviewWidget escribe <img src="/gallery/...">.
+ *    Acá se le arma una foto de verdad con CatusFixtures para que el selector la pueda abrir.
+ */
+window.harness = {avisos: []};
+
+jQuery.alert = function (mensaje) { window.harness.avisos.push(mensaje); };
+jQuery.info = function (mensaje) { window.harness.avisos.push(mensaje); };
+
+window.tinymce = {init: function () {}};
+window.tinyMCE = {get: function () {
+    return {setMode: function () {}, setContent: function () {}, getContent: function () { return ""; }};
+}};
+
+(function () {
+    "use strict";
+
+    var foto = window.CatusFixtures.foto(2000, 1000, 1);
+
+    Array.prototype.forEach.call(document.querySelectorAll("img[data-foto]"), function (img) {
+        img.src = foto;
+    });
+
+    function input(fila, campo) {
+        return document.getElementById("id_animalimage_set-" + fila + "-" + campo);
+    }
+
+    // los cuatro valores como STRING, tal como viajarían en el POST
+    window.harness.crudo = function (fila) {
+        return {
+            x: input(fila, "crop_x").value,
+            y: input(fila, "crop_y").value,
+            w: input(fila, "crop_w").value,
+            h: input(fila, "crop_h").value
+        };
+    };
+
+    window.harness.leer = function (fila) {
+
+        var crudo = window.harness.crudo(fila);
+
+        if (crudo.x === "" || crudo.w === "") {
+            return null;
+        }
+
+        return {x: parseFloat(crudo.x), y: parseFloat(crudo.y),
+                w: parseFloat(crudo.w), h: parseFloat(crudo.h)};
+    };
+
+    window.harness.total = function () {
+        return parseInt(document.getElementById("id_animalimage_set-TOTAL_FORMS").value, 10);
+    };
+
+    /* Los pares name=value que viajarían en el POST, tal como los lee el formset.
+     *
+     * Mirar el DOM no alcanza: lo que rompe el guardado es lo que se SERIALIZA, y un
+     * input escondido, sacado de su .form-group pero todavía dentro del <form>, viaja
+     * igual. FormData es el mismo criterio que usa el navegador al enviar. */
+    window.harness.post = function () {
+
+        var datos = [];
+
+        new FormData(document.getElementById("animal-form")).forEach(function (valor, nombre) {
+            datos.push(nombre + "=" + (typeof valor === "string" ? valor : "<archivo>"));
+        });
+
+        return datos;
+    };
+
+    // lo que el POST lleva de UNA fila del formset (el guión final evita que la 3 se lleve la 30)
+    window.harness.postDeLaFila = function (fila) {
+
+        var prefijo = "animalimage_set-" + fila + "-";
+
+        return window.harness.post().filter(function (dato) {
+            return dato.indexOf(prefijo) === 0;
+        });
+    };
+})();
+</script>
+
+<!--
+  Acá NO va una copia del JS del formset: va el JS de verdad.
+
+  Antes esto era un copy/paste del bloque <script> de catus/templates/animal/edit.html, y
+  el copy/paste tenía el defecto de siempre: se arregló updateRemoveAdded en el template,
+  se revirtió a mano para comprobar la cobertura y los 116 tests siguieron en verde. Un
+  test que no se pone en rojo cuando el código se rompe no está probando ese código.
+
+  Ahora /template-js/animal-edit.js es el bloque <script> recortado del template real.
+  Lo sirve crop-formset.spec.js con page.route() (ver ahí qué se sustituye de la sintaxis
+  de Django y por qué está del lado del test y no del server): abrir este archivo a mano
+  en el navegador da una pantalla muerta, sin botones de recorte. Es esperable.
+-->
+<script src="/template-js/animal-edit.js"></script>
+
+</body>
+</html>

@@ -19,6 +19,11 @@ class GPTService(BaseService):
     #la página de un post de Instagram pesa menos de 1 MB
     MAX_POST_BYTES = 5 * 1024 * 1024
 
+    #El pedido web espera esta llamada. Sin request_timeout el SDK 0.x se queda
+    #esperando 600s: el rescatista pegaba el link y se comia un 502 en vez de un
+    #error. Lo mismo que hace ModeracionService.
+    TIMEOUT_OPENAI = 12
+
     def _get_html_title_and_images(self, url):
 
         # try:
@@ -73,12 +78,24 @@ class GPTService(BaseService):
 
         return data
 
-    def clean_value(self, value):
+    #formas en que el modelo dice "no sé" cuando el dato no está en el post
+    NO_VALUES = ("no", "no se", "no se especifica", "no se menciona", "no corresponde", "no especifica")
 
-        no_values = ["no", "no se", "no se especifica", "no se menciona", "no corresponde", "no especifica"]
-        for no_value in no_values:
-            if no_value in value.lower():
-                value = ""
+    #las frases largas a veces siguen ("no se especifica en el post"), las cortas no
+    NO_VALUES_LARGOS = tuple(no_value for no_value in NO_VALUES if len(no_value.split()) >= 3)
+
+    def clean_value(self, value):
+        """Vacía el valor si el modelo contestó que no sabe.
+
+        Se compara el valor entero, no por subcadena: buscando subcadenas, un perro
+        llamado Bruno o Nono se quedaba sin nombre, y el JS de la carga corta la
+        precarga completa cuando falta el nombre, asi que se perdía toda la importación.
+        """
+
+        limpio = value.strip().lower().rstrip(".")
+
+        if limpio in self.NO_VALUES or limpio.startswith(self.NO_VALUES_LARGOS):
+            return ""
 
         return value
 
@@ -214,7 +231,7 @@ class GPTService(BaseService):
             {"role": "user", "content": text},
         ]
 
-        response = openai.ChatCompletion.create(model=model, messages=messages)
+        response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=self.TIMEOUT_OPENAI)
         content = response["choices"][0]["message"]["content"]
 
         ChatGTPResponse.objects.create(

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import random
 import uuid
 from forms_builder.forms.forms import FormForForm
@@ -25,6 +26,7 @@ FORM_MAX_BYTES = 40 * 1024 * 1024
 FORM_MAX_PER_HOUR = 10          # per address: someone can apply for several animals
 RECEIPTS_MAX_PER_DAY = 5        # per mailbox: the receipt goes to whatever was typed
 HONEYPOT_FIELD = "sitio_web"    # hidden from people, see preadoption.html
+logger = logging.getLogger(__name__)
 
 
 class ListView(BaseView):
@@ -44,6 +46,12 @@ class PreAdoptionView(BaseView):
     url = r"^pre-adopcion/$"
     form_type = "preadoption"
     animal_type = "gato"
+
+    #Buscar el formulario por posición (Form.objects.all()[0]) depende del orden en
+    #que se hayan creado: borrar uno desplaza al resto y esta página puede terminar
+    #mostrando otro formulario, o directamente caerse. El slug es estable.
+    form_slug = "formulario-de-pre-adopcion"
+    form_index = 0
 
     def render_to_response(self, context):
 
@@ -106,7 +114,19 @@ class PreAdoptionView(BaseView):
 
     def _get_form(self):
 
-        return Form.objects.all()[0]
+        form = Form.objects.filter(slug=self.form_slug).first()
+        if form is not None:
+            return form
+
+        #si el slug cambió en el admin no dejamos la página pública sin formulario:
+        #caemos al comportamiento de antes y avisamos por el log
+        logger.error(
+            "No hay ningún formulario con slug '%s'; usando el de la posición %s.",
+            self.form_slug, self.form_index,
+        )
+
+        forms = Form.objects.all()[self.form_index:self.form_index + 1]
+        return forms[0] if forms else None
 
     def _rejected(self):
         """Why this post is not even read, or None. The size comes first, so that a
@@ -242,8 +262,20 @@ class PreAdoptionView(BaseView):
         email_context = {"animal": animal, "fields": fields, "form_hash": estado.hash, "settings": settings}
         content = self.render(self._get_email_template(), email_context)
 
-        to_emails = list(set(["catpuccino.ok@gmail.com", animal.cargado_por.email]))
-        send_html_email(subject, content, settings.SEND_MAIL, to_emails)
+        to_emails = ["catpuccino.ok@gmail.com"]
+
+        #"animal" no siempre es un Animal: con la opción "otro" es el nombre que la
+        #persona escribió a mano, y hay animales viejos sin rescatista asociado
+        rescatista = getattr(animal, "cargado_por", None)
+        if rescatista is not None and rescatista.email:
+            to_emails.append(rescatista.email)
+
+        #el formulario ya quedó guardado: si el mail falla, avisamos por el log pero
+        #no le mostramos un error a quien acaba de completarlo (volvería a mandarlo)
+        try:
+            send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)))
+        except Exception:
+            logger.exception("No se pudo avisar del formulario %s", estado.hash)
 
         # The receipt goes to the one address the candidate gave, if it is an address:
         # on the cats' form that field is free text. And since nothing proves it is
@@ -267,8 +299,8 @@ class PreAdoptionView(BaseView):
 
         try:
             send_html_email(subject, content, settings.SEND_MAIL, email)
-        except:
-            pass
+        except Exception:
+            logger.exception("No se pudo confirmarle el formulario %s a %s", estado.hash, email)
 
 
 class PreAdoptionPerrosView(PreAdoptionView):
@@ -278,7 +310,6 @@ class PreAdoptionPerrosView(PreAdoptionView):
     animal_type = "perro"
     template_name = "adoption/preadoption.html"
 
-    def _get_form(self):
-
-        return Form.objects.all()[3]
+    form_slug = "formulario-de-pre-adopcion-para-perros"
+    form_index = 3
 

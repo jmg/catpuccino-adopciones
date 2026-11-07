@@ -1,0 +1,1249 @@
+"""Tests de la revisión automática de publicaciones.
+
+Dos reglas que no se pueden romper:
+  1. Es una ayuda para el equipo. Pase lo que pase (API caída, sin crédito, respuesta
+     rara) nunca puede impedir que se guarde ni que se publique un animal.
+  2. Marcar de más hace daño: si el filtro se equivoca, alguien que rescató un animal
+     no lo puede publicar. Ante la duda, aprueba.
+"""
+import json
+import shutil
+import tempfile
+from io import StringIO
+from unittest import mock
+
+from django.contrib.admin.sites import AdminSite
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.core.cache import cache
+from django.core.management import call_command
+from django.db import connection
+from django.forms.models import modelform_factory
+from django.test import RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
+
+from catus.admin import AnimalAdmin
+from catus.management.commands.automatic_approve import Command as AutomaticApproveCommand
+from catus.models import Animal, RevisionIALlamada
+from catus.services.mail import MailService
+from catus.services.moderacion import ModeracionService
+from catus.tests.factories import make_animal, make_animal_image, make_user, uploaded_photo
+from catus.views.animal import AprobarView, EditView
+
+
+def visto(animales, descripcion="Se ve un gato.", texto_sospechoso=False, inapropiado=False):
+    """Lo que devuelve el modelo: describe lo que ve, no juzga."""
+
+    return json.dumps({
+        "animales": animales,
+        "descripcion": descripcion,
+        "texto_sospechoso": texto_sospechoso,
+        "inapropiado": inapropiado,
+    })
+
+
+def con_respuesta(contenido):
+
+    return mock.patch.object(ModeracionService, "_preguntar", return_value=contenido)
+
+
+def con_error(error=None):
+
+    return mock.patch.object(
+        ModeracionService, "_preguntar", side_effect=error or RuntimeError("API caída"),
+    )
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class DecidirTest(TestCase):
+    """La política vive en código, no en el prompt: acá se prueba sin tocar la API.
+
+    Se separó así porque pedirle al modelo que juzgara hacía que copiara las reglas
+    en vez de mirar la foto, y marcaba como sospechosas fotos de gatos normales.
+    """
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.gato = make_animal(nombre="Willy", tipo="G")
+        self.perro = make_animal(nombre="Rocco", tipo="P")
+
+    def decidir(self, animal, **kwargs):
+
+        datos = json.loads(visto(**kwargs)) if "animales" in kwargs else json.loads(visto(["gato"]))
+        return self.service.decidir(animal, datos)
+
+    def test_un_gato_declarado_gato_pasa(self):
+
+        estado, _ = self.service.decidir(self.gato, json.loads(visto(["gato"])))
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_un_perro_declarado_perro_pasa(self):
+
+        estado, _ = self.service.decidir(self.perro, json.loads(visto(["perro"])))
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_sin_animales_se_manda_a_revisar(self):
+
+        estado, motivo = self.service.decidir(self.gato, json.loads(visto([], "Es una captura de pantalla.")))
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+        self.assertIn("animal", motivo.lower())
+
+    def test_texto_de_spam_se_manda_a_revisar(self):
+
+        estado, motivo = self.service.decidir(
+            self.gato, json.loads(visto(["gato"], texto_sospechoso=True)),
+        )
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+        self.assertIn("spam", motivo.lower())
+
+    def test_contenido_inapropiado_se_manda_a_revisar(self):
+
+        estado, motivo = self.service.decidir(
+            self.gato, json.loads(visto(["gato"], inapropiado=True)),
+        )
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+        self.assertIn("inapropiado", motivo.lower())
+
+    def test_equivocarse_de_especie_no_frena_la_publicacion(self):
+        """Errar el desplegable es un error de tipeo, no spam. Se avisa, no se bloquea."""
+
+        estado, motivo = self.service.decidir(self.gato, json.loads(visto(["perro"])))
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+        self.assertIn("perro", motivo.lower())
+
+    def test_un_animal_que_no_se_distingue_pasa(self):
+        """Foto oscura o de lejos: el modelo dice "otro". No es motivo para frenar."""
+
+        estado, _ = self.service.decidir(self.gato, json.loads(visto(["otro"])))
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_varios_animales_en_la_foto_pasan(self):
+
+        estado, _ = self.service.decidir(self.gato, json.loads(visto(["gato", "perro"])))
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_lo_inapropiado_gana_sobre_todo_lo_demas(self):
+
+        estado, motivo = self.service.decidir(
+            self.gato, json.loads(visto(["gato"], inapropiado=True, texto_sospechoso=True)),
+        )
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+        self.assertIn("inapropiado", motivo.lower())
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class RevisarTest(TestCase):
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G", datos="Gatito en adopción.")
+        make_animal_image(animal=self.animal)
+
+    def test_aprueba_una_publicacion_valida(self):
+
+        with con_respuesta(visto(["gato"], "Se ve un gato atigrado.")):
+            estado, motivo = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+        self.assertIn("gato", motivo.lower())
+
+    def test_entiende_la_respuesta_envuelta_en_markdown(self):
+
+        with con_respuesta("```json\n" + visto(["gato"]) + "\n```"):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_entiende_json_con_texto_alrededor(self):
+
+        with con_respuesta("Acá va: " + visto([]) + " listo"):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+
+    def test_una_respuesta_vacia_no_rompe(self):
+        """openai devuelve content=None cuando el modelo se rehúsa a describir una imagen.
+
+        Antes esto explotaba en la propia línea de log (contenido[:200] sobre None), que
+        estaba fuera del try: el rescatista veía un 500 con el animal ya guardado.
+        """
+
+        with con_respuesta(None):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_una_respuesta_vacia_tampoco_rompe_al_guardar(self):
+
+        with con_respuesta(None):
+            estado = self.service.revisar_y_guardar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_animales_con_forma_rara_es_error_y_no_sospecha(self):
+        """Distinción que importa: si el modelo manda basura donde va la lista, es
+        "no se pudo revisar", no "sospechoso". Marcarlo como sospechoso frenaría la
+        publicación de un animal legítimo por culpa de nuestro propio parseo."""
+
+        for basura in [1, {"a": 1}, True]:
+            with con_respuesta(json.dumps({"animales": basura, "descripcion": "x"})):
+                estado, _ = self.service.revisar(self.animal)
+
+            self.assertEqual(
+                estado, Animal.REVISION_ERROR,
+                "animales={!r} debería dar error, no sospecha".format(basura),
+            )
+
+    def test_un_animal_como_texto_suelto_se_entiende(self):
+        """Si manda "gato" en vez de ["gato"], se entiende igual."""
+
+        with con_respuesta(json.dumps({"animales": "gato", "descripcion": "Un gato."})):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_una_descripcion_mal_formada_no_descarta_un_veredicto_valido(self):
+        """La descripción es cosmética: si la lista de animales vino bien, se aprueba
+        igual. Perder una revisión válida por un campo de texto sería peor."""
+
+        with con_respuesta(json.dumps({"animales": ["gato"], "descripcion": ["a", "b"]})):
+            estado, motivo = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+        self.assertIsInstance(motivo, str)
+        #y no imprime el repr de la estructura en la pantalla del equipo
+        self.assertNotIn("[", motivo)
+
+    def test_una_lista_json_en_vez_de_objeto_es_error(self):
+
+        with con_respuesta('[{"animales": ["gato"]}]'):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_una_respuesta_ininteligible_no_marca_el_animal(self):
+        """Ante la duda no se penaliza: queda como error, no como sospechoso."""
+
+        with con_respuesta("no tengo idea"):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_si_la_api_falla_no_levanta_excepcion(self):
+
+        with con_error():
+            estado, motivo = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertTrue(motivo)
+
+    def test_sin_credito_tampoco_rompe(self):
+
+        with con_error(RuntimeError("insufficient_quota: no credits")):
+            estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    def test_un_animal_sin_fotos_no_se_marca_como_sospechoso(self):
+
+        estado, _ = self.service.revisar(make_animal(nombre="Sin fotos"))
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    @override_settings(MODERACION_IA_ACTIVA=False)
+    def test_desactivada_no_llama_a_la_api(self):
+
+        with mock.patch.object(ModeracionService, "_preguntar") as preguntar:
+            estado, _ = self.service.revisar(self.animal)
+
+        preguntar.assert_not_called()
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    @override_settings(OPENIA_API_KEY="")
+    def test_sin_key_no_llama_a_la_api(self):
+
+        with mock.patch.object(ModeracionService, "_preguntar") as preguntar:
+            self.service.revisar(self.animal)
+
+        preguntar.assert_not_called()
+
+    def test_guarda_el_resultado_en_el_animal(self):
+
+        with con_respuesta(visto([], "Parece una captura de pantalla.")):
+            self.service.revisar_y_guardar(self.animal)
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.revision_ia_estado, Animal.REVISION_REVISAR)
+        self.assertIsNotNone(self.animal.revision_ia_fecha)
+        self.assertTrue(self.animal.necesita_revision_humana())
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class ArmadoDelPedidoTest(TestCase):
+    """Lo que se le manda al modelo: importa por costo y por precisión."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+
+    def test_manda_como_mucho_tres_fotos(self):
+
+        animal = make_animal()
+        for _ in range(5):
+            make_animal_image(animal=animal)
+
+        self.assertEqual(len(self.service._leer_fotos(animal)), 3)
+
+    def test_las_fotos_van_en_baja_resolucion(self):
+        """detail low es lo que mantiene el costo en centavos."""
+
+        mensajes = self.service._mensajes("datos", ["data:image/jpeg;base64,AAA"])
+
+        imagenes = [c for c in mensajes[1]["content"] if c["type"] == "image_url"]
+        self.assertEqual(imagenes[0]["image_url"]["detail"], "low")
+
+    def test_achica_las_fotos_antes_de_mandarlas(self):
+        """El modelo trabaja a 512px: subir el original solo gasta tiempo y datos."""
+
+        from io import BytesIO
+        from PIL import Image
+
+        animal = make_animal()
+        make_animal_image(animal=animal, size=(3000, 2000))
+
+        foto = self.service._leer_fotos(animal)[0]
+
+        import base64
+        crudo = base64.b64decode(foto.split(",", 1)[1])
+        with Image.open(BytesIO(crudo)) as imagen:
+            self.assertLessEqual(max(imagen.size), self.service.LADO_MAXIMO)
+
+    def test_una_foto_ilegible_no_frena_la_revision(self):
+
+        with mock.patch("PIL.Image.open", side_effect=OSError("rota")):
+            self.assertEqual(self.service._achicar(b"basura"), b"basura")
+
+    def test_el_texto_va_sin_html(self):
+        """La descripción se escribe en un editor enriquecido."""
+
+        descripcion = self.service._describir(make_animal(nombre="Willy", datos="<p>Es <b>muy</b> mimoso</p>"))
+
+        self.assertNotIn("<p>", descripcion)
+        self.assertIn("mimoso", descripcion)
+
+    def test_le_avisa_al_modelo_que_el_texto_no_es_confiable(self):
+        """Sin esto el modelo describía el texto en vez de la foto y dejaba pasar spam."""
+
+        descripcion = self.service._describir(make_animal(nombre="Willy"))
+
+        self.assertIn("SIN VERIFICAR", descripcion)
+
+    def test_el_prompt_conserva_el_encuadre_contra_inyeccion(self):
+        """El texto del aviso lo escribe cualquiera y puede traer instrucciones.
+
+        Se probó contra la API real con cuatro intentos de inyección (orden directa,
+        falso bloque de sistema, instrucción metida en el nombre, y afirmación
+        insistente de que hay un gato) sobre una imagen sin ningún animal: los cuatro
+        fueron bloqueados. Eso depende de estas dos frases del prompt, así que si
+        alguien las saca conviene que se entere acá.
+        """
+        from catus.services import moderacion
+
+        #el prompt viene con saltos de línea: comparamos con el espacio normalizado
+        prompt = " ".join(moderacion.PROMPT.split())
+
+        self.assertIn("REGLA MÁS IMPORTANTE", prompt)
+        self.assertIn("pueden ser falsos", prompt)
+        self.assertIn("ÚNICAMENTE lo que se ve en las imágenes", prompt)
+
+    def test_le_dice_al_modelo_que_tipo_declaro_el_rescatista(self):
+
+        self.assertIn("gato", self.service._describir(make_animal(tipo="G")))
+        self.assertIn("perro", self.service._describir(make_animal(tipo="P")))
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class AltaDeAnimalTestCase(TestCase):
+    """Base de los tests que dan de alta un animal de verdad, por la vista.
+
+    El override de settings va acá y lo heredan las subclases: todas necesitan la
+    revisión prendida y un MEDIA_ROOT descartable.
+    """
+
+    def setUp(self):
+        #el alta sube una foto de verdad: que los archivos caigan en un directorio
+        #descartable y no en la galería del repo
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+
+        self.factory = RequestFactory()
+        self.rescatista = make_user(email="rescatista@catpuccino.test", automatic_approve=True)
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def datos_del_alta(self, nombre="Willy"):
+        """El POST del alta, con el management form del formset y una foto de verdad."""
+
+        return {
+            "tipo": "G",
+            "estado": "D",
+            "nombre": nombre,
+            "edad": "2 años",
+            "sexo": "M",
+            "zona": "CABA",
+            "datos": "Gatito en adopción.",
+            "animalimage_set-TOTAL_FORMS": "1",
+            "animalimage_set-INITIAL_FORMS": "0",
+            "animalimage_set-MIN_NUM_FORMS": "0",
+            "animalimage_set-MAX_NUM_FORMS": "1000",
+            "animalimage_set-0-image": uploaded_photo(),
+        }
+
+    def guardar_animal(self, respuesta_ia, rescatista=None, nombre="Willy"):
+        """Da de alta un animal por la vista y devuelve lo que quedó en la base.
+
+        Va por EditView a propósito. Antes esto copiaba la condición de auto-aprobación
+        adentro del test, así que sacarla de la vista dejaba todo en verde igual y una
+        publicación marcada como sospechosa salía publicada.
+
+        `rescatista` se pasa cuando el test necesita a alguien SIN historial: quién
+        carga el animal es justamente lo que decide varias de las reglas de acá abajo.
+        """
+
+        request = self.factory.post("/animales/", self.datos_del_alta(nombre))
+        request.user = rescatista or self.rescatista
+
+        SessionMiddleware(lambda request: None).process_request(request)
+        request.session.save()
+
+        view = EditView()
+        view.request = request
+
+        #se mockea solo lo que sale a la red: la decisión la sigue tomando la vista
+        with respuesta_ia, mock.patch("catus.views.animal.MailService"):
+            view.req(is_post=True)
+
+        animal = Animal.objects.filter(nombre=nombre).first()
+        self.assertIsNotNone(animal, "el alta no guardó el animal: el POST del test quedó viejo")
+
+        return animal
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class AutoAprobacionTest(AltaDeAnimalTestCase):
+    """El único efecto real: frenar la auto-aprobación de una publicación sospechosa."""
+
+    def test_una_publicacion_valida_se_auto_aprueba(self):
+
+        self.assertTrue(self.guardar_animal(con_respuesta(visto(["gato"]))).aprobado)
+
+    def test_una_sospechosa_queda_esperando_revision(self):
+
+        animal = self.guardar_animal(con_respuesta(visto([], "No se ve ningún animal.")))
+
+        self.assertFalse(animal.aprobado, "una publicación marcada como sospechosa se publicó sola")
+        self.assertTrue(animal.necesita_revision_humana())
+
+    def sin_historial(self):
+        """Alguien que se registró recién: nadie le aprobó nunca una publicación."""
+
+        return make_user(email="recien@catpuccino.test", automatic_approve=False)
+
+    def test_un_fallo_del_mail_no_le_voltea_el_alta_al_rescatista(self):
+        """send_html_email reintenta y después vuelve a lanzar (utils.py).
+
+        Con una API key vencida de SendGrid, o un 429, el alta terminaba en 500 con el
+        animal YA guardado, ya revisado, ya aprobado y ya agendado para Instagram: la
+        persona ve un error, no sabe que quedó cargado, y si vuelve a intentar carga un
+        duplicado. AprobarView y la acción del admin ya lo tenían envuelto; el alta no.
+        """
+
+        rescatista = self.sin_historial()
+
+        request = self.factory.post("/animales/", self.datos_del_alta())
+        request.user = rescatista
+
+        SessionMiddleware(lambda request: None).process_request(request)
+        request.session.save()
+
+        view = EditView()
+        view.request = request
+
+        with con_respuesta(visto(["gato"])), mock.patch.object(
+            MailService, "send_new_animal_mail", side_effect=Exception("sendgrid caído"),
+        ):
+            #si esto levanta, el rescatista vio un 500
+            view.req(is_post=True)
+
+        animal = Animal.objects.filter(nombre="Willy").first()
+
+        self.assertIsNotNone(animal, "el alta se perdió por un fallo del mail")
+        self.assertTrue(animal.aprobado, "quedó sin aprobar por un fallo del mail")
+
+    def test_la_ia_aprueba_al_que_no_tiene_historial(self):
+        """El cambio de fondo: quien aprueba es la revisión, no el historial.
+
+        Antes hacía falta `automatic_approve`, que el cron le da al que ya tiene cinco
+        animales aprobados a mano. O sea que las primeras cinco publicaciones de cada
+        rescatista esperaban a que una persona las mirara, aunque la revisión ya hubiera
+        visto el gato en las fotos.
+        """
+
+        animal = self.guardar_animal(con_respuesta(visto(["gato"])), self.sin_historial())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_OK)
+        self.assertTrue(animal.aprobado, "la revisión dijo que estaba bien y no se publicó")
+
+    def test_al_que_no_tiene_historial_una_falla_de_la_ia_no_le_abre_la_puerta(self):
+        """'E' es que NO se pudo revisar, no un veredicto.
+
+        Es la contracara del test de abajo, y la distinción que sostiene todo esto: al
+        que ya tiene historial una caída de OpenAI no le frena la carga, pero al que
+        recién llega no se la puede abrir por el mismo motivo. Si 'E' alcanzara para
+        publicar, quedarse sin crédito en la API sería lo mismo que apagar el filtro.
+        """
+
+        animal = self.guardar_animal(con_error(), self.sin_historial())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(animal.aprobado, "se publicó sin que la revisión pudiera correr")
+
+    def test_al_que_no_tiene_historial_una_sospechosa_tampoco_le_pasa(self):
+
+        animal = self.guardar_animal(
+            con_respuesta(visto([], "Es una captura de pantalla.")), self.sin_historial(),
+        )
+
+        self.assertFalse(animal.aprobado)
+        self.assertTrue(animal.necesita_revision_humana())
+
+    def test_ni_el_historial_alcanza_para_publicar_una_sospechosa(self):
+        """El historial cubre el caso "no se pudo revisar", no el "acá hay algo raro"."""
+
+        animal = self.guardar_animal(con_respuesta(visto([], "No se ve ningún animal.")))
+
+        self.assertFalse(animal.aprobado, "el historial le ganó a un veredicto de sospecha")
+
+    def test_lo_que_aprueba_la_ia_queda_agendado_para_instagram(self):
+        """La cadena completa: acá no miró nadie, así que la demora es la única ventana.
+
+        Si el agendado no saliera de este camino, lo aprobado por la revisión nunca
+        llegaría a Instagram y el posteo automático sólo funcionaría para las
+        aprobaciones a mano, que son las que el cambio vino a sacar del medio.
+        """
+
+        with override_settings(INSTAGRAM_AUTO_ACTIVO=True):
+            animal = self.guardar_animal(con_respuesta(visto(["gato"])), self.sin_historial())
+
+        self.assertTrue(animal.aprobado)
+        self.assertIsNotNone(
+            animal.instagram_programado_para, "se aprobó sola y no quedó agendada para Instagram",
+        )
+
+    def test_si_la_ia_falla_se_auto_aprueba_igual(self):
+        """Una caída de OpenAI no puede frenar el flujo normal del rescatista."""
+
+        animal = self.guardar_animal(con_error())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertTrue(animal.aprobado, "una falla nuestra le frenó la publicación al rescatista")
+
+    def test_lo_que_aprueba_la_ia_no_cuenta_como_mirado_por_una_persona(self):
+        """La IA aprueba a cualquiera, así que sus aprobaciones no son historial.
+
+        El cron automatic_approve contaba `aprobado=True` a secas para dar la aprobación
+        automática, y desde que la revisión aprueba sola eso dejó de querer decir que lo
+        miró alguien: con cinco altas inocuas cualquiera se fabricaba el historial.
+        """
+
+        animal = self.guardar_animal(con_respuesta(visto(["gato"])), self.sin_historial())
+
+        self.assertTrue(animal.aprobado)
+        self.assertFalse(
+            animal.aprobado_por_persona,
+            "la aprobación de la IA quedó anotada como si la hubiera mirado una persona",
+        )
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class SinCupoTest(AltaDeAnimalTestCase):
+    """Quedarse sin cupo no es lo mismo que una caída de la API.
+
+    Las dos devuelven 'E', y tienen que seguir devolviéndolo: 'E' es el estado que no
+    bloquea nada. Pero la caída es ajena —para eso existe el fallback al historial, para
+    que una caída de OpenAI no le frene la carga a un rescatista conocido— y el cupo lo
+    agota el propio usuario, que es predecible y gratis: si el cupo también cayera al
+    historial, gastarlo sería la forma de apagarse la revisión a sí mismo y publicar sin
+    que mire nadie.
+    """
+
+    def agotar_el_cupo(self, usuario):
+        """Lo mismo que hace el usuario cargando y editando: cada llamada deja su fila."""
+
+        for _ in range(ModeracionService().get_limite_diario()):
+            RevisionIALlamada.objects.create(pedido_por=usuario)
+
+    def test_sin_cupo_el_historial_no_alcanza_para_aprobar(self):
+
+        self.agotar_el_cupo(self.rescatista)
+
+        #si llegara a llamar a la API el test se rompe: sin cupo no se llama
+        animal = self.guardar_animal(con_error(AssertionError("sin cupo no se llama a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(
+            animal.aprobado,
+            "gastar el cupo del día apagó la revisión: el animal se aprobó sin que lo mirara nadie",
+        )
+
+    def test_sin_cupo_el_animal_se_guarda_igual_y_no_queda_acusado(self):
+        """No aprobarlo solo no es acusarlo de nada: 'E' no puede volverse 'R'.
+
+        Una falla NUESTRA (o un tope nuestro) jamás se reporta como sospecha de ellos.
+        """
+
+        self.agotar_el_cupo(self.rescatista)
+
+        animal = self.guardar_animal(con_error(AssertionError("sin cupo no se llama a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(animal.necesita_revision_humana(), "el tope propio se anotó como sospecha")
+
+    def test_una_caida_de_la_api_si_cae_al_historial(self):
+        """La contracara, que es para lo que se hizo el fallback."""
+
+        animal = self.guardar_animal(con_error())
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertTrue(animal.aprobado, "una caída de OpenAI le frenó la carga a un conocido")
+
+    def test_la_revision_apagada_tambien_cae_al_historial(self):
+        """Apagarla para todos (MODERACION_IA_ACTIVA) también da 'E' y tampoco es del
+        rescatista: el equipo tiene que poder apagar la revisión sin frenarle la carga
+        a los que ya conoce."""
+
+        with override_settings(MODERACION_IA_ACTIVA=False):
+            animal = self.guardar_animal(con_error(AssertionError("apagada y llamó a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertTrue(animal.aprobado)
+
+    def test_el_servicio_avisa_que_el_error_fue_el_cupo(self):
+        """La distinción vive en el servicio, no en el veredicto: inventar un estado
+        nuevo rompería la invariante de que todo camino de falla da 'E'."""
+
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+        self.agotar_el_cupo(self.rescatista)
+
+        service = ModeracionService()
+        estado, _ = service.revisar(animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertTrue(service.sin_cupo)
+
+    def test_una_falla_de_la_api_no_se_confunde_con_el_cupo(self):
+
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+
+        service = ModeracionService()
+        with con_error():
+            estado, _ = service.revisar(animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertFalse(
+            service.sin_cupo, "una caída de OpenAI se contó como cupo agotado y frenó la carga",
+        )
+
+    def test_el_cupo_de_una_revision_no_se_queda_pegado_en_la_siguiente(self):
+        """El servicio se instancia por llamada, pero el que lo reusa tiene que ver
+        siempre la última revisión: un flag pegado le frenaría la carga a un conocido."""
+
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+
+        service = ModeracionService()
+        service.sin_cupo = True
+
+        with con_respuesta(visto(["gato"])):
+            service.revisar(animal)
+
+        self.assertFalse(service.sin_cupo)
+
+
+@override_settings(
+    MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST", INSTAGRAM_AUTO_ACTIVO=True,
+)
+class CadenaCompletaTest(AltaDeAnimalTestCase):
+    """La cadena que dejaba evadir la revisión entera, de punta a punta.
+
+    Un usuario nuevo carga cinco animales inocuos y la IA se los aprueba (aprueba a
+    cualquiera, no pide historial); el cron automatic_approve toma esas aprobaciones
+    como "historial" y le da la aprobación automática; el usuario gasta su cupo diario
+    de revisiones, así que a partir de ahí revisar() devuelve 'E' sin llegar a llamar a
+    la API; y ese 'E' más el historial auto-aprueba todo lo que cargue. No lo miró
+    nadie: ni una persona ni la IA. Con el posteo automático prendido, eso sale a la
+    cuenta pública del refugio.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.nuevo = make_user(email="recien@catpuccino.test", automatic_approve=False)
+
+    def test_no_se_puede_fabricar_el_historial_y_despues_apagar_la_revision(self):
+
+        for numero in range(AutomaticApproveCommand.MINIMO_APROBADOS):
+            inocuo = self.guardar_animal(
+                con_respuesta(visto(["gato"])), self.nuevo, nombre="Inocuo {}".format(numero),
+            )
+            self.assertTrue(inocuo.aprobado, "la IA dejó de aprobar: la cadena arranca en otro lado")
+
+        call_command("automatic_approve", stdout=StringIO(), stderr=StringIO())
+
+        self.nuevo.refresh_from_db()
+        self.assertFalse(
+            self.nuevo.automatic_approve,
+            "cinco aprobaciones de la IA le dieron el historial que sólo dan las personas",
+        )
+
+        #el propio usuario gasta su cupo del día, cargando y editando
+        for _ in range(ModeracionService().get_limite_diario()):
+            RevisionIALlamada.objects.create(pedido_por=self.nuevo)
+
+        spam = self.guardar_animal(
+            con_error(AssertionError("sin cupo no se llama a la API")), self.nuevo, nombre="Spam",
+        )
+
+        self.assertEqual(spam.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(spam.aprobado, "se evadió la revisión entera: no lo miró ni una persona ni la IA")
+        self.assertIsNone(spam.instagram_programado_para, "y encima quedó agendado a Instagram")
+
+
+class QuienAproboTest(TestCase):
+    """Los caminos por los que aprueba una PERSONA dejan dicho que fue una persona.
+
+    Es lo único que cuenta el cron automatic_approve como historial: si alguno de estos
+    caminos deja de anotarlo, el equipo aprueba a mano y el rescatista no llega nunca a
+    la aprobación automática; y si lo anota la auto-aprobación de la IA, el historial se
+    lo fabrica cualquiera.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.equipo = make_user(email="equipo@catpuccino.test", is_superuser=True, is_staff=True)
+        self.animal = make_animal(nombre="Willy", aprobado=False)
+        self.admin = AnimalAdmin(Animal, AdminSite())
+
+    def request_del_admin(self):
+
+        request = self.factory.post("/")
+        request.user = self.equipo
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        return request
+
+    def guardar_el_tilde(self, **datos):
+        """Lo que hace el admin con el tilde del listado (`aprobado` es list_editable)."""
+
+        FormDelAnimal = modelform_factory(Animal, fields=["aprobado"])
+        form = FormDelAnimal(datos, instance=self.animal)
+        form.is_valid()
+
+        obj = form.save(commit=False)
+        self.admin.save_model(self.request_del_admin(), obj, form, change=True)
+
+        self.animal.refresh_from_db()
+
+    def test_el_link_del_mail_lo_marca(self):
+
+        request = self.factory.get("/", {"id": self.animal.id})
+        request.user = self.equipo
+
+        with mock.patch("catus.views.animal.MailService"):
+            AprobarView.as_view()(request)
+
+        self.animal.refresh_from_db()
+        self.assertTrue(self.animal.aprobado)
+        self.assertTrue(self.animal.aprobado_por_persona, "aprobó una persona y no quedó anotado")
+
+    def test_la_accion_del_admin_lo_marca(self):
+
+        with mock.patch("catus.admin.MailService"):
+            self.admin.aprobar_animales(
+                self.request_del_admin(), Animal.objects.filter(id=self.animal.id),
+            )
+
+        self.animal.refresh_from_db()
+        self.assertTrue(self.animal.aprobado)
+        self.assertTrue(self.animal.aprobado_por_persona, "aprobó una persona y no quedó anotado")
+
+    def test_el_tilde_del_listado_lo_marca(self):
+
+        self.guardar_el_tilde(aprobado="on")
+
+        self.assertTrue(self.animal.aprobado)
+        self.assertTrue(self.animal.aprobado_por_persona, "aprobó una persona y no quedó anotado")
+
+    def test_destildar_le_saca_la_marca(self):
+        """Retirar la aprobación es retirar la mirada: si la marca quedara puesta, un
+        animal desaprobado le seguiría contando como historial al rescatista."""
+
+        self.animal.aprobado = True
+        self.animal.aprobado_por_persona = True
+        self.animal.save()
+
+        self.guardar_el_tilde()
+
+        self.assertFalse(self.animal.aprobado)
+        self.assertFalse(self.animal.aprobado_por_persona)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class GuardarLaRevisionNoPisaLoDemasTest(TestCase):
+    """La revisión guarda sus tres columnas y nada más.
+
+    El animal se carga al principio del request y esto corre después de esperar hasta 8 s
+    a OpenAI y de comprimir las fotos: en esa ventana el cron `publish` puede haber
+    publicado al animal. Con un save() entero, los valores viejos que quedaron en memoria
+    le pisaban lo que el cron acababa de escribir, instagram_publicado volvía a False y la
+    corrida siguiente lo publicaba de nuevo: dos posts iguales en la cuenta de la
+    organización, que no se deshace.
+    """
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G", datos="Gatito en adopción.")
+        make_animal_image(animal=self.animal)
+
+    def test_no_le_pisa_al_cron_lo_que_acaba_de_publicar(self):
+
+        #el animal que el request tiene en memoria: todavía sin publicar
+        self.assertFalse(self.animal.instagram_publicado)
+
+        #y mientras tanto el cron lo publica
+        Animal.objects.filter(id=self.animal.id).update(
+            instagram_publicado=True,
+            instagram_post_id="post-1",
+            instagram_listo_para_publicar=False,
+            instagram_programado_para=None,
+        )
+
+        with con_respuesta(visto(["gato"])):
+            self.service.revisar_y_guardar(self.animal)
+
+        desde_la_base = Animal.objects.get(id=self.animal.id)
+        self.assertTrue(desde_la_base.instagram_publicado, "le devolvió el animal a la cola: post duplicado")
+        self.assertEqual(desde_la_base.instagram_post_id, "post-1")
+        self.assertEqual(desde_la_base.revision_ia_estado, Animal.REVISION_OK, "no guardó la revisión")
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class LimiteDiarioTest(TestCase):
+    """El registro es abierto y cada alta cuesta plata: sin tope, cualquiera puede
+    vaciarle la cuenta de OpenAI al refugio."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.usuario = make_user(email="alguien@ejemplo.test")
+
+    def cargar_revisados(self, cantidad, usuario=None):
+        """Anota llamadas pagas ya gastadas por esa persona.
+
+        Se anotan como filas de RevisionIALlamada y no como animales con
+        revision_ia_fecha: contar animales no ve las re-revisiones de uno mismo.
+        """
+
+        for i in range(cantidad):
+            self.service._contar_llamada(usuario or self.usuario)
+
+    def test_deja_pasar_dentro_del_cupo(self):
+
+        self.cargar_revisados(3)
+
+        self.assertFalse(self.service.paso_el_limite(self.usuario))
+
+    def test_frena_al_llegar_al_tope(self):
+
+        self.cargar_revisados(self.service.get_limite_diario())
+
+        self.assertTrue(self.service.paso_el_limite(self.usuario))
+
+    def test_el_tope_es_por_persona(self):
+
+        otro = make_user(email="otro@ejemplo.test")
+        self.cargar_revisados(self.service.get_limite_diario())
+
+        self.assertFalse(self.service.paso_el_limite(otro))
+
+    def test_no_cuenta_las_de_ayer(self):
+
+        from django.utils import timezone
+        from datetime import timedelta
+
+        ayer = timezone.now() - timedelta(days=2)
+        for i in range(self.service.get_limite_diario()):
+            RevisionIALlamada.objects.create(pedido_por=self.usuario, created_at=ayer)
+
+        self.assertFalse(self.service.paso_el_limite(self.usuario))
+
+    def test_pasarse_del_tope_no_bloquea_la_publicacion(self):
+        """Quedar sin revisar es el mismo estado que tenían todos antes de esto."""
+
+        self.cargar_revisados(self.service.get_limite_diario())
+        animal = make_animal(nombre="Nuevo", cargado_por=self.usuario)
+        make_animal_image(animal=animal)
+
+        with mock.patch.object(ModeracionService, "_preguntar") as preguntar:
+            estado, _ = self.service.revisar(animal)
+
+        preguntar.assert_not_called()
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertNotEqual(estado, Animal.REVISION_REVISAR)
+
+    @override_settings(MODERACION_IA_MAX_POR_DIA=0)
+    def test_se_puede_desactivar_el_tope(self):
+
+        self.cargar_revisados(50)
+
+        self.assertFalse(self.service.paso_el_limite(self.usuario))
+
+    def test_un_animal_sin_dueno_no_rompe(self):
+
+        self.assertFalse(self.service.paso_el_limite(None))
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class BooleanosDelModeloTest(TestCase):
+    """gpt-4o-mini a veces manda los booleanos como texto."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G")
+
+    def test_false_como_texto_no_manda_a_revisar(self):
+        """En Python "false" es verdadero: sin convertirlo, mandaba a revisión humana
+        una publicación perfectamente sana."""
+
+        datos = {"animales": ["gato"], "descripcion": "Un gato.",
+                 "texto_sospechoso": "false", "inapropiado": "false"}
+
+        estado, _ = self.service.decidir(self.animal, datos)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_true_como_texto_si_manda_a_revisar(self):
+
+        datos = {"animales": ["gato"], "descripcion": "x", "inapropiado": "true"}
+
+        estado, _ = self.service.decidir(self.animal, datos)
+
+        self.assertEqual(estado, Animal.REVISION_REVISAR)
+
+    def test_no_y_si_tambien_se_entienden(self):
+
+        self.assertFalse(self.service._es_verdadero("no"))
+        self.assertFalse(self.service._es_verdadero("No"))
+        self.assertTrue(self.service._es_verdadero("sí"))
+        self.assertTrue(self.service._es_verdadero(True))
+        self.assertFalse(self.service._es_verdadero(None))
+
+
+class EntornoTest(TestCase):
+    """Desde una máquina de desarrollo no se mandan fotos reales con la key real."""
+
+    @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="LOCAL")
+    def test_en_local_no_llama_a_la_api(self):
+
+        animal = make_animal(nombre="Willy")
+        make_animal_image(animal=animal)
+
+        with mock.patch.object(ModeracionService, "_preguntar") as preguntar:
+            estado, _ = ModeracionService().revisar(animal)
+
+        preguntar.assert_not_called()
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+
+    @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", ENV="PROD")
+    def test_en_produccion_si(self):
+
+        self.assertTrue(ModeracionService().esta_activa())
+
+
+class TiempoAcotadoTest(TestCase):
+    """El alta del animal espera esto sincrónicamente y el worker corta a los 30s."""
+
+    def test_no_reintenta(self):
+
+        self.assertEqual(ModeracionService.REINTENTOS, 0)
+
+    def test_el_peor_caso_entra_en_el_worker(self):
+        """timeout x (reintentos + 1) tiene que quedar bien por debajo de 30s."""
+
+        service = ModeracionService()
+        peor_caso = service.TIMEOUT * (service.REINTENTOS + 1)
+
+        self.assertLess(peor_caso, 15, "el alta puede pasarse del timeout del worker")
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST")
+class SinAnimalPorPalabrasTest(TestCase):
+    """El prompt pide lista vacía cuando no hay animales, pero el modelo a veces lo
+    dice con palabras. Sin normalizar eso, ["ninguno"] contaba como "hay un animal"
+    y la publicación se auto-aprobaba igual."""
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.animal = make_animal(nombre="Willy", tipo="G")
+
+    def test_las_formas_de_decir_que_no_hay_animal_se_entienden(self):
+
+        for crudo in [[], ["ninguno"], ["ninguna"], [""], ["  "], ["none"], ["null"],
+                      ["no"], ["nada"], ["sin animales"], ["N/A"], ["NINGUNO"]]:
+            estado, _ = self.service.decidir(
+                self.animal, {"animales": crudo, "descripcion": "Es una captura."},
+            )
+
+            self.assertEqual(
+                estado, Animal.REVISION_REVISAR,
+                "animales={!r} se auto-aprobó".format(crudo),
+            )
+
+    def test_un_animal_de_verdad_sigue_pasando(self):
+
+        for crudo in [["gato"], ["perro"], ["otro"], ["gato", "perro"]]:
+            estado, _ = self.service.decidir(self.animal, {"animales": crudo})
+
+            self.assertEqual(estado, Animal.REVISION_OK, "animales={!r}".format(crudo))
+
+    def test_una_negacion_mezclada_con_un_animal_no_lo_tapa(self):
+
+        estado, _ = self.service.decidir(self.animal, {"animales": ["ninguno", "gato"]})
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+
+class TextoDeRefugioTest(TestCase):
+    """Un refugio argentino pone el alias y el CVU para donaciones en la descripción.
+
+    Con la definición de spam anterior ("pide plata o datos bancarios") el modelo
+    marcaba esas publicaciones y frenaba la auto-aprobación. Verificado contra la API
+    real: 1 de 5 textos legítimos quedaba frenado; después del cambio, 0 de 5, y los
+    2 de spam real se siguen frenando.
+    """
+
+    def test_el_prompt_aclara_que_pedir_donaciones_no_es_spam(self):
+
+        from catus.services import moderacion
+
+        prompt = " ".join(moderacion.PROMPT.split())
+
+        self.assertIn("NO es spam", prompt)
+        self.assertIn("donaciones", prompt)
+        self.assertNotIn("pide plata o datos bancarios", prompt)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST",
+                   MODERACION_IA_MAX_POR_DIA=3)
+class LimiteDiarioPorLlamadasTest(TestCase):
+    """El tope cuenta llamadas pagas, no animales revisados.
+
+    Antes se contaban los animales con revision_ia_fecha reciente, pero
+    revisar_y_guardar pisa esa fecha sobre la MISMA fila: editando en bucle un
+    mismo animal (cambiarle el nombre ya dispara la re-revisión) el conteo se
+    quedaba en 1 para siempre y las llamadas pagas a OpenAI eran ilimitadas. Con
+    el registro abierto, eso es la cuenta del refugio vaciada con un script.
+    """
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.usuario = make_user(email="editor@ejemplo.test")
+        self.animal = make_animal(nombre="Willy", tipo="G", cargado_por=self.usuario)
+        make_animal_image(animal=self.animal)
+
+    def revisar_editando(self, veces, animal=None, preguntar=None):
+        """Simula que alguien edita el mismo animal una y otra vez."""
+
+        animal = animal or self.animal
+
+        for i in range(veces):
+            #lo que dispara la re-revisión desde la vista es que cambie algo revisable
+            animal.nombre = "Willy {}".format(i)
+            self.service.revisar_y_guardar(animal)
+
+    def test_reeditar_el_mismo_animal_no_da_llamadas_pagas_infinitas(self):
+        """Una sola fila editada N+1 veces tiene que dejar de llamar a la API."""
+
+        tope = self.service.get_limite_diario()
+
+        with mock.patch.object(
+            ModeracionService, "_preguntar", return_value=visto(["gato"]),
+        ) as preguntar:
+            self.revisar_editando(tope + 3)
+
+        self.assertEqual(
+            preguntar.call_count, tope,
+            "editando el mismo animal se gastaron {} llamadas pagas con un tope de {}".format(
+                preguntar.call_count, tope,
+            ),
+        )
+
+    def test_pasarse_editando_no_bloquea_ni_marca_al_animal(self):
+        """Pasarse del tope no es sospecha: el animal queda cargado y sin revisar,
+        que es el mismo estado que tenían todos antes de que esto existiera."""
+
+        tope = self.service.get_limite_diario()
+
+        with mock.patch.object(ModeracionService, "_preguntar", return_value=visto(["gato"])):
+            self.revisar_editando(tope + 2)
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(
+            self.animal.necesita_revision_humana(),
+            "quedarse sin cupo le frenó la publicación a un rescatista",
+        )
+
+    def test_el_cupo_gastado_es_de_esa_persona(self):
+        """Que alguien queme su cupo editando no puede dejar sin revisión a otro."""
+
+        otro = make_user(email="otra@ejemplo.test")
+        suyo = make_animal(nombre="Rocco", tipo="P", cargado_por=otro)
+        make_animal_image(animal=suyo)
+
+        with mock.patch.object(
+            ModeracionService, "_preguntar", return_value=visto(["gato"]),
+        ) as preguntar:
+            self.revisar_editando(self.service.get_limite_diario() + 2)
+            preguntar.reset_mock()
+
+            self.service.revisar_y_guardar(suyo)
+
+        self.assertEqual(preguntar.call_count, 1)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST",
+                   MODERACION_IA_MAX_POR_DIA=3)
+class CupoEnBaseTest(TestCase):
+    """El cupo se cuenta en base y no en django.core.cache.
+
+    El proyecto no configura CACHES, así que el backend real es LocMemCache: por
+    proceso y en memoria. En producción hay varios workers de gunicorn, así que el
+    tope de verdad era MAX_POR_DIA por worker, y cada deploy lo ponía en cero. El
+    conteo en base que quedaba de piso contaba ANIMALES, así que no veía las
+    re-revisiones de un mismo animal y no tapaba nada: con el registro abierto, eso
+    es la cuenta de OpenAI del refugio vaciada con un script.
+    """
+
+    def setUp(self):
+        self.service = ModeracionService()
+        self.usuario = make_user(email="editor@ejemplo.test")
+        self.animal = make_animal(nombre="Willy", tipo="G", cargado_por=self.usuario)
+        make_animal_image(animal=self.animal)
+
+    def revisar_editando(self, veces):
+        """Simula que alguien edita el mismo animal una y otra vez."""
+
+        for i in range(veces):
+            #lo que dispara la re-revisión desde la vista es que cambie algo revisable
+            self.animal.nombre = "Willy {}".format(i)
+            self.service.revisar_y_guardar(self.animal)
+
+    def test_el_cupo_sobrevive_al_reinicio_del_proceso(self):
+        """Vaciar la memoria del proceso no devuelve llamadas pagas.
+
+        Un deploy, un reinicio o simplemente el pedido cayendo en otro worker de
+        gunicorn dejaba el contador en cero y el cupo volvía a empezar.
+        """
+
+        tope = self.service.get_limite_diario()
+
+        with mock.patch.object(
+            ModeracionService, "_preguntar", return_value=visto(["gato"]),
+        ) as preguntar:
+            self.revisar_editando(tope + 2)
+
+            #esto es un deploy, un reinicio, o el pedido cayendo en otro worker
+            cache.clear()
+            preguntar.reset_mock()
+
+            self.revisar_editando(3)
+
+        self.assertEqual(
+            preguntar.call_count, 0,
+            "después de reiniciar el proceso se gastaron {} llamadas pagas de más".format(
+                preguntar.call_count,
+            ),
+        )
+
+    def test_cada_llamada_deja_su_fila(self):
+        """Una fila por llamada, con su usuario: es lo que hace que el conteo vea las
+        re-revisiones de un mismo animal, que también se pagan."""
+
+        with mock.patch.object(ModeracionService, "_preguntar", return_value=visto(["gato"])):
+            self.revisar_editando(2)
+
+        self.assertEqual(RevisionIALlamada.objects.filter(pedido_por=self.usuario).count(), 2)
+
+    def test_el_cupo_cuesta_dos_queries(self):
+        """El alta del animal espera la revisión de forma sincrónica y el worker corta
+        a los 30s: contar el cupo tiene que ser un count con índice y un insert."""
+
+        with CaptureQueriesContext(connection) as queries:
+            self.service.paso_el_limite(self.usuario)
+            self.service._contar_llamada(self.usuario)
+
+        self.assertEqual(len(queries), 2, [q["sql"] for q in queries])
+
+    def test_el_conteo_del_cupo_tiene_indice(self):
+        """El count corre adentro del POST del alta, que el worker corta a los 30s:
+        sin índice por (persona, fecha) es un scan de una tabla que sólo crece."""
+
+        indices = [tuple(indice.fields) for indice in RevisionIALlamada._meta.indexes]
+
+        self.assertIn(("pedido_por", "created_at"), indices)
+
+    def test_si_no_se_puede_anotar_la_llamada_el_animal_se_revisa_igual(self):
+        """Contar es lo de menos: la revisión no puede devolverle un error a quien
+        está publicando un animal."""
+
+        with mock.patch.object(
+            RevisionIALlamada.objects, "create", side_effect=RuntimeError("base caída"),
+        ):
+            with con_respuesta(visto(["gato"])):
+                estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_si_no_se_puede_leer_el_cupo_el_animal_se_revisa_igual(self):
+
+        with mock.patch.object(
+            RevisionIALlamada.objects, "filter", side_effect=RuntimeError("base caída"),
+        ):
+            with con_respuesta(visto(["gato"])):
+                estado, _ = self.service.revisar(self.animal)
+
+        self.assertEqual(estado, Animal.REVISION_OK)
+
+    def test_pasarse_del_tope_no_marca_al_animal(self):
+        """Un fallo NUESTRO no se reporta como sospecha de ELLOS: quedarse sin cupo
+        da 'no se pudo revisar', que no le frena la publicación a nadie."""
+
+        with mock.patch.object(ModeracionService, "_preguntar", return_value=visto(["gato"])):
+            self.revisar_editando(self.service.get_limite_diario() + 1)
+
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertFalse(self.animal.necesita_revision_humana())

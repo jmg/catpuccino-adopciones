@@ -53,6 +53,18 @@ class Animal(BaseEntity):
     estado = models.CharField(max_length=2, choices=settings.ANIMAL_ESTADO_CHOICES, default="D") #D: Disponible, #A: Adoptado, #R: Reservado, #E: Expirado
 
     aprobado = models.BooleanField(default=False)
+
+    #Quién aprobó, no sólo que está aprobado. El cron automatic_approve otorga el
+    #"historial" contando animales aprobados, y desde que la revisión automática aprueba
+    #sola esa cuenta incluía sus propias aprobaciones: con cinco altas inocuas —que la IA
+    #aprueba sin pedirle historial a nadie— cualquiera se ganaba la aprobación automática
+    #y, con ella, que las altas siguientes salieran solas a Instagram. Sólo lo marcan los
+    #caminos donde mira una persona: AprobarView y el admin (la acción y el tilde).
+    #db_default además de default: con un default solo en Python la columna queda NOT NULL sin
+    #default en MySQL, y el código de antes de estas migraciones (un rollback) no podía dar de
+    #alta un animal: IntegrityError 1364. Ver 0036.
+    aprobado_por_persona = models.BooleanField(default=False, db_default=False)
+
     destacado = models.BooleanField(default=False)
     cargado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
@@ -65,12 +77,57 @@ class Animal(BaseEntity):
     instagram_media_url = models.CharField(max_length=255, null=True, blank=True)
     instagram_comment_id = models.CharField(max_length=255, null=True, blank=True)
 
+    #El posteo automático: al aprobarse, el animal se agenda para más tarde en vez de
+    #publicarse al toque, así queda una ventana para cancelarlo desde /tools/. Hace falta
+    #porque aprobado=True no garantiza que alguien haya mirado: el comando
+    #automatic_approve le regala automatic_approve a cualquiera con un animal aprobado.
+    instagram_programado_para = models.DateTimeField(null=True, blank=True)
+
+    #Sin esto el cron reintenta para siempre y en silencio: los errores se escribían por
+    #stdout, que nadie mira, y no quedaba nada en el animal para mostrar en una pantalla.
+    instagram_intentos = models.PositiveIntegerField(default=0, db_default=0)
+    instagram_ultimo_intento = models.DateTimeField(null=True, blank=True)
+    instagram_error = models.TextField(null=True, blank=True)
+
     mail_preguntar_adopcion_enviado = models.BooleanField(default=False)
 
     custom_link = models.CharField(max_length=255, null=True, blank=True)
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
     chatgpt_response = models.TextField(null=True, blank=True)
+
+    #Revisión automática de la publicación: que las fotos sean del animal que dice
+    #ser y que el texto sea una publicación de adopción de verdad. Es una ayuda para
+    #el equipo, no un veredicto: nunca rechaza sola.
+    REVISION_PENDIENTE = "P"
+    REVISION_OK = "OK"
+    REVISION_REVISAR = "R"
+    REVISION_ERROR = "E"
+
+    REVISION_IA_CHOICES = (
+        (REVISION_PENDIENTE, "Sin revisar"),
+        (REVISION_OK, "Parece correcta"),
+        (REVISION_REVISAR, "Revisar a mano"),
+        (REVISION_ERROR, "No se pudo revisar"),
+    )
+
+    revision_ia_estado = models.CharField(
+        max_length=2, choices=REVISION_IA_CHOICES, default=REVISION_PENDIENTE, db_default=REVISION_PENDIENTE,
+    )
+    revision_ia_motivo = models.TextField(null=True, blank=True)
+    revision_ia_fecha = models.DateTimeField(null=True, blank=True)
+
+    def necesita_revision_humana(self):
+
+        return self.revision_ia_estado == self.REVISION_REVISAR
+
+    def get_revision_ia_badge(self):
+
+        return {
+            self.REVISION_OK: "success",
+            self.REVISION_REVISAR: "danger",
+            self.REVISION_ERROR: "secondary",
+        }.get(self.revision_ia_estado, "light")
 
     def save(self, *args, **kwargs):
         from catus.services.cache import CacheService
@@ -139,6 +196,14 @@ class Animal(BaseEntity):
 
         return self.estado
 
+    def esta_reservado(self):
+
+        return self.get_estado() == "R"
+
+    def esta_adoptado(self):
+
+        return self.get_estado() == "A"
+
     def set_estado(self, estado):
 
         if estado == "A" and self.fecha_adopcion is None:
@@ -158,7 +223,10 @@ class Animal(BaseEntity):
 
     def get_images(self):
 
-        return self.animalimage_set.order_by(F("posicion").asc(nulls_last=True))
+        #el desempate por id importa: posicion no se escribe en ningún lado, así que sin
+        #él quedan todas en NULL y el orden lo elige la base. En el carrusel de Instagram
+        #eso significa que la foto de portada puede cambiar entre una corrida y la otra.
+        return self.animalimage_set.order_by(F("posicion").asc(nulls_last=True), "id")
 
     def __str__(self):
 
@@ -177,6 +245,32 @@ class AnimalImage(BaseEntity):
     image_font_size = models.PositiveIntegerField(default=150)
     image_posicion_edad_sexo = models.CharField(max_length=255, null=True, blank=True)
     image_posicion_nombre = models.CharField(max_length=255, null=True, blank=True)
+
+    #recorte cuadrado elegido para instagram, en fracciones (0 a 1) de la imagen original
+    crop_x = models.FloatField(null=True, blank=True)
+    crop_y = models.FloatField(null=True, blank=True)
+    crop_w = models.FloatField(null=True, blank=True)
+    crop_h = models.FloatField(null=True, blank=True)
+
+    def get_crop(self):
+        """Devuelve el recorte como (x, y, w, h) en fracciones, o None si no hay."""
+
+        crop = (self.crop_x, self.crop_y, self.crop_w, self.crop_h)
+        if any(value is None for value in crop):
+            return None
+
+        if self.crop_w <= 0 or self.crop_h <= 0:
+            return None
+
+        return crop
+
+    def set_crop(self, crop):
+        """Guarda el recorte. crop es (x, y, w, h) en fracciones, o None para volver al automatico."""
+
+        if crop is None:
+            self.crop_x = self.crop_y = self.crop_w = self.crop_h = None
+        else:
+            self.crop_x, self.crop_y, self.crop_w, self.crop_h = crop
 
 
 class EstadoFormulario(BaseEntity):
@@ -228,6 +322,9 @@ class EstadoFormulario(BaseEntity):
         if persona_nombre:
             self.persona_nombre = persona_nombre
             self.save()
+
+        #se muestra directo en las tablas del admin: devolver None imprime "None"
+        return persona_nombre or ""
 
     def get_estado_badge(self):
 
@@ -463,3 +560,32 @@ class ChatGTPResponse(BaseEntity):
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
     chatgpt_response = models.TextField(null=True, blank=True)
+
+    #quién pidió leer el post. Cada pedido cuesta una llamada paga y el registro es
+    #abierto, así que hay que poder contar cuántos hizo cada persona en el día.
+    pedido_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+
+class RevisionIALlamada(BaseEntity):
+    """Una llamada paga a la revisión automática de publicaciones. Existe sólo para
+    contarlas y poder cortar el cupo diario de cada persona.
+
+    Va en una tabla propia y no en ChatGTPResponse porque ese cupo es otro: lo cuenta
+    /animal/pulldatafromig/ sobre sus propias filas, y meter acá las revisiones le
+    comería el cupo a la lectura de posts (y al revés) sin que se note.
+
+    El contador vivía en django.core.cache, pero el proyecto no configura CACHES: el
+    backend real es LocMemCache, por proceso y en memoria. Con varios workers de
+    gunicorn el tope real era MAX_POR_DIA por worker, y cada deploy lo ponía en cero.
+    El registro es abierto: esto es lo único que separa a un refugio chico de una
+    factura de OpenAI.
+    """
+
+    #quién gastó la llamada. La fecha es created_at, que ya pone BaseEntity.
+    pedido_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        #el alta del animal espera la revisión de forma sincrónica: el conteo del día
+        #se hace por este índice y no barriendo las llamadas de toda la historia.
+        #indexes y no index_together, que Django 5.1 sacó (0035 renombra el que creó 0033)
+        indexes = [models.Index(fields=["pedido_por", "created_at"], name="catus_revia_pedido_fecha_idx")]

@@ -120,6 +120,10 @@ class FormView(LoginRequiredMixin, BaseView):
 
         if nuevo_estado and gato and gato.get_estado() != nuevo_estado:
 
+            #acá se entra con solo conocer el hash, y un hash se consigue solo: te registrás,
+            #cargás un animal y completás el formulario público de tu propio animal. Con eso
+            #se marcaba "adoptado" cualquier animal del sitio, que es como se lo saca del
+            #listado público. El animal lo toca su rescatista o el equipo, nadie más.
             if not puede_editar_animal(self.request.user, gato):
                 return self.json_response({
                     "status": "error",

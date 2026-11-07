@@ -49,6 +49,8 @@ def contrato_hash_del_link(token):
         return signer.unsign_object(token, max_age=CONTRATO_PDF_MAX_AGE)
 
 
+
+
 def add_pdf_content(existing_pdf, output, page_num, contrato, tipo):
 
     page = existing_pdf.pages[page_num]

@@ -19,10 +19,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
+
+from catus.views.base import puede_editar_animal
 from threading import Thread
 
 from catus.forms import ContratoForm
-from catus.views.base import puede_editar_animal
 
 
 def mail_del_adoptante(estado_form):
@@ -63,15 +64,33 @@ class EditView(TemplateView):
     url = [r"^formulario/(?P<estado_id>(\d*))/contrato/$"]
     is_persona = False
 
+    def requiere_login(self):
+        """La pantalla por id es del equipo y muestra los datos personales del adoptante.
+
+        La versión por hash (EditPersonaView) la usa el adoptante, que no tiene cuenta.
+        """
+
+        return not self.is_persona
+
     def dispatch(self, request, *args, **kwargs):
 
-        #la pantalla por id muestra nombre, DNI, dirección y teléfono del adoptante, y los
-        #ids son correlativos. La versión por hash (EditPersonaView) es la del adoptante,
-        #que no tiene cuenta.
-        if not self.is_persona and not request.user.is_authenticated:
+        if self.requiere_login() and not request.user.is_authenticated:
             return redirect_to_login(request.get_full_path())
 
         return super().dispatch(request, *args, **kwargs)
+
+    def puede_ver(self, estado_form):
+        """El equipo ve todos los contratos; cada rescatista, los de sus animales.
+
+        Sin esto alcanzaba con estar registrado (y el registro es abierto) para
+        recorrer los contratos de toda la organización con los datos personales
+        de cada adoptante.
+        """
+
+        if self.is_persona:
+            return True
+
+        return puede_editar_animal(self.request.user, estado_form.gato)
 
     def req(self, is_post=False, **kwargs):
 
@@ -80,17 +99,16 @@ class EditView(TemplateView):
         gato = None
 
         if not self.is_persona:
-            estado_form = EstadoFormulario.objects.get(id=self.kwargs.get("estado_id"))
+            estado_form = get_object_or_404(EstadoFormulario, id=self.kwargs.get("estado_id"))
             try:
                 contrato = Contrato.objects.get(estado_formulario=estado_form)
             except:
                 contrato = None
         else:
-            contrato = Contrato.objects.get(hash=self.kwargs.get("contrato_hash"))
+            contrato = get_object_or_404(Contrato, hash=self.kwargs.get("contrato_hash"))
             estado_form = contrato.estado_formulario
 
-        #el registro es abierto: con solo tener cuenta no alcanza para ver contratos ajenos
-        if not self.is_persona and not puede_editar_animal(self.request.user, estado_form.gato):
+        if not self.puede_ver(estado_form):
             raise PermissionDenied("Este formulario es de otra persona.")
 
         gato = estado_form.gato
@@ -320,8 +338,12 @@ class DownloadContractView(LoginRequiredMixin, TemplateView):
 
     def get(self, *args, **kwargs):
 
-        contrato = Contrato.objects.get(id=self.kwargs.get("contrato_id"))
+        contrato = Contrato.objects.filter(id=self.kwargs.get("contrato_id")).first()
+        if contrato is None:
+            return HttpResponse("No se encontró el contrato.")
 
+        #el PDF tiene nombre, DNI, dirección y teléfono del adoptante: solo el equipo
+        #y el rescatista del animal. Los ids son correlativos.
         if not puede_editar_animal(self.request.user, contrato.gato):
             raise PermissionDenied("Este contrato es de otra persona.")
 
@@ -355,12 +377,13 @@ class DatosView(LoginRequiredMixin, TemplateView):
 
     def get(self, *args, **kwargs):
 
-        estado_form = EstadoFormulario.objects.get(id=self.kwargs.get("estado_id"))
+        estado_form = get_object_or_404(EstadoFormulario, id=self.kwargs.get("estado_id"))
 
+        #muestra los mismos datos personales que la pantalla del contrato
         if not puede_editar_animal(self.request.user, estado_form.gato):
             raise PermissionDenied("Este formulario es de otra persona.")
 
-        contrato = Contrato.objects.get(estado_formulario=estado_form)
+        contrato = get_object_or_404(Contrato, estado_formulario=estado_form)
         gato = estado_form.gato
 
         data_attrs = AdoptionService().get_form_attrs(estado_form.form_entry, ["Nombre y Apellido", "Edad", "Profesión",
@@ -395,7 +418,7 @@ class DatosView(LoginRequiredMixin, TemplateView):
             "gato": gato,
             "data_attrs": data_attrs,
             "cat_attrs": cat_attrs,
-            "miembro": contrato.miembro_felis_catus_nombre,
+            "miembro": contrato.miembro_adopcion_nombre,
             "link_contrato": link_contrato
         }
 

@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import admin
 from django.urls import reverse, re_path
 
@@ -8,7 +10,10 @@ from django.contrib.auth.models import Group, User
 from django.contrib.sites.models import Site
 
 from django.utils.safestring import mark_safe
+from catus.services.instagram_auto import InstagramAutoService
 from catus.services.mail import MailService
+
+logger = logging.getLogger(__name__)
 
 
 class AnimalImageAdmin(admin.StackedInline):
@@ -39,10 +44,12 @@ class AnimalAdmin(admin.ModelAdmin):
     def utilidades(self, obj):
 
         links = "<a target='_blank' href='/tools/generarimagen/{}/'>Generar Imagen</a>".format(obj.id)
+
+        #al dar de baja a un rescatista sus animales quedan con cargado_por en NULL
+        #(SET_NULL). Este link estaba fuera del if y tumbaba el listado entero.
         if obj.cargado_por is not None:
             links += " | <a target='_blank' href='/user/settingslogin/?user_id={}'>Login as user</a>".format(obj.cargado_por.id)
-
-        links += " | <a target='_blank' href='/tools/preguntaradopcion/?user_id={}'>Preguntar Adopción</a>".format(obj.cargado_por.id)
+            links += " | <a target='_blank' href='/tools/preguntaradopcion/?user_id={}'>Preguntar Adopción</a>".format(obj.cargado_por.id)
 
         # Agregar enlace para aprobar animal si no está aprobado
         if not obj.aprobado:
@@ -50,25 +57,87 @@ class AnimalAdmin(admin.ModelAdmin):
 
         return mark_safe(links)
 
+    def save_model(self, request, obj, form, change):
+        """El otro camino del admin: los tildes del listado y del formulario.
+
+        La acción en lote no es la única forma de aprobar desde acá: `aprobado` está en
+        list_editable, así que se aprueba (y se desaprueba) con un tilde en el listado,
+        y por ahí no pasaba nada del posteo automático.
+
+        Se mira el cambio y no el valor: agendar cada vez que se guarda un animal ya
+        aprobado le devolvería la agenda a uno que el equipo canceló a propósito.
+        """
+
+        cambiados = getattr(form, "changed_data", [])
+
+        #El tilde también es una persona aprobando, y es de las formas más usadas. Se
+        #anota antes de guardar para que salga en el mismo save. Desaprobar limpia la
+        #marca: retirar la aprobación es retirar la mirada, y si quedara puesta ese animal
+        #le seguiría contando como historial al rescatista sin estar aprobado.
+        if "aprobado" in cambiados:
+            obj.aprobado_por_persona = obj.aprobado
+
+        super().save_model(request, obj, form, change)
+
+        if "aprobado" in cambiados:
+
+            if obj.aprobado:
+                InstagramAutoService().agendar(obj)
+            else:
+                #desaprobar es la forma de frenar una publicación que ya estaba en camino
+                InstagramAutoService().cancelar(obj)
+
+        #Destildar "listo para publicar" era el freno de mano del flujo viejo: ese tilde
+        #era lo único que decidía si un animal salía. Con el posteo automático dejó de
+        #frenar nada, porque la agenda vencida seguía puesta: preparar_publicaciones
+        #levantaba al animal por la agenda, le volvía a prender la marca y el posteo que el
+        #equipo creía frenado salía igual unos minutos después. cancelar() apaga la marca y
+        #la agenda juntas, que es lo que el gesto quería decir.
+        #Sólo cuando se apaga: marcar listo a mano es adelantar el posteo, no cancelarlo, y
+        #borrarle la agenda ahí lo sacaría de la cola en vez de meterlo.
+        if "instagram_listo_para_publicar" in cambiados and not obj.instagram_listo_para_publicar:
+            InstagramAutoService().cancelar(obj)
+
     def aprobar_animales(self, request, queryset):
         """
         Acción personalizada para aprobar animales seleccionados
         """
         animales_aprobados = 0
+        sin_aviso = 0
         mail_service = MailService()
 
         for animal in queryset:
-            if not animal.aprobado:
-                animal.aprobado = True
-                animal.save()
-                # Enviar email de aprobación
+            if animal.aprobado:
+                continue
+
+            animal.aprobado = True
+
+            #acá aprueba una persona del equipo, y eso es lo que cuenta el cron
+            #automatic_approve para dar el "historial": contar cualquier animal aprobado
+            #dejó de significar "lo miró alguien" cuando la revisión automática empezó a
+            #aprobar sola.
+            animal.aprobado_por_persona = True
+            animal.save()
+            animales_aprobados += 1
+
+            #aprobar es lo que agenda el posteo en Instagram. El servicio se traga sus
+            #propios errores, así que un problema acá no deja la tanda a medio aprobar.
+            InstagramAutoService().agendar(animal)
+
+            #un problema mandando un mail no puede dejar la tanda a medio aprobar
+            try:
                 mail_service.send_mail_aprobacion(animal)
-                animales_aprobados += 1
+            except Exception:
+                sin_aviso += 1
+                logger.exception("No se pudo avisar de la aprobación de %s", animal.nombre)
 
         if animales_aprobados == 1:
-            message = f"1 animal fue aprobado y se envió el email de notificación."
+            message = "1 animal fue aprobado."
         else:
-            message = f"{animales_aprobados} animales fueron aprobados y se enviaron los emails de notificación."
+            message = "{} animales fueron aprobados.".format(animales_aprobados)
+
+        if sin_aviso:
+            message += " {} quedaron sin aviso por mail (mirá el log).".format(sin_aviso)
 
         self.message_user(request, message)
 
@@ -90,6 +159,12 @@ class CatusUserAdmin(admin.ModelAdmin):
 
     list_display = ("email", "handle", "get_instagram", "automatic_approve", "no_preguntar_adoptado", "animal_count", "login")
     list_editable = ("automatic_approve", "no_preguntar_adoptado")
+
+    #este es el modelo de login, y al ser un ModelAdmin común el campo password salía
+    #editable como texto: lo que se escribiera ahí se guardaba tal cual, sin hashear,
+    #y esa persona después no podía entrar. Se cambia con "Cambiar contraseña" del
+    #propio perfil o con manage.py changepassword.
+    readonly_fields = ("password", "last_login", "date_joined")
 
     def animal_count(self, obj):
 
@@ -117,7 +192,12 @@ class EstadoFormularioAdmin(admin.ModelAdmin):
 
     def animal_cargado_por(self, obj):
 
-        return obj.gato.cargado_por.get_instagram() if obj.gato.cargado_por else ""
+        #al borrar un animal, los formularios de sus candidatos quedan con gato en
+        #NULL (SET_NULL) y este listado dejaba de abrirse
+        if obj.gato is None or obj.gato.cargado_por is None:
+            return ""
+
+        return obj.gato.cargado_por.get_instagram()
 
 
 class FieldEntryAdmin(admin.ModelAdmin):
