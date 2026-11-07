@@ -201,7 +201,10 @@ class GPTService(BaseService):
         openai.organization = settings.OPENIA_API_ORG_ID
         openai.api_key = settings.OPENIA_API_KEY
 
-        model = "gpt-3.5-turbo"
+        #gpt-3.5-turbo ya no existe para las cuentas de OpenAI: la API contestaba
+        #InvalidRequestError y "Obtener datos desde Instagram" fallaba siempre, con un
+        #"No pudimos leer ese post" que no decía por qué.
+        model = "gpt-4o-mini"
         prompt = "Si el post es sobre un gato o perro en adopción: Extraer el nombre del animal en adopción, tipo (perro o gato), sexo (se puede deducir del texto, para el resultado usar el valor 'macho' o 'hembra'), edad y descripción (copiarla textualmente sin usar \"). Responder con un objeto JSON. No usar comentarios // en el JSON."
 
         text, images = self._get_html_title_and_images(url)
