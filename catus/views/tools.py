@@ -1,5 +1,6 @@
 from catus.utils import clean_html, has_crop_fields, parse_crop
 import html
+import logging
 import uuid
 import zipfile
 from django.http import HttpResponse
@@ -16,6 +17,8 @@ from catus.services.mail import MailService
 from catus.utils import rreplace
 from django.db.models import Case, F, IntegerField, Prefetch, Q, Value, When
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 def por_id(entidad, id_):
@@ -590,7 +593,9 @@ class CropMixin():
         """Recorte a usar para esta imagen.
 
         Si el form trae los campos de recorte manda el form (vacio = volver al automatico).
-        Si no los trae (la carga inicial de la galeria) vale el que ya estaba guardado.
+        Si no los trae (un POST sin los controles de cada foto) vale el que ya estaba
+        guardado. La carga inicial de la galería ya no pasa por acá: arma lo que falta con
+        ImageService.generar_imagen_para_instagram, igual que el cron.
         """
 
         if has_crop_fields(self.request.POST, suffix):
@@ -613,7 +618,27 @@ class MakeImagesView(SoloPostMixin, CropMixin, BaseView):
         if animal is None:
             return self.response("No se encontró el animal.")
 
+        es_la_carga = self.request.POST.get("is_load") == "1"
+
         for imagen in animal.get_images():
+
+            #La primera carga de la pantalla no trae los controles de cada foto. Con los
+            #valores por defecto de abajo se armaba la imagen que faltaba con el nombre y la
+            #edad arriba aunque lo guardado (o la vista previa que vio el rescatista) dijera
+            #abajo, y como quedaba guardada, preparar_publicaciones ya no la rehacía. Ahora
+            #la que falta se arma igual que en ese cron, con lo guardado o lo automático, y
+            #las que ya están no se recomponen: antes se armaban todas en cada carga y se
+            #tiraban.
+            if es_la_carga:
+                if imagen.image and not imagen.image_for_instagram:
+                    #una foto rota no puede dejar sin cargar a toda la galería (el spinner
+                    #quedaba girando para siempre): como en el cron, se la saltea y queda
+                    #"Pendiente"
+                    try:
+                        ImageService().generar_imagen_para_instagram(imagen)
+                    except Exception as error:
+                        logger.warning("No se pudo armar la imagen de Instagram de la foto %s: %s", imagen.id, type(error).__name__)
+                continue
 
             centered = True
             if self.request.POST.get("centrado_{}".format(imagen.id)) == "no":
@@ -651,18 +676,13 @@ class MakeImagesView(SoloPostMixin, CropMixin, BaseView):
 
             random_name = f'{uuid.uuid4()}.jpeg'
 
-            if not self.request.POST.get("is_load") == "1":
-                imagen.image_for_instagram.save(random_name, file, save=True)
-                imagen.image_layout = layout
-                imagen.image_centered = centered
-                imagen.image_font_size = nombre_font_size
-                imagen.image_posicion_edad_sexo = posicion_edad_sexo
-                imagen.image_posicion_nombre = posicion_nombre
-                imagen.set_crop(crop)
-
-            elif not imagen.image_for_instagram:
-                imagen.image_for_instagram.save(random_name, file, save=True)
-
+            imagen.image_for_instagram.save(random_name, file, save=True)
+            imagen.image_layout = layout
+            imagen.image_centered = centered
+            imagen.image_font_size = nombre_font_size
+            imagen.image_posicion_edad_sexo = posicion_edad_sexo
+            imagen.image_posicion_nombre = posicion_nombre
+            imagen.set_crop(crop)
             imagen.save()
 
         return self.render_to_response({"animal": animal, "fonts": fonts})

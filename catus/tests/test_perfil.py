@@ -127,3 +127,22 @@ class PerfilDelEquipoTest(TestCase):
 
         self.assertIn("/formularios/mio/", cuerpo)
         self.assertNotIn("/formularios/ajeno/", cuerpo)
+
+
+class TooltipsDelPerfilTest(TestCase):
+
+    def test_los_tooltips_se_crean_al_pasar_el_mouse_y_no_todos_al_cargar(self):
+        """Con miles de botones, crear un tooltip por botón al cargar (dos en los de
+        acción) congelaba la página varios segundos, y se veían dos tooltips encimados."""
+
+        equipo = make_user(email="equipo-tips@catpuccino.test", is_superuser=True, is_staff=True)
+        self.client.force_login(equipo)
+
+        html = self.client.get("/accounts/profile/").content.decode()
+
+        import re
+
+        self.assertIn("tippy.delegate(", html)
+        #la única llamada directa que queda es el aviso de "link copiado", sobre un div
+        self.assertIsNone(re.search(r"""tippy\(\s*['"]""", html), "volvió una llamada a tippy() sobre todos los botones")
+        self.assertIn("tippy.js@6.3.7", html, "la versión de tippy tiene que ser fija: delegate y el resto dependen de ella")

@@ -40,11 +40,11 @@ URLS_SOLO_POST = [
     "/tools/publish/",
     "/tools/saveform/",
     "/tools/sendpreguntaremail/",
+    "/usuario/save/",
 ]
 
-#usuario.py queda fuera de este cambio: SaveView se está arreglando aparte. Sacarla de
-#acá cuando su GET también conteste 405.
-FUERA_DE_ESTE_CAMBIO = {"catus.views.usuario.SaveView"}
+#ninguna vista queda afuera: si hiciera falta exceptuar una, va acá con el porqué
+FUERA_DE_ESTE_CAMBIO = set()
 
 
 def vistas_que_solo_reciben_post():
@@ -70,7 +70,11 @@ def vistas_que_solo_reciben_post():
                 continue
 
             def definido_en(metodo):
-                return next(k for k in clase.__mro__ if metodo in vars(k))
+                #una vista que hereda de View a secas no tiene get(): ya contesta 405 sola
+                return next((k for k in clase.__mro__ if metodo in vars(k)), None)
+
+            if any(definido_en(m) is None for m in ("get", "render_to_response", "get_context_data")):
+                continue
 
             if all(definido_en(m) in genericas for m in ("get", "render_to_response", "get_context_data")):
                 yield clase

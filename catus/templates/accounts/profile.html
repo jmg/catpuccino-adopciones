@@ -904,8 +904,8 @@
 <script src="/static/js/tinymce/tinymce.min.js"></script>
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
 <!-- Agregar la librería Tippy.js -->
-<script src="https://unpkg.com/@popperjs/core@2"></script>
-<script src="https://unpkg.com/tippy.js@6"></script>
+<script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+<script src="https://unpkg.com/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js"></script>
 
 <script type="text/javascript">
 $(document).ready(function () {
@@ -958,24 +958,19 @@ $(document).ready(function () {
         toolbar: 'undo redo | bold italic underline strikethrough | forecolor fontselect fontsizeselect formatselect | alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist |  backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons',
     });
 
-    // Inicializar tooltips con Tippy.js
-    tippy('[data-tippy-content]', {
-        placement: 'top',
-        animation: 'scale',
-        duration: [200, 100],
-        arrow: true,
-        theme: 'custom'
-    });
-
-    // Tooltips específicos para los botones de acción en formularios
-    tippy('.action-buttons .action-btn', {
+    // Tooltips con Tippy.js, delegados: cada uno se crea recién cuando el mouse (o el
+    // dedo) llega al botón. Antes se creaban todos al cargar, y dos veces para los botones
+    // de acción: con todos los formularios del equipo eran ~28.000 tooltips y la página
+    // quedaba congelada unos segundos en la compu y más de diez en un celular.
+    // sin unpkg no hay tooltips, pero el resto de la página (filas clickeables) sigue
+    if (window.tippy) tippy.delegate('body', {
+        target: '[data-tippy-content]',
         placement: 'top',
         animation: 'scale',
         duration: [200, 100],
         arrow: true,
         theme: 'custom',
-        delay: [50, 0],
-        size: 'large'
+        delay: [50, 0]
     });
 
     // Hacer que las filas sean clickables
@@ -1158,6 +1153,8 @@ function marcarEnAdopcion(animalId) {
 
 function copyTextToClipboard(text) {
     navigator.clipboard.writeText(text).then(function() {
+        if (!window.tippy) return;
+
         // Usar Tippy.js para mostrar un mensaje de éxito
         tippy.hideAll(); // Ocultar cualquier tooltip visible
 
@@ -1177,8 +1174,9 @@ function copyTextToClipboard(text) {
             }
         });
 
-        // Posicionar en el centro de la pantalla
-        tempTippy[0].setProps({
+        // Posicionar en el centro de la pantalla. Con un solo elemento tippy devuelve la
+        // instancia y no una lista: tempTippy[0] era undefined y el aviso no se centraba.
+        tempTippy.setProps({
             getReferenceClientRect: () => ({
                 width: 0,
                 height: 0,

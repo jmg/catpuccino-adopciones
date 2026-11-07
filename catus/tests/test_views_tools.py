@@ -1222,3 +1222,205 @@ class ColaInstagramConElPosteoApagadoTest(ColaInstagramTestCase):
 
         animal.refresh_from_db()
         self.assertFalse(animal.instagram_listo_para_publicar)
+
+
+class PrimeraCargaDeGenerarImagenTest(ToolsViewTestCase):
+    """La primera carga de /tools/generarimagen/ (POST con is_load=1, sin los controles de
+    cada foto) arma la imagen que falta igual que preparar_publicaciones.
+
+    Antes la armaba con "Izquierda" para el nombre y la edad, ignorando lo guardado: si el
+    equipo había puesto el nombre abajo y el rescatista cambiaba el recorte, la imagen nueva
+    salía con el nombre arriba, distinta de la vista previa, y el cron ya no la rehacía.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media, ignore_errors=True)
+        ajuste = override_settings(MEDIA_ROOT=media)
+        ajuste.enable()
+        self.addCleanup(ajuste.disable)
+
+        self.animal = make_animal(nombre="Willy", cargado_por=self.rescatista, aprobado=True)
+        self.client.force_login(self.admin)
+
+    def cargar(self):
+
+        from unittest import mock
+
+        from catus.services.images import ImageService
+
+        with mock.patch.object(ImageService, "generate_logo_image", autospec=True,
+                               side_effect=ImageService.generate_logo_image) as generar:
+            response = self.client.post("/tools/makeimages/", {"animal_id": self.animal.id, "is_load": "1"})
+
+        self.assertEqual(response.status_code, 200)
+        return generar
+
+    def test_respeta_las_posiciones_guardadas(self):
+
+        imagen = make_animal_image(
+            self.animal, image_posicion_nombre="Izquierda (abajo)", image_posicion_edad_sexo="Izquierda (abajo)",
+        )
+
+        generar = self.cargar()
+
+        self.assertEqual(generar.call_count, 1)
+        usadas = (generar.call_args.kwargs["posicion_nombre"], generar.call_args.kwargs["posicion_edad_sexo"])
+        self.assertEqual(usadas, ("Izquierda (abajo)", "Izquierda (abajo)"), "se armó con las posiciones por defecto")
+        imagen.refresh_from_db()
+        self.assertTrue(imagen.image_for_instagram)
+        self.assertEqual(imagen.image_posicion_nombre, "Izquierda (abajo)")
+
+    def test_sin_posiciones_guardadas_usa_las_automaticas_como_el_cron(self):
+
+        from catus.services.images import ImageService
+
+        imagen = make_animal_image(self.animal)
+
+        generar = self.cargar()
+
+        usadas = (generar.call_args.kwargs["posicion_nombre"], generar.call_args.kwargs["posicion_edad_sexo"])
+        self.assertEqual(usadas, (ImageService.POSICION_NOMBRE_AUTOMATICA, ImageService.POSICION_EDAD_SEXO_AUTOMATICA))
+        imagen.refresh_from_db()
+        self.assertEqual(imagen.image_posicion_nombre, ImageService.POSICION_NOMBRE_AUTOMATICA)
+
+    def test_no_recompone_las_que_ya_estan(self):
+        """Antes se armaban todas en cada carga y se tiraban: trabajo de más en cada visita."""
+
+        from django.core.files.base import ContentFile
+
+        from catus.tests.factories import photo_bytes
+
+        imagen = make_animal_image(self.animal)
+        imagen.image_for_instagram.save("ya-armada.jpeg", ContentFile(photo_bytes().getvalue()), save=True)
+        antes = imagen.image_for_instagram.name
+
+        generar = self.cargar()
+
+        self.assertEqual(generar.call_count, 0)
+        imagen.refresh_from_db()
+        self.assertEqual(imagen.image_for_instagram.name, antes)
+
+
+class GenerarImagenPasaLaPosicionDeLaEdadTest(ToolsViewTestCase):
+    """El selector de recorte del equipo tiene que recibir la posición de la edad de su
+    propio select: si se la deduce del nombre, la vista previa la dibuja en otro lado."""
+
+    def test_el_boton_de_recorte_lee_el_select_de_la_edad(self):
+
+        animal = make_animal(nombre="Willy", cargado_por=self.rescatista, aprobado=True)
+        self.client.force_login(self.admin)
+
+        html = self.client.get("/tools/generarimagen/{}/".format(animal.id)).content.decode()
+
+        self.assertIn("""posicionEdadSexo: form.find('[name="posicion_edad_sexo_' + imageId + '"]').val()""", html)
+        self.assertIn("crop-widget.js", html)
+
+
+class PrimeraCargaCasosQueFaltanTest(PrimeraCargaDeGenerarImagenTest):
+    """Los bordes que propuso la revisión: posiciones distintas, recorte, sin layout, varias fotos."""
+
+    def test_respeta_nombre_y_edad_por_separado(self):
+        """Confundir la posición del nombre con la de la edad es justo el error que tenía
+        la vista previa: con las dos iguales no se nota."""
+
+        make_animal_image(
+            self.animal, image_posicion_nombre="Izquierda (abajo)", image_posicion_edad_sexo="Izquierda (arriba)",
+        )
+
+        generar = self.cargar()
+
+        usadas = (generar.call_args.kwargs["posicion_nombre"], generar.call_args.kwargs["posicion_edad_sexo"])
+        self.assertEqual(usadas, ("Izquierda (abajo)", "Izquierda (arriba)"))
+
+    def test_usa_el_recorte_guardado(self):
+
+        make_animal_image(self.animal, crop_x=0.1, crop_y=0.0, crop_w=0.75, crop_h=1.0)
+
+        generar = self.cargar()
+
+        self.assertEqual(generar.call_args.kwargs["crop"], (0.1, 0.0, 0.75, 1.0))
+
+    def test_una_foto_sin_layout_va_tal_cual(self):
+
+        imagen = make_animal_image(self.animal, image_layout=False)
+
+        generar = self.cargar()
+
+        self.assertEqual(generar.call_count, 0)
+        imagen.refresh_from_db()
+        with imagen.image.open("rb") as original, imagen.image_for_instagram.open("rb") as posteo:
+            self.assertEqual(original.read(), posteo.read())
+
+    def test_con_varias_fotos_arma_solo_las_que_faltan(self):
+
+        from django.core.files.base import ContentFile
+
+        from catus.tests.factories import photo_bytes
+
+        ya = make_animal_image(self.animal)
+        ya.image_for_instagram.save("ya-armada.jpeg", ContentFile(photo_bytes().getvalue()), save=True)
+        antes = ya.image_for_instagram.name
+        falta = make_animal_image(self.animal)
+
+        generar = self.cargar()
+
+        self.assertEqual(generar.call_count, 1)
+        ya.refresh_from_db()
+        falta.refresh_from_db()
+        self.assertEqual(ya.image_for_instagram.name, antes)
+        self.assertTrue(falta.image_for_instagram)
+
+    def test_una_foto_rota_no_deja_sin_cargar_al_resto(self):
+        """Antes una foto que no se podía armar daba 500 y el spinner de la galería quedaba
+        girando para siempre; ahora se la saltea, como en el cron."""
+
+        import os
+
+        #las dos antes de borrar: si no, la sana se guarda con el nombre que quedó libre
+        #y la "rota" vuelve a apuntar a un archivo que existe
+        rota = make_animal_image(self.animal)
+        sana = make_animal_image(self.animal)
+        self.assertNotEqual(rota.image.path, sana.image.path)
+        os.remove(rota.image.path)
+
+        with self.assertLogs("catus.views.tools", level="WARNING"):
+            self.cargar()
+
+        rota.refresh_from_db()
+        sana.refresh_from_db()
+        self.assertFalse(rota.image_for_instagram)
+        self.assertTrue(sana.image_for_instagram)
+
+
+class ActualizarGenerarImagenTest(PrimeraCargaDeGenerarImagenTest):
+    """El botón Actualizar (sin is_load) rearma con lo elegido y lo guarda."""
+
+    def test_actualizar_rearma_y_guarda_lo_elegido(self):
+
+        from django.core.files.base import ContentFile
+
+        from catus.tests.factories import photo_bytes
+
+        imagen = make_animal_image(self.animal)
+        imagen.image_for_instagram.save("vieja.jpeg", ContentFile(photo_bytes().getvalue()), save=True)
+        vieja = imagen.image_for_instagram.name
+        i = imagen.id
+
+        response = self.client.post("/tools/makeimages/", {
+            "animal_id": self.animal.id,
+            "posicion_nombre_{}".format(i): "Izquierda (abajo)",
+            "posicion_edad_sexo_{}".format(i): "Izquierda (arriba)",
+            "nombre_font_size_{}".format(i): "100",
+            "centrado_{}".format(i): "no",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        imagen.refresh_from_db()
+        self.assertNotEqual(imagen.image_for_instagram.name, vieja)
+        self.assertEqual(
+            (imagen.image_posicion_nombre, imagen.image_posicion_edad_sexo, imagen.image_font_size, imagen.image_centered),
+            ("Izquierda (abajo)", "Izquierda (arriba)", 100, False),
+        )

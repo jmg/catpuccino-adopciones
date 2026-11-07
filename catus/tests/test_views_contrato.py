@@ -268,3 +268,23 @@ class DatosViewTest(ContratoViewTestCase):
         response = self.client.get("/formulario/999999/datos/")
 
         self.assertEqual(response.status_code, 404)
+
+
+class IdVacioTest(ContratoViewTestCase):
+    """Las rutas aceptaban un id vacío ((\\d*)) y get_object_or_404(id="") daba 500."""
+
+    def test_sin_id_es_404_y_no_500(self):
+
+        self.client.force_login(self.admin)
+
+        for url in ("/formulario//datos/", "/formulario//contrato/", "/contrato_adopcion//download/"):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_con_id_siguen_andando(self):
+
+        self.client.force_login(self.admin)
+
+        response = self.client.get("/formulario/{}/contrato/".format(self.estado_form.id))
+
+        self.assertEqual(response.status_code, 200)

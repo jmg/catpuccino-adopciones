@@ -183,3 +183,30 @@ class SaveViewTest(TestCase):
         yo.refresh_from_db()
         self.assertEqual(yo.handle, "yo")
         self.assertIn("handle", self.client.session.get("usuario_save_error", ""))
+
+
+class SaveViewSinLoginTest(TestCase):
+
+    def test_un_post_anonimo_va_al_login_y_no_da_500(self):
+        """Armaba el form con AnonymousUser como instancia y daba 500."""
+
+        response = self.client.post("/usuario/save/", {"handle": "x", "email": "x@test.com"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+        #con next=/usuario/save/, después del login caía en un GET que da 405
+        self.assertNotIn("next=", response["Location"])
+
+
+class AnimalesPorIdTest(TestCase):
+
+    def test_un_id_que_no_es_un_numero_es_404_y_no_500(self):
+        """Con url .+ un id de texto llegaba a get_object_or_404 y daba ValueError."""
+
+        self.assertEqual(self.client.get("/usuario/abc/animales/").status_code, 404)
+
+    def test_un_id_numerico_sigue_andando(self):
+
+        rescatista = make_user(email="porid@catpuccino.test")
+
+        self.assertEqual(self.client.get("/usuario/{}/animales/".format(rescatista.id)).status_code, 200)

@@ -61,7 +61,7 @@ def contrato_pdf_response(contrato):
 
 class EditView(TemplateView):
 
-    url = [r"^formulario/(?P<estado_id>(\d*))/contrato/$"]
+    url = [r"^formulario/(?P<estado_id>(\d+))/contrato/$"]
     is_persona = False
 
     def requiere_login(self):
@@ -334,7 +334,7 @@ class DownloadView(TemplateView):
 
 class DownloadContractView(LoginRequiredMixin, TemplateView):
 
-    url = [r"^contrato_adopcion/(?P<contrato_id>(\d*))/download/$"]
+    url = [r"^contrato_adopcion/(?P<contrato_id>(\d+))/download/$"]
 
     def get(self, *args, **kwargs):
 
@@ -374,7 +374,7 @@ class DatosView(LoginRequiredMixin, TemplateView):
     PDF que se descarga desde ahí. Un link viejo lleva ahí en vez de a un error.
     """
 
-    url = [r"^formulario/(?P<estado_id>(\d*))/datos/$"]
+    url = [r"^formulario/(?P<estado_id>(\d+))/datos/$"]
 
     def get(self, *args, **kwargs):
 

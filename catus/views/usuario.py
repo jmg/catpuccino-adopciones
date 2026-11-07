@@ -8,7 +8,8 @@ from django.http import Http404, HttpResponse
 from catus.utils import get_context_columns, send_html_email
 from django.conf import settings
 import requests
-from .base import BaseView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from .base import BaseView, SoloPostMixin
 
 
 def get_user_por_handle(handle):
@@ -48,7 +49,8 @@ def get_user_por_handle(handle):
 
 class AnimalesView(BaseView):
 
-    url = r"^usuario/(?P<user_id>.+)/animales/$"
+    #solo números: con .+ un id de texto llegaba a get_object_or_404 y daba 500
+    url = r"^usuario/(?P<user_id>\d+)/animales/$"
 
     def render_to_response(self, context):
 
@@ -74,12 +76,13 @@ class ProfileView(AnimalesView):
     template_name = "usuario/animales.html"
 
 
-class SaveView(BaseView):
+class SaveView(SoloPostMixin, LoginRequiredMixin, BaseView):
 
-    #solo recibe el POST del form de perfil. BaseView es un TemplateView, así que sin
-    #esto un GET (alguien que recarga o abre el link) buscaba usuario/save.html, que
-    #no existe, y daba 500. Django contesta 405 con "Allow: POST".
-    http_method_names = ["post"]
+    #Solo recibe un POST, y de alguien logueado. Sin SoloPostMixin un GET (alguien que
+    #recarga o abre el link) buscaba usuario/save.html, que no existe, y daba 500; sin el
+    #login, un POST anónimo armaba el form con AnonymousUser y también daba 500.
+    #Sin "next": volver acá después del login es un GET, que da 405; mejor al perfil.
+    redirect_field_name = None
 
     def post(self, *args, **kwargs):
 
