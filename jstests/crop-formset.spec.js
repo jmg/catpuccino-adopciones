@@ -24,6 +24,7 @@
 const {test, expect} = require("@playwright/test");
 const fs = require("fs");
 const path = require("path");
+const {ABAJO, ARRIBA, dondeDibujaElServer, medirVistaPrevia, compararConElServer} = require("./vista-previa");
 
 /*
  * El JS que se prueba sale del template DE VERDAD, no de una copia.
@@ -358,6 +359,62 @@ test.describe("lo que ve la persona en cada fila", () => {
 
         expect(await crudo(page, 2), "la fila 2 tenía que quedar intacta").toEqual(CENTINELA[2]);
         await expect(boton(page, 2)).toHaveText(/Cambiar recorte/);
+    });
+});
+
+
+test.describe("la vista previa de cada fila muestra lo que va a dibujar el server", () => {
+
+    /* El posteo de estas fotos lo arma generar_imagen_para_instagram, con la posición que
+     * la foto tenga guardada (image_posicion_nombre / image_posicion_edad_sexo) o, si no
+     * tiene, con ImageService.POSICION_NOMBRE_AUTOMATICA y POSICION_EDAD_SEXO_AUTOMATICA,
+     * las dos "Izquierda (arriba)". El template pasaba siempre el nombre arriba y nunca
+     * la edad, y el selector deducía la edad del nombre: en una foto que el equipo había
+     * compuesto con la edad abajo, la vista previa la mostraba arriba. */
+
+    async function vistaPreviaDe(page, fila) {
+
+        await abrirSelector(page, fila);
+        const medido = await medirVistaPrevia(page);
+
+        await page.getByRole("button", {name: "Cancelar"}).click();
+        await expect(page.locator(".catus-crop-overlay")).toHaveCount(0);
+
+        return medido;
+    }
+
+    test("una foto sin posición guardada sale como la automática", async ({page}) => {
+
+        compararConElServer(expect, await vistaPreviaDe(page, 1),
+            dondeDibujaElServer(ARRIBA, ARRIBA), "fila 1, sin posiciones guardadas");
+    });
+
+    test("la foto que se agrega con 'Agregar Foto' sale como la automática", async ({page}) => {
+        /* Es el caso de todo animal nuevo: con extra=0 todas las fotos entran por acá, y
+         * la fila clonada de #empty_form no tiene ningún .photo-container con posiciones
+         * alrededor. Si leerlas tirara un error o diera "undefined" mal manejado, la
+         * vista previa caería en otra posición, o directamente no abriría. */
+
+        await page.locator("#add_more").click();
+        await ponerFoto(page, 3);
+
+        compararConElServer(expect, await vistaPreviaDe(page, 3),
+            dondeDibujaElServer(ARRIBA, ARRIBA), "fila nueva");
+    });
+
+    test("una foto con posiciones guardadas usa las suyas, nombre y edad por separado", async ({page}) => {
+        /* Las filas 0 y 2 tienen las posiciones cruzadas: si la edad se dedujera del
+         * nombre, o si todas las filas usaran las de una sola, alguna de las dos falla. */
+
+        compararConElServer(expect, await vistaPreviaDe(page, 0),
+            dondeDibujaElServer(ARRIBA, ABAJO), "fila 0, nombre arriba y edad abajo");
+
+        compararConElServer(expect, await vistaPreviaDe(page, 2),
+            dondeDibujaElServer(ABAJO, ARRIBA), "fila 2, nombre abajo y edad arriba");
+
+        // mirar la vista previa y cancelar no toca los recortes
+        expect(await crudo(page, 0)).toEqual(CENTINELA[0]);
+        expect(await crudo(page, 2)).toEqual(CENTINELA[2]);
     });
 });
 

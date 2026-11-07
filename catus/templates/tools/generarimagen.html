@@ -1352,7 +1352,7 @@
 {{block.super}}
 <link rel="stylesheet" href="{% static 'vendor/cropper/cropper.min.css' %}">
 <script src="{% static 'vendor/cropper/cropper.min.js' %}"></script>
-<script src="{% static 'js/crop-widget.js' %}?v=1"></script>
+<script src="{% static 'js/crop-widget.js' %}?v=2"></script>
 <script>
     $(document).ready(function() {
 
@@ -1638,7 +1638,10 @@
             crop: current,
             nombre: button.data('nombre'),
             subtitulo: button.data('subtitulo'),
+            // los mismos selects que viajan en el POST de /tools/makesingleimage/: la edad
+            // tiene su propia posición, si se la deduce del nombre la vista previa miente
             posicionNombre: form.find('[name="posicion_nombre_' + imageId + '"]').val(),
+            posicionEdadSexo: form.find('[name="posicion_edad_sexo_' + imageId + '"]').val(),
             onSave: function(crop) {
 
                 input('x').val(crop ? crop.x : '');

@@ -8,6 +8,7 @@
  *   cd jstests && npm test
  */
 const {test, expect} = require("@playwright/test");
+const {COMBINACIONES, dondeDibujaElServer, medirVistaPrevia, compararConElServer} = require("./vista-previa");
 
 // el posteo es un lienzo de 1400 con la foto de 1200 adentro
 const CANVAS = 1400;
@@ -351,6 +352,56 @@ test.describe("la vista previa del posteo", () => {
                 .toBeLessThanOrEqual(desborde.visible + 1);
         }
     });
+
+    test("la ayuda no manda a buscar la vista previa a un costado donde no esta", async ({page}, testInfo) => {
+        /* Decia "A la derecha ves como queda el posteo", y en el celular el @media de
+         * 640px pone la vista previa ABAJO de la foto, fuera de la pantalla: la persona
+         * buscaba a la derecha algo que no estaba. El texto tiene que valer en las dos
+         * pantallas, asi que no puede decir de que lado. */
+
+        await page.evaluate((foto) => window.harness.preparar(foto), FOTOS.paisaje);
+        await abrirSelector(page);
+
+        const foto = await page.locator(".catus-crop-stage").boundingBox();
+        const vista = await page.locator(".catus-crop-side").boundingBox();
+
+        // primero, que el layout sea el que motiva el test: si esto cambia, revisar el texto
+        if (testInfo.project.name === "mobile") {
+            expect(vista.y, "en el celular la vista previa va abajo de la foto")
+                .toBeGreaterThanOrEqual(foto.y + foto.height - 1);
+        } else {
+            expect(vista.x, "en escritorio la vista previa va al lado de la foto")
+                .toBeGreaterThanOrEqual(foto.x + foto.width - 1);
+        }
+
+        const ayuda = await page.locator(".catus-crop-help").textContent();
+
+        expect(ayuda).not.toMatch(/derecha|izquierda|abajo|arriba|al lado|debajo/i);
+        // y nombra la vista previa como la nombra su rotulo, para que se la encuentre
+        expect(ayuda.toLowerCase()).toContain("vista previa");
+        await expect(page.locator(".catus-crop-side-label")).toHaveText(/vista previa/i);
+    });
+
+    for (const combinacion of COMBINACIONES) {
+
+        test(`ubica nombre y edad donde los dibuja el server: ${combinacion.que}`, async ({page}) => {
+            /* La vista previa ponia el renglon de edad y sexo segun la posicion del
+             * NOMBRE, pero el server lo dibuja segun posicion_edad_sexo, que en
+             * /tools/generarimagen/ es otro select. Con los dos en lugares distintos el
+             * renglon se mostraba en la otra punta de la foto, y la persona encuadraba
+             * dejando libre justo el lugar donde no iba a ir. */
+
+            await page.evaluate((datos) => window.harness.preparar(datos), {
+                ...FOTOS.paisaje,
+                posicionNombre: combinacion.nombre,
+                posicionEdadSexo: combinacion.edadSexo,
+            });
+            await abrirSelector(page);
+
+            compararConElServer(expect, await medirVistaPrevia(page),
+                dondeDibujaElServer(combinacion.nombre, combinacion.edadSexo), combinacion.que);
+        });
+    }
 });
 
 

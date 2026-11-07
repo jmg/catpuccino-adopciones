@@ -1,9 +1,10 @@
 /*
  * Selector de recorte cuadrado para Instagram.
  *
- * Abre la foto con un cuadro 1:1 que se arrastra y se agranda, y al lado muestra una
- * vista previa aproximada de como va a quedar el posteo (marco blanco, logo y la barra
- * con el nombre), para poder elegir sin que el animal quede cortado ni tapado.
+ * Abre la foto con un cuadro 1:1 que se arrastra y se agranda, y al lado (abajo, en el
+ * celular) muestra una vista previa aproximada de como va a quedar el posteo (marco
+ * blanco, logo, la barra con el nombre y el renglon de edad y sexo), para poder elegir
+ * sin que el animal quede cortado ni tapado.
  *
  * El recorte se guarda en fracciones (0 a 1) de la foto original, asi que no depende
  * del tamano en el que se la muestre.
@@ -13,7 +14,9 @@
  *       crop: {x: 0, y: 0.1, w: 1, h: 0.42},   // o null si todavia no tiene
  *       nombre: "Willy",
  *       subtitulo: "2 anios - Macho",
+ *       // las dos con el valor que va a recibir ImageService.add_nombre_y_edad
  *       posicionNombre: "Izquierda (abajo)",
+ *       posicionEdadSexo: "Izquierda (arriba)",
  *       onSave: function (crop) { ... }        // crop es null si eligio automatico
  *   });
  */
@@ -30,6 +33,11 @@
     // tamanos con los que se dibujan el nombre y el subtitulo sobre el lienzo de 1400
     var NOMBRE_FONT = 150;
     var SUBTITULO_FONT = 60;
+
+    // los valores que mira ImageService.add_nombre_y_edad. Los compara enteros, asi que
+    // cualquier otro texto (o ninguno) cae en el else del server, que es arriba
+    var ABAJO = "Izquierda (abajo)";
+    var ARRIBA = "Izquierda (arriba)";
 
     var STYLE_ID = "catus-crop-styles";
 
@@ -120,6 +128,21 @@
         }
     }
 
+    function barraDelNombre(posicion) {
+        /* Donde dibuja add_nombre_y_edad la barra verde, en el lienzo de 1400.
+         *
+         * La barra termina 20 por debajo de donde termina el texto del nombre (1160 con
+         * "abajo", 260 con cualquier otra cosa) y arranca a la altura del texto: los ~160
+         * que mide Impact 150 menos los 5 de back_margin. "Izquierda (arriba)" es la
+         * excepcion, la estira hasta el borde de arriba de la foto.
+         */
+
+        var finTexto = posicion === ABAJO ? 1160 : 260;
+        var top = posicion === ARRIBA ? INSET : finTexto - 155;
+
+        return {top: top, height: finTexto + 20 - top};
+    }
+
     function buildPreview(container, options) {
         /* Arma la vista previa del posteo. Devuelve el nodo donde Cropper dibuja la foto. */
 
@@ -131,21 +154,24 @@
         photo.style.width = percent(PHOTO);
         photo.style.height = percent(PHOTO);
 
-        var abajo = (options.posicionNombre || "").indexOf("abajo") !== -1;
-
         if (options.nombre) {
+            var barra = barraDelNombre(options.posicionNombre);
             var bar = make("div", "catus-crop-namebar", post);
             bar.textContent = options.nombre;
-            bar.style.top = percent(abajo ? 1005 : 100);
-            bar.style.height = percent(175);
+            bar.style.top = percent(barra.top);
+            bar.style.height = percent(barra.height);
             bar.style.paddingLeft = percent(105);
             bar.style.paddingRight = percent(25);
         }
 
+        // la edad y el sexo tienen su propia posicion en el server (posicion_edad_sexo),
+        // no siguen al nombre. Cuando la vista previa los ubicaba segun el nombre, con
+        // los dos en lugares distintos mostraba el renglon en la otra punta de la foto, y
+        // el posteo salia con el texto encima de lo que la persona habia dejado libre
         if (options.subtitulo) {
             var subtitle = make("div", "catus-crop-subtitle", post);
             subtitle.textContent = options.subtitulo;
-            subtitle.style.top = percent(abajo ? 1205 : 305);
+            subtitle.style.top = percent(options.posicionEdadSexo === ABAJO ? 1205 : 305);
             subtitle.style.left = percent(140);
         }
 
@@ -258,9 +284,11 @@
         var title = make("p", "catus-crop-title", dialog);
         title.textContent = "Recortar para Instagram";
 
+        // sin decir de que lado: en el celular el @media de 640px manda la vista previa
+        // abajo de la foto, y "a la derecha" mandaba a buscarla donde no estaba
         var help = make("p", "catus-crop-help", dialog);
         help.textContent = "Movés y agrandás el cuadro para elegir qué parte de la foto se publica. "
-            + "A la derecha ves cómo queda el posteo.";
+            + "En la vista previa ves cómo queda el posteo.";
 
         var body = make("div", "catus-crop-body", dialog);
 

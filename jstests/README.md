@@ -13,7 +13,7 @@ Los dos con dos perfiles:
 - **desktop**: 1280×800, mouse.
 - **mobile**: iPhone 13 (390×844), touch de verdad por CDP.
 
-Los dos perfiles corren los mismos 58 tests. No es redundante: el caso que motivó todo
+Los dos perfiles corren los mismos 66 tests. No es redundante: el caso que motivó todo
 esto —la foto vertical sacada con el celular— sólo aparece en mobile, y el tamaño de
 letra de la vista previa y el desborde horizontal sólo se notan con la pantalla angosta.
 
@@ -39,13 +39,18 @@ ignora. `node_modules/` está en `.gitignore`.
   de verdad, no una copia que se puede desincronizar. Sin dependencias: `http` y `fs`.
 - **`fixtures/harness.html`** monta el widget copiando el cableado de
   `catus/templates/tools/generarimagen.html`: cuatro inputs con el recorte, un botón que
-  abre el selector, y un `onSave` que escribe las fracciones en los inputs. **Si ese
-  template cambia cómo llama a `CatusCrop.open()`, hay que actualizar el harness**, o los
-  tests van a seguir en verde probando un cableado que ya no existe.
+  abre el selector con las dos posiciones (nombre y edad/sexo), y un `onSave` que escribe
+  las fracciones en los inputs. **Si ese template cambia cómo llama a
+  `CatusCrop.open()`, hay que actualizar el harness**, o los tests van a seguir en verde
+  probando un cableado que ya no existe.
 - **`fixtures/harness-formset.html`** es el otro lugar donde se usa el selector: el
   formset de fotos de `animal/edit.html`, con N filas, índices armados a mano y filas que
   se agregan después de cargar la página. Acá el JS **no se copia**: ver
   [El JS del formset sale del template, no de una copia](#el-js-del-formset-sale-del-template-no-de-una-copia).
+- **`vista-previa.js`** (no es un spec) tiene el oráculo de dónde dibuja
+  `ImageService.add_nombre_y_edad` la barra del nombre y el renglón de edad y sexo, y
+  mide dónde quedaron en la vista previa. Lo usan `crop.spec.js` y `crop-formset.spec.js`.
+  Si el server cambia esas coordenadas, hay que cambiarlas ahí.
 - **`fixtures/jpeg.js`** arma las fotos en el navegador con canvas y les inserta a mano
   un segmento EXIF APP1 con el `Orientation` que se pida. Así no hay que versionar
   binarios ni depender de Pillow. Van como `data:` URL, que es el camino en el que Cropper
@@ -117,6 +122,8 @@ Cada arreglo se revirtió a mano y se confirmó que algún test lo agarra:
 | se saca el `disabled` inicial de "Guardar recorte" | 2 |
 | el `font-size` de la vista previa vuelve a ir en `%` | 4 |
 | se saca el guard `if (!cropper) return` | 2 |
+| la edad vuelve a ubicarse según la posición del nombre | 6 (los dos perfiles × las 2 combinaciones cruzadas, y la fila con posiciones guardadas del formset) |
+| la ayuda vuelve a decir "A la derecha ves cómo queda el posteo" | 2 |
 
 Y lo mismo con el JS del formset, que hasta que dejó de ser copia no se podía comprobar:
 
@@ -124,6 +131,7 @@ Y lo mismo con el JS del formset, que hasta que dejó de ser copia no se podía 
 |---|---|
 | `updateRemoveAdded` vuelve a las dos `.prev().remove()` | 4 (los dos perfiles × 2 tests de "borrar una fila recién agregada") |
 | `field(index, name)` ignora el índice y apunta siempre a la fila 0 | los 20 |
+| el selector vuelve a recibir el nombre fijo arriba y no la posición de la edad | 2 (los dos perfiles × "una foto con posiciones guardadas usa las suyas") |
 
 ## Lo que NO cubre
 

@@ -161,3 +161,71 @@ class RecorteEnLaPantallaDeToolsTest(TestCase):
         html = self.render()
 
         self.assertIn('name="crop_x_{}" value=""'.format(self.imagen.id), html)
+
+
+class PosicionesParaLaVistaPreviaTest(TestCase):
+    """El selector de recorte de la edición muestra el nombre y la edad donde los va a
+    dibujar el server.
+
+    generar_imagen_para_instagram arma el posteo con las posiciones que la foto tiene
+    guardadas (las elige el equipo en /tools/generarimagen/, nombre y edad por separado)
+    y, si no tiene, con las automáticas. El JS del template las lee de cada fila del
+    formset: si no estuvieran, la vista previa mostraba arriba la edad de una foto que
+    el posteo iba a llevar con la edad abajo.
+    """
+
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+
+        self.user = make_user()
+        self.animal = make_animal(nombre="Willy", edad="2 años", sexo="M", cargado_por=self.user)
+        self.compuesta = make_animal_image(
+            animal=self.animal,
+            image_posicion_nombre="Izquierda (abajo)",
+            image_posicion_edad_sexo="Izquierda (arriba)",
+        )
+        self.sin_componer = make_animal_image(animal=self.animal)
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def pagina(self):
+
+        self.client.force_login(self.user)
+        response = self.client.get("/animales/{}/".format(self.animal.id))
+        self.assertEqual(response.status_code, 200)
+
+        return response.content.decode()
+
+    def test_cada_foto_lleva_las_posiciones_que_tiene_guardadas(self):
+
+        html = self.pagina()
+
+        self.assertIn(
+            'data-posicion-nombre="Izquierda (abajo)" data-posicion-edad-sexo="Izquierda (arriba)"', html,
+            "la foto compuesta por el equipo no le pasa sus posiciones al selector",
+        )
+
+    def test_una_foto_sin_posiciones_las_lleva_vacias(self):
+        """Vacío y no "None": el JS toma cualquier texto como posición, y "None" no es
+        ninguna de las que dibuja el server."""
+
+        html = self.pagina()
+
+        self.assertIn('data-posicion-nombre="" data-posicion-edad-sexo=""', html)
+        self.assertNotIn('data-posicion-nombre="None"', html)
+
+    def test_sin_posiciones_cae_a_la_misma_automatica_que_el_server(self):
+        """El JS tiene escrita la posición automática para las fotos nuevas, una sola para
+        las dos: si el server cambia la suya, la vista previa tiene que cambiar con él."""
+
+        from catus.services.images import ImageService
+
+        self.assertEqual(ImageService.POSICION_NOMBRE_AUTOMATICA, ImageService.POSICION_EDAD_SEXO_AUTOMATICA)
+        self.assertIn(
+            "|| '{}'".format(ImageService.POSICION_NOMBRE_AUTOMATICA), self.pagina(),
+            "la posición automática del template ya no es la de ImageService",
+        )

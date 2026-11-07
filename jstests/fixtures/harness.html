@@ -20,9 +20,10 @@
 
 <!--
   Se copia el cableado de catus/templates/tools/generarimagen.html: cuatro inputs
-  ocultos con el recorte, un botón que abre el selector, y un onSave que escribe las
-  fracciones en los inputs. Si eso cambia en el template, este harness queda viejo:
-  está anotado en jstests/README.md.
+  ocultos con el recorte, un botón que abre el selector con las dos posiciones de los
+  selects (nombre y edad/sexo), y un onSave que escribe las fracciones en los inputs.
+  Si eso cambia en el template, este harness queda viejo: está anotado en
+  jstests/README.md.
 -->
 <form id="animals-form">
     <input type="hidden" name="crop_x_1" id="crop_x">
@@ -55,7 +56,8 @@
 
     // lo que el test configura antes de abrir
     var config = {width: 2000, height: 1000, orientacion: 1, nombre: "Willy",
-                  subtitulo: "2 años - Macho", posicionNombre: "Izquierda (abajo)"};
+                  subtitulo: "2 años - Macho", posicionNombre: "Izquierda (abajo)",
+                  posicionEdadSexo: "Izquierda (abajo)"};
 
     var src = null;
 
@@ -121,6 +123,7 @@
             nombre: config.nombre,
             subtitulo: config.subtitulo,
             posicionNombre: config.posicionNombre,
+            posicionEdadSexo: config.posicionEdadSexo,
             logoUrl: "/logo.png",
             onSave: function (crop) {
                 window.harness.guardados.push(crop);

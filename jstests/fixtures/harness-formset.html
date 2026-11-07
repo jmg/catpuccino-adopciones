@@ -78,8 +78,16 @@
         <h3>Fotografías</h3>
         <div id="form-set" class="row">
 
-            <!-- fila 0: foto ya cargada, CON recorte elegido (el que escribio el server) -->
-            <div class="col-md-6 photo-container"><div class="form-group"><label for="id_animalimage_set-0-image">Fotos</label><input type="file" name="animalimage_set-0-image" class="form-control-file" title="" id="id_animalimage_set-0-image" /><img data-foto="1" alt=""/></div>
+            <!--
+              Los data-posicion-* los escribe edit.html con lo que la foto tiene guardado
+              (image_posicion_nombre / image_posicion_edad_sexo); vacío es que no tiene.
+              Las filas 0 y 2 los tienen cruzados a propósito: si la vista previa dedujera
+              la edad de la posición del nombre, alguna de las dos lo muestra.
+            -->
+
+            <!-- fila 0: foto ya cargada, CON recorte elegido (el que escribio el server);
+                 compuesta por el equipo con el nombre arriba y la edad abajo -->
+            <div class="col-md-6 photo-container" data-posicion-nombre="Izquierda (arriba)" data-posicion-edad-sexo="Izquierda (abajo)"><div class="form-group"><label for="id_animalimage_set-0-image">Fotos</label><input type="file" name="animalimage_set-0-image" class="form-control-file" title="" id="id_animalimage_set-0-image" /><img data-foto="1" alt=""/></div>
 <input type="hidden" name="animalimage_set-0-crop_x" id="id_animalimage_set-0-crop_x" value="0.05" />
 <input type="hidden" name="animalimage_set-0-crop_y" id="id_animalimage_set-0-crop_y" value="0.1" />
 <input type="hidden" name="animalimage_set-0-crop_w" id="id_animalimage_set-0-crop_w" value="0.4" />
@@ -88,8 +96,9 @@
 <div class="form-group"><div class="form-check"><input type="checkbox" name="animalimage_set-0-DELETE" class="form-check-input" id="id_animalimage_set-0-DELETE" /><label class="form-check-label" for="id_animalimage_set-0-DELETE">Delete</label></div></div>
 <input type="hidden" name="animalimage_set-0-animal" id="id_animalimage_set-0-animal" value="1" /></div>
 
-            <!-- fila 1: foto ya cargada, SIN recorte: es la que tocan los tests -->
-            <div class="col-md-6 photo-container"><div class="form-group"><label for="id_animalimage_set-1-image">Fotos</label><input type="file" name="animalimage_set-1-image" class="form-control-file" title="" id="id_animalimage_set-1-image" /><img data-foto="1" alt=""/></div>
+            <!-- fila 1: foto ya cargada, SIN recorte: es la que tocan los tests; sin
+                 posiciones guardadas, como toda foto que todavía no compuso nadie -->
+            <div class="col-md-6 photo-container" data-posicion-nombre="" data-posicion-edad-sexo=""><div class="form-group"><label for="id_animalimage_set-1-image">Fotos</label><input type="file" name="animalimage_set-1-image" class="form-control-file" title="" id="id_animalimage_set-1-image" /><img data-foto="1" alt=""/></div>
 <input type="hidden" name="animalimage_set-1-crop_x" id="id_animalimage_set-1-crop_x" />
 <input type="hidden" name="animalimage_set-1-crop_y" id="id_animalimage_set-1-crop_y" />
 <input type="hidden" name="animalimage_set-1-crop_w" id="id_animalimage_set-1-crop_w" />
@@ -98,8 +107,9 @@
 <div class="form-group"><div class="form-check"><input type="checkbox" name="animalimage_set-1-DELETE" class="form-check-input" id="id_animalimage_set-1-DELETE" /><label class="form-check-label" for="id_animalimage_set-1-DELETE">Delete</label></div></div>
 <input type="hidden" name="animalimage_set-1-animal" id="id_animalimage_set-1-animal" value="1" /></div>
 
-            <!-- fila 2: foto ya cargada, CON recorte elegido (el otro centinela) -->
-            <div class="col-md-6 photo-container"><div class="form-group"><label for="id_animalimage_set-2-image">Fotos</label><input type="file" name="animalimage_set-2-image" class="form-control-file" title="" id="id_animalimage_set-2-image" /><img data-foto="1" alt=""/></div>
+            <!-- fila 2: foto ya cargada, CON recorte elegido (el otro centinela);
+                 compuesta con el nombre abajo y la edad arriba -->
+            <div class="col-md-6 photo-container" data-posicion-nombre="Izquierda (abajo)" data-posicion-edad-sexo="Izquierda (arriba)"><div class="form-group"><label for="id_animalimage_set-2-image">Fotos</label><input type="file" name="animalimage_set-2-image" class="form-control-file" title="" id="id_animalimage_set-2-image" /><img data-foto="1" alt=""/></div>
 <input type="hidden" name="animalimage_set-2-crop_x" id="id_animalimage_set-2-crop_x" value="0.55" />
 <input type="hidden" name="animalimage_set-2-crop_y" id="id_animalimage_set-2-crop_y" value="0.05" />
 <input type="hidden" name="animalimage_set-2-crop_w" id="id_animalimage_set-2-crop_w" value="0.4" />

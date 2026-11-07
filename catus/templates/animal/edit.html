@@ -560,7 +560,8 @@
                         <div id="form-set" class="row">
                             {{ images_form.management_form }}
                             {% for form in images_form %}
-                                <div class="col-md-6 photo-container">
+                                {% comment %}Dónde dibuja el server el nombre y la edad si rearma el posteo de esta foto: generar_imagen_para_instagram usa la posición guardada. La lee el selector de recorte para la vista previa; vacío es "sin guardar" y el JS cae a la automática.{% endcomment %}
+                                <div class="col-md-6 photo-container" data-posicion-nombre="{{ form.instance.image_posicion_nombre|default:'' }}" data-posicion-edad-sexo="{{ form.instance.image_posicion_edad_sexo|default:'' }}">
                                     {% bootstrap_form form %}
                                 </div>
                             {% endfor %}
@@ -608,7 +609,7 @@
 <script src="/static/js/tinymce/tinymce.min.js"></script>
 <link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css">
 <script src="/static/vendor/cropper/cropper.min.js"></script>
-<script src="/static/js/crop-widget.js?v=1"></script>
+<script src="/static/js/crop-widget.js?v=2"></script>
 
 <script>
     function enableForm(btn, oldHtml) {
@@ -831,6 +832,18 @@
 
             var objectUrl = null;
 
+            // Dónde va a dibujar el server el nombre y la edad, para que la vista previa
+            // muestre eso y no otra cosa. generar_imagen_para_instagram usa la posición
+            // guardada de la foto (la que eligió el equipo en /tools/generarimagen/) y, si
+            // no tiene, ImageService.POSICION_NOMBRE_AUTOMATICA y
+            // POSICION_EDAD_SEXO_AUTOMATICA: es el caso de toda foto nueva, y de las filas
+            // agregadas con "Agregar Foto", que no están adentro de un .photo-container.
+            var fila = fileInput.closest('.photo-container');
+
+            function posicion(cual) {
+                return fila.attr('data-posicion-' + cual) || 'Izquierda (arriba)';
+            }
+
             function getCrop() {
 
                 var x = field(index, 'crop_x').val();
@@ -906,10 +919,11 @@
                     crop: getCrop(),
                     nombre: $('#id_nombre').val(),
                     subtitulo: subtitulo(),
-                    // donde la dibuja el server en una foto nueva
-                    // (ImageService.POSICION_NOMBRE_AUTOMATICA): con "abajo" la vista
-                    // previa invitaba a dejar la cara arriba, justo debajo de la barra
-                    posicionNombre: "Izquierda (arriba)",
+                    // con "abajo" fijo la vista previa invitaba a dejar la cara arriba,
+                    // justo debajo de la barra; y la edad tiene su propia posición, no
+                    // sigue al nombre
+                    posicionNombre: posicion('nombre'),
+                    posicionEdadSexo: posicion('edad-sexo'),
                     onSave: setCrop
                 });
             });
