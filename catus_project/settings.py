@@ -46,6 +46,13 @@ if ENV != "LOCAL":
 else:
     ALLOWED_HOSTS = ["localhost"]
 
+# Browser errors (the {% jentry_browser %} tag, catus/templatetags/jentry.py)
+# go to the same Jentry project as the backend: the app's SENTRY_DSN. Empty in
+# LOCAL and TEST, so no SDK is loaded there.
+JENTRY_BROWSER_DSN = os.environ.get("SENTRY_DSN", "") if ENV not in ("LOCAL", "TEST") else ""
+SENTRY_ENVIRONMENT = "production" if ENV == "PROD" else ENV.lower()
+SENTRY_RELEASE = os.environ.get("SENTRY_RELEASE", "")
+
 if ENV != "LOCAL":
     HOST = "adopciones.catpuccino.org"
     SSL_HOST = "https://{}".format(HOST)

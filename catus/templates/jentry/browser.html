@@ -1,0 +1,12 @@
+{% if dsn %}<script src="https://browser.sentry-cdn.com/7.120.0/bundle.min.js" integrity="sha384-IDUZ4TLzLVVJBrAVtnp+7wFfhZCU12V7TY5aTUOF2fYY2U1+uajA2SItOGQudpYE" crossorigin="anonymous"></script>
+<script>
+  if (window.Sentry) {
+    Sentry.init({
+      dsn: "{{ dsn|escapejs }}",
+      environment: "{{ environment|escapejs }}",
+      release: "{{ release|escapejs }}" || undefined,
+      // Browser quirks, not errors of the page.
+      ignoreErrors: ["ResizeObserver loop"]
+    });
+  }
+</script>{% endif %}

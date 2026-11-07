@@ -1,0 +1,4 @@
+{% extends "admin/base_site.html" %}
+{% load jentry %}
+{# Django's own admin page, plus the browser SDK: its errors reach Jentry too. #}
+{% block extrahead %}{{ block.super }}{% jentry_browser %}{% endblock %}
