@@ -685,6 +685,14 @@
                 </thead>
 
                 <tbody>
+                    {% comment %}
+                    spaceless saca la sangría que queda entre etiqueta y etiqueta, que era la mitad
+                    de cada fila: al equipo esta tabla y la de formularios le salen con miles de
+                    filas, y el perfil pesaba 8 MB. Se ve igual: los botones van en un flex, y el
+                    espacio antes de "(Publicado hace más de 30 días)" está pegado al texto, que
+                    spaceless no toca.
+                    {% endcomment %}
+                    {% spaceless %}
                     {% for animal in animals %}
                         <tr class="clickable-row" data-href="/animales/{{animal.id}}/" style="cursor: pointer;">
                         <td>
@@ -693,9 +701,7 @@
                             </div>
                         </td>
                         <td>
-                            <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">
-                                {{animal.get_estado_display}}
-                            </span>
+                            <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">{{animal.get_estado_display}}</span>
                             <span id="publicado-expired-text-{{animal.id}}" class="small-text">
                             {% if animal.estado == "E" %}
                                 (Publicado hace más de 30 días)
@@ -731,6 +737,7 @@
                         </td>
                     </tr>
                     {% endfor %}
+                    {% endspaceless %}
                 </tbody>
             </table>
                 {% else %}
@@ -849,6 +856,8 @@
                     </thead>
 
                     <tbody>
+                        {# spaceless: el porqué está en la tabla de animales, más arriba #}
+                        {% spaceless %}
                         {% for estado_form in estado_forms %}
                         <tr>
                             <td>
@@ -857,9 +866,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="limited-td">
-                                    {{estado_form.gato.nombre}}
-                                </div>
+                                <div class="limited-td">{{estado_form.gato.nombre}}</div>
                             </td>
 
                             <td>
@@ -874,6 +881,7 @@
                             </td>
                         </tr>
                         {% endfor %}
+                        {% endspaceless %}
                     </tbody>
                 </table>
                 {% else %}

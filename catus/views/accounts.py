@@ -27,6 +27,14 @@ class ProfileView(LoginRequiredMixin, BaseView):
         else:
             estado_forms = EstadoFormulario.objects.filter(gato__cargado_por=self.request.user).order_by("-id")
 
+        #El equipo ve todos los formularios de la historia (miles) y la tabla pide el
+        #nombre del gato en cada fila: sin el select_related eso era una consulta por
+        #formulario, y el perfil del equipo tardaba 15 segundos en producción. El only
+        #es porque la fila muestra cuatro campos: sin él, cada formulario traía además
+        #el animal entero (datos, la respuesta de ChatGPT...), repetido por formulario.
+        #Si la tabla suma un campo, va acá; si no, vuelve a ser una consulta por fila.
+        estado_forms = estado_forms.select_related("gato").only("hash", "persona_nombre", "gato__nombre")
+
         context["estado_forms"] = estado_forms
         context["SSL_HOST"] = settings.SSL_HOST
 
