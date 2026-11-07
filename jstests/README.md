@@ -8,12 +8,20 @@ parte de la foto sale en el posteo de Instagram:
 - el bloque `<script>` de `catus/templates/animal/edit.html`, que es el que lo cablea al
   formset de fotos (`crop-formset.spec.js`).
 
-Los dos con dos perfiles:
+Y, de ese mismo bloque, la guarda del botón "Guardar Cambios" (`guardar.spec.js`): se
+apaga en cuanto sale el formulario, para que un doble clic no cargue dos veces el mismo
+animal, y vuelve a andar si algo frenó el envío, si la persona vuelve atrás con el
+navegador o, a los 90 segundos, si la navegación se cortó sin cambiar de página. Contra
+el doble clic protege esta guarda y no el server: el server busca el duplicado y después
+guarda, sin lock, así que frena al segundo envío sólo si llega después de que el primero
+se guardó.
+
+Todo con dos perfiles:
 
 - **desktop**: 1280×800, mouse.
 - **mobile**: iPhone 13 (390×844), touch de verdad por CDP.
 
-Los dos perfiles corren los mismos 66 tests. No es redundante: el caso que motivó todo
+Los dos perfiles corren los mismos 72 tests. No es redundante: el caso que motivó todo
 esto —la foto vertical sacada con el celular— sólo aparece en mobile, y el tamaño de
 letra de la vista previa y el desborde horizontal sólo se notan con la pantalla angosta.
 
@@ -47,6 +55,16 @@ ignora. `node_modules/` está en `.gitignore`.
   formset de fotos de `animal/edit.html`, con N filas, índices armados a mano y filas que
   se agregan después de cargar la página. Acá el JS **no se copia**: ver
   [El JS del formset sale del template, no de una copia](#el-js-del-formset-sale-del-template-no-de-una-copia).
+- **`fixtures/harness-guardar.html`** es el `<form>` de `animal/edit.html` con lo mínimo
+  para el botón de guardar: el mismo id y clase, los dos botones "Guardar Cambios" y un
+  campo obligatorio. El JS tampoco se copia. El POST lo contesta `guardar.spec.js` con un
+  204, que deja la página como estaba al enviar: dejarlo colgado sería más parecido a una
+  subida lenta, pero con una navegación pendiente Playwright no deja ni evaluar la página.
+  Para la navegación que se corta (Detener, Esc) lo corta con `route.abort("aborted")`, el
+  `net::ERR_ABORTED` con el que Chromium se queda en la página, y los 90 segundos los
+  adelanta con el reloj de Playwright (`page.clock`).
+- **`template-js.js`** (no es un spec) recorta el JS de `animal/edit.html` para los dos
+  harness que lo usan.
 - **`vista-previa.js`** (no es un spec) tiene el oráculo de dónde dibuja
   `ImageService.add_nombre_y_edad` la barra del nombre y el renglón de edad y sexo, y
   mide dónde quedaron en la vista previa. Lo usan `crop.spec.js` y `crop-formset.spec.js`.
@@ -65,7 +83,8 @@ copy/paste, que nadie había revertido: un test que no se pone en rojo cuando el
 rompe no está probando ese código.
 
 Ahora el harness pide el JS con un `<script src="/template-js/animal-edit.js">` y quien lo
-sirve es `crop-formset.spec.js`, con un `page.route()` que:
+sirve es `crop-formset.spec.js`, con un `page.route()`. Lo que sirve lo arma
+`jsDelTemplate()`, en `template-js.js` (lo usa también `guardar.spec.js`), que:
 
 1. lee `catus/templates/animal/edit.html` del disco,
 2. recorta su único `<script>` sin atributos (los demás son `<script src=…>`),
@@ -74,7 +93,7 @@ sirve es `crop-formset.spec.js`, con un `page.route()` que:
 
 **Lo único que se sustituye hoy es `{{ csrf_token }}`**, por el string `csrf-de-prueba`.
 Es el token que el template manda en el POST de `/animal/validatename/`, que en el harness
-no se llama nunca. La lista vive en `RESUELTO_POR_DJANGO`, en `crop-formset.spec.js`, y si
+no se llama nunca. La lista vive en `RESUELTO_POR_DJANGO`, en `template-js.js`, y si
 aparece otra expresión el extractor **corta con un error** en vez de servir JS mal armado:
 un `{{ … }}` suelto es un `SyntaxError` que dejaría la página sin enganchar nada y los
 tests en rojo sin decir por qué. Si agregás una, agregala también acá para que se sepa qué
@@ -94,8 +113,8 @@ una pantalla muerta, sin botones de recorte. El JS lo pone el test.
 > repo. Sería una rama más en `resolver()`: `/template-js/animal-edit.js` → recortar el
 > `<script>` de `catus/templates/animal/edit.html`, sustituir `{{ csrf_token }}`, servirlo
 > como `.js`. Está del lado del test porque `server.js` lo estaba tocando otro cambio al
-> mismo tiempo. Si se muda, **el harness no se entera**: sigue pidiendo la misma URL, y lo
-> que se saca de `crop-formset.spec.js` son `jsDelTemplate()` y el `page.route()`.
+> mismo tiempo. Si se muda, **los harness no se enteran**: siguen pidiendo la misma URL, y
+> lo que se saca de los specs es el `page.route()`; `template-js.js` pasa a usarlo el server.
 
 ## Por qué hace falta EXIF de verdad
 
@@ -132,6 +151,18 @@ Y lo mismo con el JS del formset, que hasta que dejó de ser copia no se podía 
 | `updateRemoveAdded` vuelve a las dos `.prev().remove()` | 4 (los dos perfiles × 2 tests de "borrar una fila recién agregada") |
 | `field(index, name)` ignora el índice y apunta siempre a la fila 0 | los 20 |
 | el selector vuelve a recibir el nombre fijo arriba y no la posición de la edad | 2 (los dos perfiles × "una foto con posiciones guardadas usa las suyas") |
+
+Y la guarda de "Guardar Cambios" (corrido en desktop):
+
+| Se rompe esto en la guarda de `animal/edit.html` | Lo detecta |
+|---|---|
+| los botones no se apagan | "un doble clic manda un solo POST" y "volver atrás con el navegador los vuelve a prender" |
+| se saca la marca que frena al segundo envío antes de que se apaguen los botones | "dos envíos pegados…" |
+| la marca no se levanta cuando otro código frenó el envío | "si otro código frena el envío…" |
+| se saca el `pageshow` | "volver atrás con el navegador los vuelve a prender" |
+| se saca el `setTimeout` que los prende a los 90 segundos (o se corre el template de antes) | "si la navegación se corta…" |
+| los prende a los 5 segundos | "si la navegación se corta…" (a los 10 todavía tienen que estar apagados) |
+| los prende enseguida (0 ms) | "un doble clic…", "volver atrás…" y "si la navegación se corta…" |
 
 ## Lo que NO cubre
 

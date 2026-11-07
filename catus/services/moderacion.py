@@ -408,7 +408,10 @@ class ModeracionService():
 
     def _sin_html(self, texto):
 
-        return re.sub(r"<[^>]*>", " ", texto or "").replace("&nbsp;", " ").strip()
+        #una etiqueta no tiene '<' adentro. Con r"<[^>]*>" cada '<' sin cerrar recorría todo
+        #el resto del texto buscando un '>', y `datos` no tiene tope: '<' * 200.000 tardaba
+        #14 s con el GIL tomado. Así el costo crece con el largo y no con su cuadrado
+        return re.sub(r"<[^<>]*>", " ", texto or "").replace("&nbsp;", " ").strip()
 
     def _leer_fotos(self, animal):
         """Devuelve las fotos como data URLs. Se leen del disco, no por URL pública:

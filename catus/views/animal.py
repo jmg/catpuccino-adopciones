@@ -5,6 +5,7 @@ import requests
 from PIL import Image
 from datetime import timedelta
 from django.conf import settings
+from catus.services.duplicados import DuplicadosService
 from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
 from catus.services.mail import MailService
@@ -19,9 +20,10 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.core.files import File
+from django.core.files.uploadedfile import UploadedFile
 from tempfile import NamedTemporaryFile
 from django.utils import timezone
-from django.utils.html import escape
+from django.utils.html import escape, format_html
 import os
 
 from catus.forms import AnimalForm
@@ -32,6 +34,10 @@ logger = logging.getLogger(__name__)
 #una foto de un post de Instagram pesa unos cientos de KB; esto es para que una URL
 #no pueda llenar la memoria ni el disco
 MAX_FOTO_INSTAGRAM_BYTES = 15 * 1024 * 1024
+
+#el ancho con el que se optimiza cada foto del alta. La búsqueda de duplicados rehace esa
+#misma cuenta para comparar contra lo guardado: tiene que ser el mismo número
+MAX_ANCHO_FOTO = 1200
 
 
 def bajar_foto_de_instagram(image_url):
@@ -216,6 +222,86 @@ class EditView(LoginRequiredMixin, BaseView):
 
         return mensajes
 
+    def fotos_subidas(self, image_form_set):
+        """Los archivos que este POST trae para guardar, sin las filas tildadas para borrar.
+
+        Sólo tiene sentido con el formset validado: es cleaned_data lo que se guarda.
+        """
+
+        fotos = []
+
+        for form in image_form_set.forms:
+
+            datos = getattr(form, "cleaned_data", None) or {}
+            foto = datos.get("image")
+
+            if datos.get("DELETE") or not isinstance(foto, UploadedFile):
+                continue
+
+            fotos.append(foto)
+
+        return fotos
+
+    def buscar_duplicado(self, animal_form, image_form_set, formset_ok, instagram_images):
+        """¿Esta persona ya tiene cargado este mismo animal? Se pregunta al dar de alta.
+
+        En producción una cuenta cargó al mismo perro dos veces con 29 minutos de
+        diferencia, con el mismo texto y las mismas seis fotos: el primero estaba
+        esperando la aprobación y la persona, como no lo veía publicado, lo volvió a
+        cargar. Se pregunta antes de guardar nada, así no queda ni el animal ni sus fotos.
+
+        No es atómico: busca y después guarda, sin lock. Frena a un segundo POST sólo si
+        llega después de que el primero se guardó; dos pegados, como los de un doble clic,
+        pasan los dos. Contra eso protege la guarda del botón en animal/edit.html.
+
+        Las fotos que vienen de un post de Instagram se bajan después de guardar: para esas
+        queda la comparación de los datos.
+        """
+
+        return DuplicadosService().buscar(
+            self.request.user,
+            animal_form.cleaned_data,
+            fotos_subidas=self.fotos_subidas(image_form_set) if formset_ok else [],
+            hay_fotos_de_instagram=bool(instagram_images),
+            max_width=MAX_ANCHO_FOTO,
+        )
+
+    def aviso_de_duplicado(self, duplicado):
+        """El error que ve quien está cargando de nuevo un animal que ya cargó.
+
+        Le dice dónde está el que ya cargó y en qué anda, que es lo que no sabía: la
+        persona lo vuelve a cargar porque no lo ve publicado. Lleva el link para editarlo,
+        así que va armado con format_html: el nombre lo escribió el usuario y sale
+        escapado, el resto es nuestro.
+        """
+
+        animal = duplicado.animal
+
+        if not animal.aprobado:
+            situacion = "Está esperando que el equipo lo revise y lo apruebe"
+        elif animal.estado == "R":
+            situacion = "Ya está publicado, como reservado"
+        else:
+            situacion = "Ya está publicado"
+
+        #"fotos" es que tiene exactamente las mismas fotos: lo que lo destraba es sumar una que
+        #no esté en esa publicación (decirle "subí sus propias fotos" a un gatito cuyas fotos
+        #son las de su camada no le servía). Con "datos" y con "nombre y foto" lo que los
+        #confunde es el nombre
+        if duplicado.motivo == "fotos":
+            salida = "Si es otro animal, sumale al menos una foto que no esté en esa publicación."
+        else:
+            salida = "Si es otro animal, cambiale el nombre para distinguirlo."
+
+        url = "/animales/{}/".format(animal.id)
+        fecha = timezone.localtime(animal.created_at).strftime("%d/%m/%Y a las %H:%M")
+
+        return format_html(
+            'Ya cargaste a {} el {}. {}: no hace falta cargarlo de nuevo. '
+            'Si querés cambiarle algo, editalo desde <a href="{}">{}</a>. {}',
+            animal.nombre, fecha, situacion, url, url, salida,
+        )
+
     def req(self, is_post=False, **kwargs):
 
         ImageFormSet = inlineformset_factory(Animal, AnimalImage, extra=0, can_delete=True, form=AnimalImageForm, formset=RequiredImageInlineFormset)
@@ -258,7 +344,14 @@ class EditView(LoginRequiredMixin, BaseView):
             #silencio mientras la pantalla le decía que había salido todo bien
             solo_fotos_de_instagram = bool(instagram_images) and not self.hay_fotos_subidas(image_form_set)
 
-            if animal_form.is_valid() and (formset_ok or solo_fotos_de_instagram):
+            se_puede_guardar = animal_form.is_valid() and (formset_ok or solo_fotos_de_instagram)
+
+            #sólo en el alta (editar un animal no lo duplica) y antes de guardar nada
+            duplicado = None
+            if se_puede_guardar and animal is None:
+                duplicado = self.buscar_duplicado(animal_form, image_form_set, formset_ok, instagram_images)
+
+            if se_puede_guardar and duplicado is None:
 
                 is_new_animal = animal_form.instance.id is None
                 cambiaron_las_fotos = False
@@ -307,7 +400,7 @@ class EditView(LoginRequiredMixin, BaseView):
                         if "image" not in form.changed_data:
                             continue
 
-                        ImageService().optimize(animal_image.image, max_width=1200)
+                        ImageService().optimize(animal_image.image, max_width=MAX_ANCHO_FOTO)
                         self.set_suggested_crop(animal_image)
 
                         #la foto ya no es la que se compuso para Instagram
@@ -327,7 +420,7 @@ class EditView(LoginRequiredMixin, BaseView):
                     # same folder, MEDIA_ROOT/gallery, as before).
                     animal_image.image.save(os.path.basename(img_temp.name), File(img_temp))
                     animal_image.save()
-                    ImageService().optimize(animal_image.image, max_width=1200)
+                    ImageService().optimize(animal_image.image, max_width=MAX_ANCHO_FOTO)
                     self.set_suggested_crop(animal_image)
 
                     #estas fotos se crean fuera del formset, así que no aparecen en sus
@@ -422,6 +515,14 @@ class EditView(LoginRequiredMixin, BaseView):
                         self.request.session["is_new_animal"] = True
 
                 return self.redirect(settings.LOGIN_REDIRECT_URL)
+            elif duplicado is not None:
+                context["success"] = False
+                context["errors"] = [self.aviso_de_duplicado(duplicado)]
+
+                logger.info(
+                    "Alta frenada: el usuario %s ya cargó este animal (%s, por %s)",
+                    self.request.user.id, duplicado.animal.id, duplicado.motivo,
+                )
             else:
                 context["success"] = False
                 context["errors"] = self.get_error_messages(animal_form, image_form_set)

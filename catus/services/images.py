@@ -95,15 +95,22 @@ class ImageService():
 
         return self._ratio_para_optimizar(size, max_width) < 1.0
 
-    def optimize(self, image_field, max_width):
+    def bytes_optimizados(self, archivo, max_width):
+        """Los bytes exactos que optimize() guardaría para esta foto, sin guardar nada.
+
+        Está aparte porque lo que queda en el disco no es lo que se subió: optimize()
+        reencoda siempre. Para saber si una foto que alguien está subiendo ya está
+        guardada en otro animal (services/duplicados.py) hay que comparar contra esto, no
+        contra el archivo subido. Tiene que ser la misma cuenta que usa optimize(): si se
+        copiara, alcanza con cambiarle la calidad a una de las dos para que la comparación
+        deje de encontrar nada, sin que falle ningún guardado.
+        """
 
         OUTPUT_FORMAT = "JPEG"
         OUTPUT_QUALITY = 70
 
-        img = Image.open(image_field)
+        img = Image.open(archivo)
         img = img.convert('RGB')
-
-        random_name = f'{uuid.uuid4()}.jpeg'
 
         ratio = self._ratio_para_optimizar(img.size, max_width)
 
@@ -117,10 +124,16 @@ class ImageService():
 
         output = BytesIO()
         img.save(output, format=OUTPUT_FORMAT, quality=OUTPUT_QUALITY, optimize=True, progressive=True)
-        output.seek(0)
 
-        content_file = ContentFile(output.read())
-        file = File(content_file)
+        return output.getvalue()
+
+    def optimize(self, image_field, max_width):
+
+        contenido = self.bytes_optimizados(image_field, max_width)
+
+        random_name = f'{uuid.uuid4()}.jpeg'
+
+        file = File(ContentFile(contenido))
 
         os.remove(image_field.path)
 

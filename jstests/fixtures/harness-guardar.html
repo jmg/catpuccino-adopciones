@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness de Guardar Cambios</title>
+
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+    .form-group { margin-bottom: 10px; }
+    button { padding: 10px 20px; }
+</style>
+</head>
+<body>
+
+<h1>Nuevo Animal</h1>
+
+<!--
+  El <form> de catus/templates/animal/edit.html con lo mínimo para el botón de guardar:
+  el mismo id y la misma clase (el JS los busca por ahí), los dos botones "Guardar
+  Cambios" con el mismo HTML, y un campo obligatorio para que la validación del navegador
+  tenga algo que frenar. El JS NO se copia: se carga al final desde el template de verdad
+  (ver jstests/template-js.js).
+
+  Lo que sí es copia es este HTML: si edit.html cambia el id del form o de los botones,
+  hay que actualizarlo acá.
+
+  El action no existe: guardar.spec.js atiende ese POST con page.route() y lo contesta
+  con un 204, que deja la página como estaba al enviar, con los botones apagados: es lo
+  que se ve durante una subida lenta, y ahí se mira qué pasa con el segundo clic. Para
+  la navegación que se corta (Detener, Esc) lo corta con route.abort().
+-->
+<form id="adoption-form" class="needs-validation" action="/guardar-de-prueba/" method="post" enctype="multipart/form-data">
+
+    <div class="text-center mb-4">
+        <button id="send-form-button" class="btn btn-primary">
+            <i class="fa fa-save mr-2"></i> Guardar Cambios
+        </button>
+    </div>
+
+    <div class="form-group">
+        <label for="id_nombre">Nombre</label>
+        <input type="text" name="nombre" id="id_nombre" maxlength="255" required>
+    </div>
+
+    <div class="text-center mt-4 mb-3 d-flex justify-content-center">
+        <button id="send-form-button-bottom" class="btn btn-primary">
+            <i class="fa fa-save mr-2"></i> Guardar Cambios
+        </button>
+    </div>
+</form>
+
+<script src="/static/vendor/jquery/jquery.min.js"></script>
+
+<script>
+/*
+ * Andamio, igual que en harness-formset.html: $.alert / $.info salen de static/js/index.js
+ * y tinymce de /static/js/tinymce/, que no está en el repo. Sin el doble de tinymce, el
+ * $(document).ready() del template corta con un ReferenceError antes de enganchar la
+ * validación del formulario.
+ */
+window.harness = {avisos: []};
+
+jQuery.alert = function (mensaje) { window.harness.avisos.push(mensaje); };
+jQuery.info = function (mensaje) { window.harness.avisos.push(mensaje); };
+
+window.tinymce = {init: function () {}};
+window.tinyMCE = {get: function () {
+    return {setMode: function () {}, setContent: function () {}, getContent: function () { return ""; }};
+}};
+</script>
+
+<script src="/template-js/animal-edit.js"></script>
+
+</body>
+</html>

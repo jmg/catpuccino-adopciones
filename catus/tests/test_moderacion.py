@@ -9,6 +9,7 @@ Dos reglas que no se pueden romper:
 import json
 import shutil
 import tempfile
+import time
 from io import StringIO
 from unittest import mock
 
@@ -338,6 +339,23 @@ class ArmadoDelPedidoTest(TestCase):
 
         self.assertNotIn("<p>", descripcion)
         self.assertIn("mimoso", descripcion)
+
+    def test_un_texto_con_etiquetas_sin_cerrar_no_traba_el_alta(self):
+        """El texto lo manda cualquiera que se registre, y no tiene tope de largo.
+
+        Sacar el HTML con r"<[^>]*>" era cuadrático con '<' sin cerrar: 200.000 tardaban
+        14 segundos con el GIL tomado, y la revisión corre adentro del POST del alta.
+        """
+
+        for texto in ("<" * 200_000, "<a" * 100_000):
+            animal = make_animal(nombre="Willy", datos=texto)
+
+            inicio = time.perf_counter()
+            descripcion = self.service._describir(animal)
+            demora = time.perf_counter() - inicio
+
+            self.assertLess(demora, 0.5, "sacar el HTML volvió a ser cuadrático: {:.1f} s".format(demora))
+            self.assertIn("Descripción:", descripcion)
 
     def test_le_avisa_al_modelo_que_el_texto_no_es_confiable(self):
         """Sin esto el modelo describía el texto en vez de la foto y dejaba pasar spam."""

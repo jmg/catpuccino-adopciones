@@ -236,6 +236,23 @@ is off — the default; production sets `"0"` explicitly — or when there is no
 per person, `GPT_IG_MAX_TOTAL_POR_DIA` 30 site-wide). Production pins openai 0.28.1 (the 0.x API);
 both SDK generations are supported.
 
+**Duplicate listings** (`services/duplicados.py`). On create only, before anything is saved,
+`EditView` checks the account's own `D`/`R` animals from the last 90 days and, on a match,
+saves nothing and links to the existing one. Two rules: the same name, type, sex, age and
+a non-empty text (no HTML, case and whitespace folded, first 20,000 characters; name and age
+are compared first and the text is fetched with `Substr` only for those that match), or the
+photos, always with the same type and sex — the same name plus one identical photo, or
+exactly the same set of at least two photos. A shared photo alone is never enough:
+littermates share the group photo, accounts reuse a flyer, and a kitten listed on its own
+reuses photos from its litter's listing. Stored photos were re-encoded by `optimize()`, so
+uploads are hashed through `ImageService.bytes_optimizados()`: a change to `optimize()` or a
+Pillow upgrade blinds the photo rule for already-stored animals until they age past the 90
+days, with the data rule as the backstop. It is not atomic (search, then save, no lock): it
+only stops a second POST that arrives after the first one saved, and a double click is
+stopped by the save-button guard in `animal/edit.html`. It runs on attacker-controlled text
+on every create, so `normalizar()` must stay linear (the tag regex), must not raise (huge
+`&#…;` references) and must not grow the text (NFC, not NFKC).
+
 ## Permissions
 
 Registration at `/accounts/register/` is open and self-service, so **"is logged in" is not a

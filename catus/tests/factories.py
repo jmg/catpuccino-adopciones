@@ -60,9 +60,11 @@ def photo_bytes(size=(800, 600), color=(120, 120, 120), fmt="JPEG"):
     return buffer
 
 
-def uploaded_photo(name="foto.jpg", size=(800, 600)):
+def uploaded_photo(name="foto.jpg", size=(800, 600), color=(120, 120, 120)):
+    """Con el mismo tamaño y color da los mismos bytes: en test_duplicados cada color es
+    una foto distinta, y repetirlo es subir la misma foto."""
 
-    return SimpleUploadedFile(name, photo_bytes(size).getvalue(), content_type="image/jpeg")
+    return SimpleUploadedFile(name, photo_bytes(size, color).getvalue(), content_type="image/jpeg")
 
 
 def foto_cortada(name="cortada.jpg", size=(1600, 1200)):

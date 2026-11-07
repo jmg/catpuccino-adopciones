@@ -612,6 +612,92 @@
 <script src="/static/js/crop-widget.js?v=2"></script>
 
 <script>
+    /*
+     * "Guardar Cambios" se apaga en cuanto sale el formulario.
+     *
+     * Un doble clic mandaba dos POST y cargaba dos veces el mismo animal. Contra eso
+     * protege esto, no el server: buscar_duplicado (views/animal.py) busca y después
+     * guarda, sin lock, así que frena al segundo envío sólo si llega después de que el
+     * primero se guardó, y los dos POST de un doble clic llegan casi juntos.
+     * Va suelto y no adentro del $(document).ready() de más abajo: si algo de ahí falla
+     * (tinymce que no cargó, por ejemplo), la guarda tiene que estar igual.
+     *
+     * La marca de "ya salió" se pone en el momento: es la que frena a un segundo envío,
+     * por rápido que llegue. Los botones se apagan un instante después, cuando ya corrió
+     * todo lo que puede frenar el envío (la validación de .needs-validation): si algo lo
+     * frenó, se levanta la marca y no queda nada apagado, así la persona corrige y vuelve
+     * a guardar.
+     *
+     * Vuelven a andar con pageshow (volver atrás con el navegador) y, si no, a los 90
+     * segundos: si la navegación se corta sin cambiar de página (Detener, Esc, un corte de
+     * red) no llega ningún evento, y quedaban apagados hasta recargar, perdiendo lo cargado
+     * con las fotos. Una subida que tarda más que eso se puede volver a mandar; el server
+     * la frena si para entonces el primer envío ya se guardó.
+     *
+     * Lo prueba jstests/guardar.spec.js.
+     */
+    (function () {
+        var REINTENTAR_DESPUES_DE_MS = 90000;
+        var enviando = false;
+        var reintento = null;
+
+        function botonesDeGuardar() {
+            return document.querySelectorAll('#send-form-button, #send-form-button-bottom');
+        }
+
+        function prenderBotones() {
+            enviando = false;
+            clearTimeout(reintento);
+            reintento = null;
+
+            Array.prototype.forEach.call(botonesDeGuardar(), function (boton) {
+                boton.disabled = false;
+                if (boton.hasAttribute('data-html-guardar')) {
+                    boton.innerHTML = boton.getAttribute('data-html-guardar');
+                }
+            });
+        }
+
+        document.addEventListener('submit', function (event) {
+            if (!event.target || event.target.id !== 'adoption-form') {
+                return;
+            }
+
+            if (enviando) {
+                event.preventDefault();
+                return;
+            }
+
+            if (event.defaultPrevented) {
+                return;
+            }
+
+            enviando = true;
+
+            setTimeout(function () {
+                if (event.defaultPrevented) {
+                    enviando = false;
+                    return;
+                }
+
+                Array.prototype.forEach.call(botonesDeGuardar(), function (boton) {
+                    if (!boton.hasAttribute('data-html-guardar')) {
+                        boton.setAttribute('data-html-guardar', boton.innerHTML);
+                    }
+                    boton.disabled = true;
+                    boton.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> Guardando...';
+                });
+
+                clearTimeout(reintento);
+                reintento = setTimeout(prenderBotones, REINTENTAR_DESPUES_DE_MS);
+            }, 0);
+        });
+
+        // volver atrás con el navegador trae la página tal como quedó (bfcache), con los
+        // botones apagados; Firefox además recuerda el disabled cuando la recarga
+        window.addEventListener('pageshow', prenderBotones);
+    })();
+
     function enableForm(btn, oldHtml) {
         $(btn).attr('disabled', false);
         $(btn).html(oldHtml);
