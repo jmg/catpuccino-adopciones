@@ -2,7 +2,7 @@ import re
 from django.conf import settings
 from catus.services.adoption import AdoptionService
 from catus.services.validation import ValidationService
-from catus.views.base import BaseView
+from catus.views.base import BaseView, SoloPostMixin
 
 from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.forms import AnimalImageForm, CatusUserForm, RequiredImageInlineFormset
@@ -53,7 +53,7 @@ class ProfileView(LoginRequiredMixin, BaseView):
             return self.json_response({"status": "failure", "errors": form.errors })
 
 
-class CheckHandleView(BaseView):
+class CheckHandleView(SoloPostMixin, BaseView):
 
     def post(self, *a, **k):
 

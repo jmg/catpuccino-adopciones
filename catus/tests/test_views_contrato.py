@@ -220,3 +220,51 @@ class ContratoPorPropiedadTest(ContratoViewTestCase):
 
         with self.assertRaises(PermissionDenied):
             DownloadContractView.as_view()(request, contrato_id=str(self.contrato.id))
+
+
+class DatosViewTest(ContratoViewTestCase):
+    """/formulario/<id>/datos/ daba siempre 500: contrato/datos.html nunca estuvo en el
+    repo. Ahora lleva a la pantalla del contrato, que muestra esos mismos datos."""
+
+    def setUp(self):
+        super().setUp()
+        self.duenio = make_user(email="duenio@catpuccino.test")
+        self.intruso = make_user(email="intruso@catpuccino.test")
+        self.animal.cargado_por = self.duenio
+        self.animal.save()
+        self.url = "/formulario/{}/datos/".format(self.estado_form.id)
+
+    def test_el_rescatista_y_el_equipo_van_al_contrato(self):
+
+        for user in (self.duenio, self.admin):
+            with self.subTest(user=user.email):
+                self.client.force_login(user)
+
+                response = self.client.get(self.url)
+
+                self.assertRedirects(response, "/formulario/{}/contrato/".format(self.estado_form.id))
+
+    def test_un_anonimo_va_al_login(self):
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_un_intruso_no_llega_ni_al_contrato(self):
+        """El 403 sale acá, no después de la redirección: los ids son correlativos."""
+
+        self.client.force_login(self.intruso)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(b"30111222", response.content)
+
+    def test_un_formulario_inexistente_da_404(self):
+
+        self.client.force_login(self.admin)
+
+        response = self.client.get("/formulario/999999/datos/")
+
+        self.assertEqual(response.status_code, 404)

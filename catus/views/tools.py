@@ -8,7 +8,7 @@ from catus.services.facebook import FacebookApiService
 from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
 from django.conf import settings
-from .base import BaseView
+from .base import BaseView, SoloPostMixin
 from django.core.files import File
 from django.core.files.base import ContentFile
 from datetime import datetime, timedelta
@@ -599,7 +599,7 @@ class CropMixin():
         return imagen.get_crop()
 
 
-class MakeImagesView(CropMixin, BaseView):
+class MakeImagesView(SoloPostMixin, CropMixin, BaseView):
 
     url = r"^tools/makeimages/$"
 
@@ -668,7 +668,7 @@ class MakeImagesView(CropMixin, BaseView):
         return self.render_to_response({"animal": animal, "fonts": fonts})
 
 
-class MakeSingleImageView(CropMixin, BaseView):
+class MakeSingleImageView(SoloPostMixin, CropMixin, BaseView):
 
     url = r"^tools/makesingleimage/$"
 
@@ -774,7 +774,7 @@ class DownloadImagesView(BaseView):
         return response
 
 
-class PublishView(BaseView):
+class PublishView(SoloPostMixin, BaseView):
 
     url = r"^tools/publish/$"
 
@@ -793,7 +793,7 @@ class PublishView(BaseView):
         return self.response(FacebookApiService.publish(animal, ig_text))
 
 
-class SaveFormView(BaseView):
+class SaveFormView(SoloPostMixin, BaseView):
 
     url = r"^tools/saveform/$"
 
@@ -863,7 +863,7 @@ class PreguntarAdopcion(BaseView):
         return self.render_to_response({"users": users })
 
 
-class SendPreguntarEmailView(BaseView):
+class SendPreguntarEmailView(SoloPostMixin, BaseView):
 
     template_name = "tools/_already_sent_email.html"
 

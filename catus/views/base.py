@@ -42,6 +42,32 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
         return super().handle_no_permission()
 
 
+class SoloPostMixin:
+    """Para las vistas que solo reciben el POST de un botón, un form o un fetch.
+
+    Sin esto un GET (el link abierto en el navegador, un bot) caía en el get() de
+    TemplateView, que busca el template que django_conventions deriva del nombre de la
+    vista. Casi ninguna lo tiene, así que contestaba 500 TemplateDoesNotExist y dejaba un
+    error en Jentry. Las que sí tienen uno, porque post() lo usa para armar su respuesta,
+    contestaban 200 con un pedazo de pantalla vacío: /tools/sendpreguntaremail/ decía "Ya
+    se envió un mail a este usuario" sin haber mandado nada.
+
+    El 405 sale antes que los mixins de permisos y es igual para todos: no corre nada de
+    la vista y a un anónimo no le dice más que la redirección al login. Por eso va primero
+    entre las clases base; detrás de un mixin de login el GET igual se corta, pero recién
+    después del chequeo de permisos y con otra respuesta para cada uno.
+    """
+
+    http_method_names = ["post"]
+
+    def dispatch(self, request, *args, **kwargs):
+
+        if request.method.lower() not in self.http_method_names:
+            return self.http_method_not_allowed(request, *args, **kwargs)
+
+        return super().dispatch(request, *args, **kwargs)
+
+
 class BaseView(TemplateView):
 
     def render_to_response(self, context):

@@ -1,9 +1,9 @@
 from catus.models import *
 from catus.services.facebook import FacebookApiService
-from .base import BaseView, SuperuserRequiredMixin
+from .base import BaseView, SoloPostMixin, SuperuserRequiredMixin
 
 
-class LoginView(SuperuserRequiredMixin, BaseView):
+class LoginView(SoloPostMixin, SuperuserRequiredMixin, BaseView):
     """Vincula la cuenta de Instagram desde la que publica el sitio.
 
     Pisa el token y la cuenta, así que es solo del equipo: sin el chequeo cualquiera

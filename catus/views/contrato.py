@@ -5,7 +5,7 @@ import os.path
 from django.views.generic import TemplateView
 from django.core import signing
 from django.http import Http404, HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 
 from catus.models import Contrato, Animal, EstadoFormulario, ContratoPersona
 from catus.forms import ContratoPersonaForm
@@ -365,61 +365,24 @@ class ContratoPdfView(TemplateView):
 
 
 class DatosView(LoginRequiredMixin, TemplateView):
+    """La vieja pantalla de "Datos Adopción": ahora manda a la del contrato.
+
+    Nunca tuvo template en el repo (contrato/datos.html no está ni en el commit inicial),
+    así que abrirla daba siempre 500 TemplateDoesNotExist. El único link a esta URL salía
+    de /formslist/, que tampoco funcionaba y se borró. Lo que juntaba está todo en la
+    pantalla del contrato: los datos del animal en su formulario y los del adoptante en el
+    PDF que se descarga desde ahí. Un link viejo lleva ahí en vez de a un error.
+    """
 
     url = [r"^formulario/(?P<estado_id>(\d*))/datos/$"]
-
-    def _format_date(self, date):
-
-        if date:
-            return date.strftime("%d/%m/%Y")
-
-        return ""
 
     def get(self, *args, **kwargs):
 
         estado_form = get_object_or_404(EstadoFormulario, id=self.kwargs.get("estado_id"))
 
-        #muestra los mismos datos personales que la pantalla del contrato
+        #el mismo chequeo que el contrato, antes de mandar ahí: con ids correlativos, a
+        #quien no es el rescatista ni del equipo se le corta acá, no del otro lado
         if not puede_editar_animal(self.request.user, estado_form.gato):
             raise PermissionDenied("Este formulario es de otra persona.")
 
-        contrato = get_object_or_404(Contrato, estado_formulario=estado_form)
-        gato = estado_form.gato
-
-        data_attrs = AdoptionService().get_form_attrs(estado_form.form_entry, ["Nombre y Apellido", "Edad", "Profesión",
-            "Celular", "Email", "Partido", "Localidad", "Facebook", "Instagram"], exact=True, convert_to_str=True)
-
-        data_attrs = dict(data_attrs)
-        data_attrs["DNI"] = contrato.adoptante.persona_dni
-        #data_attrs["Ocupacion"] = contrato.adoptante.persona_ocupacion
-
-        cat_attrs = {
-            "Nombre": gato.nombre,
-            "Color": contrato.gato_color,
-            "Sexo": gato.get_sexo_display(),
-            "Fecha nacimiento": self._format_date(contrato.gato_fecha_nacimiento),
-            "Fecha ingreso a las web de FC": self._format_date(gato.created_at),
-            "Fecha adopción": self._format_date(contrato.contrato_fecha),
-            "Fecha castración": self._format_date(contrato.gato_castrado_fecha) if contrato.gato_castrado else "NO",
-            "Fecha vacunacion triple 1era dosis": self._format_date(contrato.gato_vacunacion_triple_1_dosis_fecha) if contrato.gato_vacunacion_triple_1_dosis else "NO",
-            "Fecha vacunacion triple 2nda dosis": self._format_date(contrato.gato_vacunacion_triple_2_dosis_fecha) if contrato.gato_vacunacion_triple_2_dosis else "NO",
-            "Fecha desparasitación": self._format_date(contrato.gato_desparasitado_fecha) if contrato.gato_desparasitado else "NO",
-            "Fecha desparasitación 2nda dosis": self._format_date(contrato.gato_desparasitado_fecha_2) if contrato.gato_desparasitado_2 else "NO",
-            "Fecha pipeta antipulgas": self._format_date(contrato.gato_pipeta_antipulgas_fecha) if contrato.gato_pipeta_antipulgas else "NO",
-            "Alimento": contrato.gato_alimento,
-            "Cuidados especiales": contrato.gato_cuidados_especiales,
-        }
-
-        link_contrato = "/contrato_adopcion/{}/download/".format(contrato.id)
-
-        data = {
-            "contrato": contrato,
-            "estado_form": estado_form,
-            "gato": gato,
-            "data_attrs": data_attrs,
-            "cat_attrs": cat_attrs,
-            "miembro": contrato.miembro_adopcion_nombre,
-            "link_contrato": link_contrato
-        }
-
-        return self.render_to_response(data)
+        return redirect("/formulario/{}/contrato/".format(estado_form.id))

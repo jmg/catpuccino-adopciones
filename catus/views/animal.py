@@ -9,7 +9,7 @@ from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
 from catus.services.mail import MailService
 from catus.services.moderacion import ModeracionService
-from catus.views.base import BaseView, SuperuserRequiredMixin, puede_editar_animal
+from catus.views.base import BaseView, SoloPostMixin, SuperuserRequiredMixin, puede_editar_animal
 from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
 
@@ -488,7 +488,7 @@ class AprobarView(SuperuserRequiredMixin, BaseView):
         return self.response("{} ya habia sido aprobado".format(escape(animal.nombre)))
 
 
-class ValidateNameView(LoginRequiredMixin, BaseView):
+class ValidateNameView(SoloPostMixin, LoginRequiredMixin, BaseView):
 
     def post(self, *a, **k):
 
@@ -499,7 +499,7 @@ class ValidateNameView(LoginRequiredMixin, BaseView):
         return self.json_response({"valid": True})
 
 
-class PhotosView(BaseView):
+class PhotosView(SoloPostMixin, BaseView):
     """La usa el formulario público de pre-adopción, así que solo muestra lo publicado."""
 
     def post(self, *a, **k):
@@ -598,7 +598,7 @@ class PullDataFromIg(LoginRequiredMixin, BaseView):
         return self.json_response(data)
 
 
-class UpdateAnimal(LoginRequiredMixin, BaseView):
+class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
 
     response_status = "actualizados"
 
@@ -675,7 +675,7 @@ class ActualizarFechaIngreso(UpdateAnimal):
         animal.fecha_ingreso = timezone.now()
 
 
-class AddComment(SuperuserRequiredMixin, BaseView):
+class AddComment(SoloPostMixin, SuperuserRequiredMixin, BaseView):
     """La nota del equipo sobre un rescatista (/tools/): cualquier cuenta podía
     pisar la de cualquiera."""
 
