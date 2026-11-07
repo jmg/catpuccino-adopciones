@@ -60,9 +60,10 @@ CATUS=/var/www/catpuccino-adopciones/cron.sh
 # Mantenimiento
 # ---------------------------------------------------------------------------
 
-# Da y saca la aprobación automática según cuántos animales aprobados a mano tenga cada
-# rescatista. Saca también: el mínimo subió de 1 a 5 y los que ya la tenían del régimen
-# viejo la conservaban para siempre.
+# Da la aprobación automática a quien tenga al menos un animal aprobado por una persona.
+# Nunca la saca: lo que el equipo tilda a mano queda, pero si se la saca a alguien con un
+# animal aprobado por una persona, la corrida siguiente se la vuelve a dar (para frenar a
+# alguien hay que desactivarle la cuenta). En DeployCloud corre cada hora.
 15 5 * * * $CATUS automatic_approve
 
 # Achica las fotos grandes. Saltea las que ya están en tamaño, así que una corrida sin nada

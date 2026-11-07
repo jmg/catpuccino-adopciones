@@ -1247,3 +1247,66 @@ class CupoEnBaseTest(TestCase):
         self.animal.refresh_from_db()
         self.assertEqual(self.animal.revision_ia_estado, Animal.REVISION_ERROR)
         self.assertFalse(self.animal.necesita_revision_humana())
+
+
+class RevisionApagadaPorDefectoTest(TestCase):
+
+    def test_sin_la_linea_en_la_config_queda_apagada(self):
+        """La clave de OpenAI es compartida: si una reescritura de la config pierde la
+        línea, la revisión no puede empezar a gastar sola. La config de los tests no la
+        tiene, igual que una config que la perdió."""
+
+        from django.conf import settings
+
+        self.assertFalse(settings.MODERACION_IA_ACTIVA)
+
+
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="test-key", ENV="TEST", MODERACION_IA_MAX_TOTAL_POR_DIA=3)
+class TopeDeTodosTest(AltaDeAnimalTestCase):
+    """Con el registro abierto cada cuenta nueva trae su cupo: el tope de todos es el que
+    acota lo que se gasta de la clave compartida."""
+
+    def gastar_el_cupo_de_todos(self):
+
+        for numero in range(3):
+            RevisionIALlamada.objects.create(pedido_por=make_user(email="otro{}@catpuccino.test".format(numero)))
+
+    def test_pasado_el_tope_de_todos_no_se_llama_a_la_api(self):
+
+        self.gastar_el_cupo_de_todos()
+        animal = make_animal(cargado_por=self.rescatista)
+        make_animal_image(animal)
+
+        service = ModeracionService()
+        with con_error(AssertionError("pasado el tope no se llama a la API")):
+            estado, motivo = service.revisar(animal)
+
+        self.assertEqual(estado, Animal.REVISION_ERROR)
+        self.assertIn("del sitio", motivo)
+        self.assertFalse(service.sin_cupo, "el tope de todos no lo agotó este rescatista")
+
+    def test_al_conocido_lo_sigue_aprobando_el_historial(self):
+        """Es una falla ajena, como una caída: si contara como cupo propio, cualquiera
+        podría gastar el de todos y frenarle la carga a los rescatistas conocidos."""
+
+        self.gastar_el_cupo_de_todos()
+
+        animal = self.guardar_animal(con_error(AssertionError("pasado el tope no se llama a la API")))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_ERROR)
+        self.assertTrue(animal.aprobado)
+
+    def test_al_que_recien_llega_lo_mira_una_persona(self):
+
+        self.gastar_el_cupo_de_todos()
+        nuevo = make_user(email="recien-llegado@catpuccino.test", automatic_approve=False)
+
+        animal = self.guardar_animal(con_error(AssertionError("pasado el tope no se llama a la API")), nuevo)
+
+        self.assertFalse(animal.aprobado)
+
+    def test_debajo_del_tope_revisa_normalmente(self):
+
+        animal = self.guardar_animal(con_respuesta(visto(["gato"])))
+
+        self.assertEqual(animal.revision_ia_estado, Animal.REVISION_OK)

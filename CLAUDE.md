@@ -209,11 +209,14 @@ auto-approves — for anyone, no track record needed — and that approval also 
 Instagram post, so a listing can go from upload to the shelter's public account with nobody
 in between; the delay window in `/tools/colainstagram/` is the only human gate. `R` never
 auto-approves. `E` is *not* a verdict, so it does not approve on its own: it falls back to the
-old rule, `cargado_por.automatic_approve` (granted by the `automatic_approve` cron at 5
-hand-approved animals). That fallback is what keeps an OpenAI outage from stalling established
+old rule, `cargado_por.automatic_approve` (granted by the `automatic_approve` cron after ONE
+animal approved by a person, never revoked by the cron — the team chose this rule again on
+2026-11-07; an untick in the admin is re-granted on the next run for anyone with a
+person-approved animal, so stopping someone means deactivating the account). Animals the AI
+approved on its own (`aprobado_por_persona=False`) do not count. That fallback is what keeps an OpenAI outage from stalling established
 rescuers without opening the door for brand-new accounts — which matters because registration
-is open. The whole matrix is pinned in `tests/test_moderacion.py::AutoAprobacionTest`;
-reverting any leg of it fails a test.
+is open. The matrix is pinned mostly in `tests/test_moderacion.py` (`AutoAprobacionTest`,
+`SinCupoTest`) and the cron rule in `tests/test_commands.py::AutomaticApproveTest`.
 - **The model describes, the code decides.** `PROMPT` asks only for what is visible;
   `decidir()` holds the policy. An earlier version asked the model to judge and it echoed the
   prompt's rules instead of looking, flagging 10 of 14 real gallery photos. After the split,
@@ -223,10 +226,14 @@ Other constraints baked in: the listing text is framed as unverified data (that 
 what makes prompt injection through `nombre`/`datos` fail, and a test asserts it survives);
 photos are downscaled to 512px and capped at 3 per call; the SDK runs with `max_retries=0`
 and an 8s timeout because the upload POST waits on it; there is a
-per-user daily cap (`MODERACION_IA_MAX_POR_DIA`) because registration is open and each upload
-costs money; expected API failures log at `warning`, not `exception`, since Sentry attaches
+per-user daily cap (`MODERACION_IA_MAX_POR_DIA`, 20) and a site-wide one
+(`MODERACION_IA_MAX_TOTAL_POR_DIA`, 100) because registration is open, each upload costs money
+and the OpenAI key is shared with Easy Publisher (hitting the site-wide cap is treated as an
+outside failure, so the history fallback still applies; hitting your own cap is not); expected API failures log at `warning`, not `exception`, since Sentry attaches
 the session cookie to `ERROR` events. Inactive when `ENV=LOCAL`, when `MODERACION_IA_ACTIVA`
-is off, or when there is no `OPENIA_API_KEY`. Production pins openai 0.28.1 (the 0.x API);
+is off — the default; production sets `"0"` explicitly — or when there is no `OPENIA_API_KEY`.
+"Obtener datos desde Instagram" uses the same key with its own caps (`GPT_IG_MAX_POR_DIA` 10
+per person, `GPT_IG_MAX_TOTAL_POR_DIA` 30 site-wide). Production pins openai 0.28.1 (the 0.x API);
 both SDK generations are supported.
 
 ## Permissions

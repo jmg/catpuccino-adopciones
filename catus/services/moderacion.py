@@ -161,6 +161,32 @@ class ModeracionService():
         except Exception as error:
             logger.warning("No se pudo contar la revisión: %s", type(error).__name__)
 
+    #...y entre todos. Con el registro abierto cada cuenta nueva trae sus 20, así que el
+    #tope por persona no acota lo que se gasta de la clave, que además es compartida.
+    #En producción se cargan a lo sumo 7 animales por día.
+    MAX_TOTAL_POR_DIA = 100
+
+    def get_limite_total_diario(self):
+
+        return getattr(settings, "MODERACION_IA_MAX_TOTAL_POR_DIA", self.MAX_TOTAL_POR_DIA)
+
+    def paso_el_limite_total(self):
+        """True si entre todos ya se gastó el cupo de revisiones del día."""
+
+        from catus.models import RevisionIALlamada
+
+        limite = self.get_limite_total_diario()
+        if not limite:
+            return False
+
+        desde = timezone.now() - timedelta(days=1)
+
+        try:
+            return RevisionIALlamada.objects.filter(created_at__gte=desde).count() >= limite
+        except Exception as error:
+            logger.warning("No se pudo leer el cupo total de revisiones: %s", type(error).__name__)
+            return False
+
     def paso_el_limite(self, usuario):
         """True si esta persona ya gastó su cupo de revisiones de hoy.
 
@@ -201,6 +227,14 @@ class ModeracionService():
                 getattr(animal.cargado_por, "id", None),
             )
             return Animal.REVISION_ERROR, "Se alcanzó el límite de revisiones del día."
+
+        #El tope de todos NO es quedarse sin cupo: no lo agotó este rescatista, así que es
+        #una falla ajena como una caída de OpenAI y el historial sigue valiendo. Si contara
+        #como cupo propio, cualquiera podría gastar el de todos y frenarle la carga al
+        #resto de los rescatistas conocidos.
+        if self.paso_el_limite_total():
+            logger.warning("Se llegó al tope diario total de revisiones (%s)", self.get_limite_total_diario())
+            return Animal.REVISION_ERROR, "Se alcanzó el límite de revisiones del día del sitio."
 
         try:
             fotos = self._leer_fotos(animal)

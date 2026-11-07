@@ -244,9 +244,11 @@ def _config_bool(clave, por_defecto=True):
     return str(valor).strip().lower() not in ("0", "false", "no", "")
 
 
-#Revision automatica de las publicaciones. Se puede apagar desde la config sin tocar
-#codigo; si no hay OPENIA_API_KEY queda inactiva sola.
-MODERACION_IA_ACTIVA = _config_bool("MODERACION_IA_ACTIVA", True)
+#Revision automatica de las publicaciones. APAGADA salvo que la config diga
+#"MODERACION_IA_ACTIVA": "1": la clave de OpenAI se comparte con otra app, y con el
+#default prendido alcanzaba con que una reescritura de la config perdiera la linea para
+#que empezara a gastar sola. Sin OPENIA_API_KEY queda inactiva igual.
+MODERACION_IA_ACTIVA = _config_bool("MODERACION_IA_ACTIVA", False)
 MODERACION_IA_MODELO = app_config.get("MODERACION_IA_MODELO") or "gpt-4o-mini"
 
 #tope de revisiones por persona por dia: acota lo que puede gastar alguien que se
@@ -255,6 +257,13 @@ try:
     MODERACION_IA_MAX_POR_DIA = int(app_config.get("MODERACION_IA_MAX_POR_DIA") or 20)
 except (TypeError, ValueError):
     MODERACION_IA_MAX_POR_DIA = 20
+
+#...y entre todos: el registro es abierto y cada cuenta nueva trae su cupo, asi que el
+#tope por persona solo no acota el gasto de la clave compartida. 0 lo desactiva.
+try:
+    MODERACION_IA_MAX_TOTAL_POR_DIA = int(app_config.get("MODERACION_IA_MAX_TOTAL_POR_DIA") or 100)
+except (TypeError, ValueError):
+    MODERACION_IA_MAX_TOTAL_POR_DIA = 100
 
 #"Obtener datos desde Instagram" (catus/views/animal.py, PullDataFromIg): pedidos por
 #persona por dia y pedidos entre todos por dia. El total es el que acota el gasto: el

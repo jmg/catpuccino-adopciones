@@ -731,6 +731,53 @@ class AutomaticApproveTest(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.automatic_approve)
 
+    def test_la_salida_dice_a_quien_se_la_dio(self):
+        """El logger.info no llega al log de producción: lo que queda es esta línea."""
+
+        user = self.rescatista_con(1)
+
+        salida = self.correr()
+
+        self.assertIn("Pasan a aprobación automática: 1. (ids: {})".format(user.id), salida)
+
+    def test_guarda_solo_su_campo(self):
+        """Un save() entero pisaba con lo que había en memoria un cambio de perfil hecho
+        en el mismo momento."""
+
+        from unittest import mock
+
+        from catus.models import CatusUser
+
+        self.rescatista_con(1)
+
+        with mock.patch.object(CatusUser, "save", autospec=True, side_effect=CatusUser.save) as save:
+            self.correr()
+
+        self.assertTrue(save.called)
+        for llamada in save.call_args_list:
+            self.assertEqual(llamada.kwargs.get("update_fields"), ["automatic_approve"])
+
+    def test_un_usuario_que_falla_no_corta_la_corrida(self):
+
+        from unittest import mock
+
+        from catus.models import CatusUser
+
+        primero = self.rescatista_con(1, email="primero@catpuccino.test")
+        segundo = self.rescatista_con(1, email="segundo@catpuccino.test")
+        guardar = CatusUser.save
+
+        def falla_el_primero(user, *args, **kwargs):
+            if user.id == primero.id:
+                raise RuntimeError("fila rota")
+            return guardar(user, *args, **kwargs)
+
+        with mock.patch.object(CatusUser, "save", autospec=True, side_effect=falla_el_primero):
+            self.correr()
+
+        segundo.refresh_from_db()
+        self.assertTrue(segundo.automatic_approve, "un usuario con un problema cortó la corrida de los demás")
+
     def test_nunca_se_la_saca_a_nadie(self):
         """Lo que el equipo tilda a mano queda.
 

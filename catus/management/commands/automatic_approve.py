@@ -21,7 +21,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        nuevos = 0
+        nuevos = []
 
         #Solo se mira a los que no la tienen: este cron nunca la saca, así que lo que el
         #equipo tilda a mano en el admin queda. Lo contrario no: si el equipo se la saca
@@ -41,15 +41,22 @@ class Command(BaseCommand):
             if count < self.MINIMO_APROBADOS:
                 continue
 
-            #esto era un print(): en un cron no lo lee nadie y no queda registro de por
-            #qué un rescatista pasó a aprobación automática
             logger.info(
                 "%s pasa a aprobación automática: tiene %s animales aprobados por una persona",
                 user.get_instagram() or user.email, count,
             )
 
-            user.automatic_approve = True
-            user.save()
-            nuevos += 1
+            #solo este campo: un save() entero pisaba con lo que había en memoria un cambio
+            #de perfil hecho en el mismo momento. Y una fila con un problema no puede
+            #cortar la corrida de todos los demás.
+            try:
+                user.automatic_approve = True
+                user.save(update_fields=["automatic_approve"])
+                nuevos.append(user.id)
+            except Exception as error:
+                logger.warning("No se pudo dar la aprobación automática al usuario %s: %s", user.id, type(error).__name__)
 
-        self.stdout.write("Pasan a aprobación automática: {}.".format(nuevos))
+        #el logger.info de arriba no llega al log de producción (el nivel es WARNING): lo
+        #que queda registrado del cron es esto, con los ids y sin datos personales
+        ids = " (ids: {})".format(", ".join(str(i) for i in nuevos)) if nuevos else ""
+        self.stdout.write("Pasan a aprobación automática: {}.{}".format(len(nuevos), ids))
