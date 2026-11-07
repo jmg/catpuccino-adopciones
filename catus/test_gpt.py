@@ -55,4 +55,5 @@ class PullDataFromIgTest(TestCase):
             data = GPTService().pull_data_from_ig("https://www.instagram.com/p/DfayZB7FjpP/")
 
         self.assertEqual(create.call_args.kwargs["model"], "gpt-4o-mini")
+        self.assertLessEqual(create.call_args.kwargs["max_tokens"], 2000, "una respuesta sin tope de largo")
         self.assertEqual((data["Nombre"], data["Tipo"]), ("Pancho", "G"))

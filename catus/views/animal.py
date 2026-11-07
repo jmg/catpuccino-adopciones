@@ -521,13 +521,33 @@ class PullDataFromIg(LoginRequiredMixin, BaseView):
 
     #Cada pedido sale a buscar el post a Instagram y hace una llamada paga a OpenAI, y
     #el registro es abierto: sin tope, cualquiera que se registre puede vaciarle la
-    #cuenta de OpenAI al refugio con un bucle de curl. Nadie carga 20 animales en un
-    #día, así que a un rescatista real no le molesta.
-    MAX_POR_USUARIO_POR_DIA = 20
+    #cuenta de OpenAI al refugio con un bucle de curl. En todo el sitio se cargan a lo
+    #sumo 7 animales por día, así que a un rescatista real no le molesta.
+    MAX_POR_USUARIO_POR_DIA = 10
+
+    #...y el tope por persona solo no alcanza: cada cuenta nueva trae su propio cupo, y
+    #crear cuentas es gratis. El total del día es lo único que acota el gasto, que
+    #además sale de una clave compartida con otra app.
+    MAX_TOTAL_POR_DIA = 30
 
     def get_limite_diario(self):
 
         return getattr(settings, "GPT_IG_MAX_POR_DIA", self.MAX_POR_USUARIO_POR_DIA)
+
+    def get_limite_total_diario(self):
+
+        return getattr(settings, "GPT_IG_MAX_TOTAL_POR_DIA", self.MAX_TOTAL_POR_DIA)
+
+    def paso_el_limite_total(self):
+        """True si entre todos ya se gastó el cupo de pedidos del día."""
+
+        limite = self.get_limite_total_diario()
+        if not limite:
+            return False
+
+        desde = timezone.now() - timedelta(days=1)
+
+        return ChatGTPResponse.objects.filter(created_at__gte=desde).count() >= limite
 
     def paso_el_limite(self, usuario):
         """True si esta persona ya gastó su cupo de pedidos del día.
@@ -553,6 +573,10 @@ class PullDataFromIg(LoginRequiredMixin, BaseView):
         if self.paso_el_limite(self.request.user):
             logger.warning("El usuario %s pasó el límite diario de pedidos a ChatGPT", self.request.user.id)
             return self.json_response({"error": "Por hoy llegaste al límite de posts que podemos leer. Cargá los datos a mano y probá de nuevo mañana."})
+
+        if self.paso_el_limite_total():
+            logger.warning("Se llegó al tope diario total de pedidos a ChatGPT (%s)", self.get_limite_total_diario())
+            return self.json_response({"error": "Por hoy ya leímos todos los posts que podemos. Cargá los datos a mano y probá de nuevo mañana."})
 
         #el pedido se anota antes de hacerlo: contando solo los que salen bien alcanza
         #con hacerlos fallar para gastar llamadas sin tope

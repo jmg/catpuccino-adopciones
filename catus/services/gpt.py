@@ -231,7 +231,12 @@ class GPTService(BaseService):
             {"role": "user", "content": text},
         ]
 
-        response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=self.TIMEOUT_OPENAI)
+        response = openai.ChatCompletion.create(
+            model=model, messages=messages, request_timeout=self.TIMEOUT_OPENAI,
+            #la respuesta copia la descripción del post, y un caption de Instagram tiene
+            #a lo sumo 2200 caracteres: con esto alcanza y una respuesta no se dispara
+            max_tokens=1500,
+        )
         content = response["choices"][0]["message"]["content"]
 
         ChatGTPResponse.objects.create(

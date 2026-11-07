@@ -256,6 +256,19 @@ try:
 except (TypeError, ValueError):
     MODERACION_IA_MAX_POR_DIA = 20
 
+#"Obtener datos desde Instagram" (catus/views/animal.py, PullDataFromIg): pedidos por
+#persona por dia y pedidos entre todos por dia. El total es el que acota el gasto: el
+#registro es abierto y cada cuenta nueva trae su cupo. 0 desactiva cada tope.
+try:
+    GPT_IG_MAX_POR_DIA = int(app_config.get("GPT_IG_MAX_POR_DIA") or 10)
+except (TypeError, ValueError):
+    GPT_IG_MAX_POR_DIA = 10
+
+try:
+    GPT_IG_MAX_TOTAL_POR_DIA = int(app_config.get("GPT_IG_MAX_TOTAL_POR_DIA") or 30)
+except (TypeError, ValueError):
+    GPT_IG_MAX_TOTAL_POR_DIA = 30
+
 #Posteo automatico en Instagram: al aprobar un animal, el posteo queda agendado y sale
 #solo cuando pasa la demora. Arranca APAGADO a proposito. Publicar en la cuenta de la
 #organizacion es irreversible y se ve de afuera, asi que prenderlo tiene que ser una

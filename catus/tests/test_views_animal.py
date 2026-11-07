@@ -511,6 +511,44 @@ class TopeDePedidosAInstagramTest(AnimalViewTestCase):
 
         self.assertTrue(pull.called, "el tope de una persona le frenó los pedidos a otra")
 
+    @override_settings(GPT_IG_MAX_POR_DIA=5, GPT_IG_MAX_TOTAL_POR_DIA=2)
+    def test_el_tope_total_frena_a_todos(self):
+        """Con cuentas nuevas el tope por persona no frena a nadie: el total sí."""
+
+        import json
+
+        from catus.models import ChatGTPResponse
+
+        for _ in range(2):
+            self.pedir(self.duenio)
+
+        antes = ChatGTPResponse.objects.count()
+        response, pull = self.pedir(self.intruso)
+
+        self.assertFalse(pull.called, "una cuenta nueva gastó una llamada paga pasado el tope total")
+        self.assertIn("error", json.loads(response.content.decode()))
+        self.assertEqual(response.status_code, 200, "el tope no puede ser una excepción")
+        self.assertEqual(ChatGTPResponse.objects.count(), antes, "un pedido frenado se anotó como gastado")
+
+    @override_settings(GPT_IG_MAX_POR_DIA=5, GPT_IG_MAX_TOTAL_POR_DIA=0)
+    def test_el_tope_total_en_cero_no_frena(self):
+
+        for _ in range(3):
+            self.pedir(self.duenio)
+
+        response, pull = self.pedir(self.intruso)
+
+        self.assertTrue(pull.called)
+
+    def test_los_topes_por_defecto_son_chicos(self):
+        """La clave de OpenAI es compartida: sin config, el gasto del día queda acotado."""
+
+        from django.conf import settings
+
+        self.assertLessEqual(settings.GPT_IG_MAX_POR_DIA, 10)
+        self.assertLessEqual(settings.GPT_IG_MAX_TOTAL_POR_DIA, 30)
+        self.assertGreater(settings.GPT_IG_MAX_TOTAL_POR_DIA, 0)
+
 
 class ImagenDeInstagramAlEditarTest(EditarAnimalTestCase):
     """La imagen del posteo lleva el nombre, la edad y el sexo quemados en el pixel.
