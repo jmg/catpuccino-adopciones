@@ -534,16 +534,24 @@ class ImageService():
         draw.text((margin_text_bottom_x, margin_text_bottom_y), bottom_text, color_text_bottom_text, font=font2)
 
     def resize(self, image_field, base_width):
+        """Achica el banner o el logo del perfil para que ningún lado pase de base_width.
+        Nunca agranda.
+
+        Escalaba siempre para dejar el ANCHO en base_width, aunque lo que pasara el límite
+        fuera el alto: un banner vertical de 1080x1920 (límite 1500) quedaba en 1500x2666 y
+        un logo de 400x800 (límite 500) en 500x1000, agrandados en vez de achicados y con el
+        alto todavía por encima del límite. Ahora se escala por el lado largo.
+        """
 
         img = Image.open(image_field)
 
-        if img.size[1] > base_width or img.size[0] > base_width:
+        lado_largo = max(img.size)
+        if lado_largo > base_width:
 
-            wpercent = (base_width / float(img.size[0]))
-            hsize = int((float(img.size[1]) * float(wpercent)))
+            ratio = base_width / float(lado_largo)
+            nuevo_tamano = (max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio)))
 
-            print (base_width, hsize)
-            img = img.resize((base_width, hsize), Image.LANCZOS)
+            img = img.resize(nuevo_tamano, Image.LANCZOS)
 
             output = self.save_image(img)
             output.seek(0)
