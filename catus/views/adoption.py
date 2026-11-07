@@ -72,9 +72,7 @@ class PreAdoptionView(BaseView):
 
         animals = json.dumps(animals)
         context["animals"] = animals
-        context["honeypot_field"] = HONEYPOT_FIELD
-        context["form_max_bytes"] = FORM_MAX_BYTES
-        context["form_max_mb"] = FORM_MAX_BYTES // (1024 * 1024)
+        context.update(self._script_context())
 
         form = self._get_form()
         animal_id = self.request.GET.get("id")
@@ -112,6 +110,27 @@ class PreAdoptionView(BaseView):
 
         return BaseView.render_to_response(self, context)
 
+    def _script_context(self):
+        """Lo que el <script> de preadoption.html escribe tal cual dentro del JS.
+
+        Tiene que estar en todas las respuestas, también en las del envío ("formulario
+        enviado" y las de error): ahí faltaba form_max_bytes, el script quedaba como
+        "if (total > )" y el navegador lo descartaba entero. Con él se perdía el
+        clearForm(), y las respuestas del adoptante (datos personales) seguían en el
+        localStorage y volvían a llenar el formulario en la próxima visita.
+        """
+
+        return {
+            "honeypot_field": HONEYPOT_FIELD,
+            "form_max_bytes": FORM_MAX_BYTES,
+            "form_max_mb": FORM_MAX_BYTES // (1024 * 1024),
+        }
+
+    def _post_response(self, context):
+
+        context.update(self._script_context())
+        return BaseView.render_to_response(self, context)
+
     def _get_form(self):
 
         form = Form.objects.filter(slug=self.form_slug).first()
@@ -147,11 +166,11 @@ class PreAdoptionView(BaseView):
 
         # To a bot it looks like any other submission: nothing is stored or mailed.
         if self.request.POST.get(HONEYPOT_FIELD):
-            return BaseView.render_to_response(self, {"form": form, "is_post": True, "success": True})
+            return self._post_response({"form": form, "is_post": True, "success": True})
 
         rejected = self._rejected()
         if rejected:
-            return BaseView.render_to_response(self, {"form": form, "is_post": True, "success": False, "errors": rejected})
+            return self._post_response({"form": form, "is_post": True, "success": False, "errors": rejected})
 
         post = getattr(self.request, "POST", None)
         # Phone photos are shrunk before they are stored; see shrink_uploads.
@@ -171,7 +190,7 @@ class PreAdoptionView(BaseView):
         if form_for_form.errors:
             response_context["errors"] = form_for_form.errors
             response_context["success"] = False
-            return BaseView.render_to_response(self, response_context)
+            return self._post_response(response_context)
 
         form_entry = form_for_form.save()
 
@@ -210,7 +229,7 @@ class PreAdoptionView(BaseView):
 
         self.send_email(form_entry, form_for_form, animal_name, estado)
         response_context["success"] = True
-        return BaseView.render_to_response(self, response_context)
+        return self._post_response(response_context)
 
     def find_form_same_person(self, form_entry, persona_nombre, tipo):
 

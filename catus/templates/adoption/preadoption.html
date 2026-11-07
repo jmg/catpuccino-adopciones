@@ -870,7 +870,11 @@
             $.each(this.files, function(i, file) { total += file.size; });
         });
 
-        if (total > {{form_max_bytes}}) {
+        // Si una respuesta no trae el límite, el chequeo se saltea (el servidor igual
+        // controla el peso) en vez de dejar la comparación sin número: ese error de
+        // sintaxis tira abajo todo este script, incluido el borrado de las respuestas
+        // guardadas en "formulario enviado".
+        if (total > {{ form_max_bytes|default:"Infinity" }}) {
             alert("Los archivos adjuntos pesan demasiado: el máximo es de {{form_max_mb}} MB en total. Probá con menos fotos o con fotos más livianas.");
             return false;
         }
