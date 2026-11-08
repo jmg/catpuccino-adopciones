@@ -1,6 +1,9 @@
+import os
 import unicodedata
+import uuid
 from catus.models import Animal, AnimalImage, CatusUser, Contrato, ContratoPersona, EstadoFormulario
 from catus.utils import clean_crop
+from django.core.files.uploadedfile import UploadedFile
 from django.forms import ModelForm, Form, ChoiceField, ImageField, PasswordInput, CharField, DateField, EmailField
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, ButtonHolder, Submit, Field
@@ -184,6 +187,17 @@ class AnimalImageForm(ModelForm):
             )
         finally:
             foto.file.seek(0)
+
+        #El nombre lo pone el navegador y es con el que Django guarda la foto (optimize() la
+        #renombra recién después). Django toma como extensión todo lo que sigue al PRIMER
+        #punto y, si no entra en los 100 caracteres de la columna, acorta sólo lo de antes:
+        #una foto llamada como la descripción del animal, con un punto en la primera oración,
+        #no entraba ni así. Era un 400 con el animal ya guardado y sin fotos. Sólo a la que
+        #se está subiendo: la ya guardada es la misma FieldFile del modelo (y hasattr la abre,
+        #así que llega hasta acá), y cambiarle el nombre lo cambia en la base sin mover el
+        #archivo.
+        if isinstance(foto, UploadedFile):
+            foto.name = f"{uuid.uuid4()}{os.path.splitext(foto.name)[1]}"
 
         return foto
 
