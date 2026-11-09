@@ -5,6 +5,7 @@ import requests
 from PIL import Image
 from datetime import timedelta
 from django.conf import settings
+from django.db import transaction
 from catus.services.duplicados import DuplicadosService
 from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
@@ -357,89 +358,98 @@ class EditView(LoginRequiredMixin, BaseView):
                 cambiaron_las_fotos = False
                 fotos_a_recomponer = []
 
-                animal = animal_form.save(commit=False)
+                #Todo o nada: el animal, sus fotos (las subidas y las que se bajan de Instagram),
+                #su optimización y su recorte se guardan juntos. Antes el animal se guardaba primero
+                #y, si después fallaba una foto (ADOPCIONES-3SVEZ, un disco lleno, una foto que no
+                #se pudo procesar), quedaba publicado a medias, sin fotos y sin revisión, y el
+                #reintento del rescatista chocaba con el control de duplicados. Lo que sale para
+                #afuera (la revisión con IA, la aprobación, el agendado de Instagram, los mails)
+                #corre después, con esto ya confirmado. Los archivos que se alcanzaron a escribir
+                #no vuelven atrás, pero no queda nada en la base que apunte a ellos.
+                with transaction.atomic():
+                    animal = animal_form.save(commit=False)
 
-                #el animal sigue siendo de quien lo cargó: si alguien del equipo entra a
-                #corregirle un dato no se lo queda, ni lo saca del listado del rescatista
-                #ni de los mails de sus formularios
-                if animal.cargado_por_id is None:
-                    animal.cargado_por = self.request.user
-                if self.request.POST.get("ig_url_for_chatgpt"):
-                    animal.ig_url_for_chatgpt = self.request.POST.get("ig_url_for_chatgpt")
-                if self.request.POST.get("chatgpt_response"):
-                    animal.chatgpt_response = self.request.POST.get("chatgpt_response")
+                    #el animal sigue siendo de quien lo cargó: si alguien del equipo entra a
+                    #corregirle un dato no se lo queda, ni lo saca del listado del rescatista
+                    #ni de los mails de sus formularios
+                    if animal.cargado_por_id is None:
+                        animal.cargado_por = self.request.user
+                    if self.request.POST.get("ig_url_for_chatgpt"):
+                        animal.ig_url_for_chatgpt = self.request.POST.get("ig_url_for_chatgpt")
+                    if self.request.POST.get("chatgpt_response"):
+                        animal.chatgpt_response = self.request.POST.get("chatgpt_response")
 
-                animal.save()
+                    animal.save()
 
-                image_form_set.instance = animal
+                    image_form_set.instance = animal
 
-                if formset_ok:
+                    if formset_ok:
 
-                    image_form_set.save()
+                        image_form_set.save()
 
-                    #borrar una foto también cambia lo que se revisó
-                    if image_form_set.deleted_forms:
-                        cambiaron_las_fotos = True
+                        #borrar una foto también cambia lo que se revisó
+                        if image_form_set.deleted_forms:
+                            cambiaron_las_fotos = True
 
-                    #optimize() reescribe el archivo con otro nombre, así que solo corre
-                    #sobre las fotos que realmente se subieron: si no, editarle la edad a un
-                    #animal recomprimía y renombraba todas sus fotos, y las URLs que ya
-                    #habían salido por mail quedaban rotas
-                    for form in image_form_set.forms:
+                        #optimize() reescribe el archivo con otro nombre, así que solo corre
+                        #sobre las fotos que realmente se subieron: si no, editarle la edad a un
+                        #animal recomprimía y renombraba todas sus fotos, y las URLs que ya
+                        #habían salido por mail quedaban rotas
+                        for form in image_form_set.forms:
 
-                        animal_image = form.instance
+                            animal_image = form.instance
 
-                        if form.cleaned_data.get("DELETE") or animal_image.pk is None:
-                            continue
+                            if form.cleaned_data.get("DELETE") or animal_image.pk is None:
+                                continue
 
-                        #el recorte también va dibujado: es el cuadrado que se publica, así
-                        #que corregir el encuadre sin rearmar la imagen no cambia el posteo
-                        if set(form.changed_data) & set(AnimalImageForm.CROP_FIELDS):
+                            #el recorte también va dibujado: es el cuadrado que se publica, así
+                            #que corregir el encuadre sin rearmar la imagen no cambia el posteo
+                            if set(form.changed_data) & set(AnimalImageForm.CROP_FIELDS):
+                                fotos_a_recomponer.append(animal_image)
+
+                            if "image" not in form.changed_data:
+                                continue
+
+                            ImageService().optimize(animal_image.image, max_width=MAX_ANCHO_FOTO)
+                            self.set_suggested_crop(animal_image)
+
+                            #la foto ya no es la que se compuso para Instagram
                             fotos_a_recomponer.append(animal_image)
 
-                        if "image" not in form.changed_data:
+                    for image_url in instagram_images:
+                        contenido = bajar_foto_de_instagram(image_url)
+                        if contenido is None:
                             continue
 
+                        img_temp = NamedTemporaryFile(delete=True, dir=os.path.join(settings.MEDIA_ROOT, "gallery"))
+                        img_temp.write(contenido)
+                        img_temp.flush()
+
+                        animal_image = AnimalImage.objects.create(animal=animal)
+                        # By its name: Django 3.2+ refuses a path (the file lands in the
+                        # same folder, MEDIA_ROOT/gallery, as before).
+                        animal_image.image.save(os.path.basename(img_temp.name), File(img_temp))
+                        animal_image.save()
                         ImageService().optimize(animal_image.image, max_width=MAX_ANCHO_FOTO)
                         self.set_suggested_crop(animal_image)
 
-                        #la foto ya no es la que se compuso para Instagram
-                        fotos_a_recomponer.append(animal_image)
+                        #estas fotos se crean fuera del formset, así que no aparecen en sus
+                        #forms ni marcan has_changed(): sin esto se podían reemplazar todas
+                        #las fotos sin tocar el texto y la publicación se quedaba con el
+                        #"OK" de la revisión vieja
+                        cambiaron_las_fotos = True
 
-                for image_url in instagram_images:
-                    contenido = bajar_foto_de_instagram(image_url)
-                    if contenido is None:
-                        continue
+                        os.remove(img_temp.name)
 
-                    img_temp = NamedTemporaryFile(delete=True, dir=os.path.join(settings.MEDIA_ROOT, "gallery"))
-                    img_temp.write(contenido)
-                    img_temp.flush()
+                    #El nombre, la edad y el sexo van dibujados adentro de la imagen del
+                    #posteo, así que si cambia alguno hay que rearmar las de todas las fotos:
+                    #si no, el animal sale publicado con los datos que tenía cuando se armó.
+                    #El tipo no se dibuja hoy, pero va en la lista igual: es "qué animal es",
+                    #cambiarlo es rarísimo y rearmar de más no le cuesta nada a nadie.
+                    if any(c in animal_form.changed_data for c in ("nombre", "edad", "sexo", "tipo")):
+                        fotos_a_recomponer = list(animal.get_images())
 
-                    animal_image = AnimalImage.objects.create(animal=animal)
-                    # By its name: Django 3.2+ refuses a path (the file lands in the
-                    # same folder, MEDIA_ROOT/gallery, as before).
-                    animal_image.image.save(os.path.basename(img_temp.name), File(img_temp))
-                    animal_image.save()
-                    ImageService().optimize(animal_image.image, max_width=MAX_ANCHO_FOTO)
-                    self.set_suggested_crop(animal_image)
-
-                    #estas fotos se crean fuera del formset, así que no aparecen en sus
-                    #forms ni marcan has_changed(): sin esto se podían reemplazar todas
-                    #las fotos sin tocar el texto y la publicación se quedaba con el
-                    #"OK" de la revisión vieja
-                    cambiaron_las_fotos = True
-
-                    os.remove(img_temp.name)
-
-                #El nombre, la edad y el sexo van dibujados adentro de la imagen del
-                #posteo, así que si cambia alguno hay que rearmar las de todas las fotos:
-                #si no, el animal sale publicado con los datos que tenía cuando se armó.
-                #El tipo no se dibuja hoy, pero va en la lista igual: es "qué animal es",
-                #cambiarlo es rarísimo y rearmar de más no le cuesta nada a nadie.
-                if any(c in animal_form.changed_data for c in ("nombre", "edad", "sexo", "tipo")):
-                    fotos_a_recomponer = list(animal.get_images())
-
-                self.invalidar_imagenes_de_instagram(animal, fotos_a_recomponer)
+                    self.invalidar_imagenes_de_instagram(animal, fotos_a_recomponer)
 
                 #Si cambiaron las fotos o el texto, lo revisado ya no es lo que hay: sin
                 #esto alguien podía cargar un gato de verdad, quedar aprobado, y después
