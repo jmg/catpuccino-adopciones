@@ -81,3 +81,33 @@ class CarruselDeFotosTest(TestCase):
 
                 self.assertLess(codigo.index("slider.pause()"), codigo.index(".lightSlider("))
                 self.assertLess(codigo.index('slider.closest(".lSSlideOuter").remove()'), codigo.index("response.html"))
+
+    def test_una_respuesta_vieja_no_pisa_a_la_nueva(self):
+        """Cambiando rápido el desplegable, las respuestas de /animal/photos/ pueden llegar
+        en otro orden: la del animal anterior pisaba a la del elegido."""
+
+        for vista, animal in self.paginas:
+            with self.subTest(animal=vista.animal_type):
+                codigo = self.mostrar_fotos(vista, animal)
+
+                self.assertIn("var pedido = ++pedidosDeFotos", codigo)
+                self.assertIn("if (pedido !== pedidosDeFotos)", codigo)
+                self.assertLess(codigo.index("if (pedido !== pedidosDeFotos)"), codigo.index("response.html"))
+
+    def test_al_mostrar_el_formulario_pide_las_fotos_del_animal_elegido(self):
+        """showForm() pedía siempre las fotos del animal de la URL (o de ninguno): al tocar
+        "Aceptar y Completar el Formulario" el carrusel mostraba otro animal que el que la
+        persona había elegido en el desplegable, o desaparecía."""
+
+        for vista, animal in self.paginas:
+            with self.subTest(animal=vista.animal_type):
+                request = RequestFactory().get("/pre-adopcion/", {"id": animal.id})
+                request.user = AnonymousUser()
+                response = vista.as_view()(request)
+                response.render()
+
+                mostrar = re.search(r"function showForm\(\) \{.*?\n    \}\n", response.content.decode(), re.S).group(0)
+                codigo = "\n".join(l for l in mostrar.splitlines() if not l.strip().startswith("//"))
+
+                self.assertIn("showAnimalPhotos(isDog, fotosDe)", codigo)
+                self.assertNotIn('showAnimalPhotos(isDog, "{}")'.format(animal.id), codigo)

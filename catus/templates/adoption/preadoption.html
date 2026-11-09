@@ -421,8 +421,14 @@
         $("#adoption-form-container").show();
 
         {% if not is_post and form_type == "preadoption" %}
-        var isDog = {% if animal_type == "perro" %}true{% else %}false{% endif %}
-        showAnimalPhotos(isDog, "{{animal.id}}")
+        // El carrusel se vuelve a armar al mostrar el formulario, con las fotos del último
+        // animal pedido: el de la URL o el que la persona eligió en el desplegable. Antes
+        // pedía siempre las del animal de la URL (o las de ninguno, si se entró sin animal),
+        // y el carrusel pasaba a mostrar otro animal que el elegido, o desaparecía.
+        if (fotosDe) {
+            var isDog = {% if animal_type == "perro" %}true{% else %}false{% endif %}
+            showAnimalPhotos(isDog, fotosDe)
+        }
         {% endif %}
     }
 
@@ -693,6 +699,10 @@
     }
 
     var slider = null;
+    // el animal de las últimas fotos pedidas, y cuántos pedidos van: si cambian rápido el
+    // desplegable, las respuestas pueden llegar en otro orden que los pedidos
+    var fotosDe = null;
+    var pedidosDeFotos = 0;
 
     function showAnimalPhotos(isDog, animalId) {
 
@@ -702,11 +712,20 @@
             var el = $("#id_gatito");
         }
 
+        fotosDe = animalId;
+        var pedido = ++pedidosDeFotos;
+
         var data = {
             "animal_id": animalId,
             "csrfmiddlewaretoken": "{{ csrf_token }}"
         }
         $.post("/animal/photos/", data, function(response) {
+
+            // Llegó tarde: mientras tanto se pidieron las fotos de otro animal. Sin esto, la
+            // respuesta vieja pisaba a la nueva y el carrusel quedaba con el animal anterior.
+            if (pedido !== pedidosDeFotos) {
+                return
+            }
 
             // lightSlider sale sin adjuntar sus métodos cuando el contenedor no existe
             // todavía (pasa al entrar a /pre-adopcion/ sin animal elegido). Sin este
