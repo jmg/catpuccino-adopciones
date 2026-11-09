@@ -336,6 +336,12 @@ class CatusUserForm(ModelForm):
         self.fields["title"].label = _("Título de tu perfil")
         self.fields["description"].label = _("Descripción de tu perfil")
 
+        #El nombre del archivo no se guarda (catus.models.ruta_de_imagen le pone un uuid), así
+        #que no tiene por qué entrar en los 100 caracteres de la columna: con el tope, una
+        #imagen llamada como una descripción larga se rechazaba y había que renombrarla.
+        for campo in ("logo_img", "banner_img"):
+            self.fields[campo].max_length = None
+
     def clean_handle(self):
         """El handle es la URL pública del perfil, así que no puede repetirse.
 

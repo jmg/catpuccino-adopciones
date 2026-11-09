@@ -8,8 +8,28 @@ import random
 from django.db.models import F
 
 import os
+import pathlib
+import re
+import uuid
 import requests
 from django.conf import settings
+
+
+def ruta_de_imagen(instance, filename):
+    """Dónde y con qué nombre se guarda una imagen subida: gallery/<uuid><extensión>.
+
+    El nombre que manda el navegador no se usa. Django 5 toma como extensión todo lo que
+    sigue al PRIMER punto y, si el nombre no entra en los 100 caracteres de la columna,
+    acorta solo lo de antes: una imagen llamada como la descripción del animal, con puntos
+    en el medio, no se podía guardar (ADOPCIONES-3SVEZ). El arreglo del #553 lo cubrió en el
+    formulario del animal; acá queda para toda imagen de los modelos: el banner y el logo
+    del perfil, el admin, y lo que se agregue. Queda la última extensión, en minúscula,
+    cuando es una extensión de verdad.
+    """
+    extension = pathlib.PurePath(filename).suffix.lower()
+    if not re.fullmatch(r"\.[a-z0-9]{1,8}", extension):
+        extension = ""
+    return "gallery/{}{}".format(uuid.uuid4(), extension)
 
 
 class BaseEntity(models.Model):
@@ -236,10 +256,10 @@ class Animal(BaseEntity):
 class AnimalImage(BaseEntity):
 
     animal = models.ForeignKey("Animal", null=True, blank=True, on_delete=models.SET_NULL)
-    image = models.ImageField(upload_to='gallery')
+    image = models.ImageField(upload_to=ruta_de_imagen)
     posicion = models.PositiveIntegerField(null=True, blank=True)
 
-    image_for_instagram = models.ImageField(upload_to='gallery', null=True, blank=True)
+    image_for_instagram = models.ImageField(upload_to=ruta_de_imagen, null=True, blank=True)
     image_layout = models.BooleanField(default=True)
     image_centered = models.BooleanField(default=True)
     image_font_size = models.PositiveIntegerField(default=150)
@@ -360,8 +380,8 @@ class CatusUser(AbstractUser):
     facebook = models.CharField(max_length=255, null=True, blank=True)
     twitter = models.CharField(max_length=255, null=True, blank=True)
 
-    banner_img = models.ImageField(upload_to='gallery', null=True, blank=True, default="static/defaults/banner_bg.png")
-    logo_img = models.ImageField(upload_to='gallery', null=True, blank=True, default="static/defaults/logo.png")
+    banner_img = models.ImageField(upload_to=ruta_de_imagen, null=True, blank=True, default="static/defaults/banner_bg.png")
+    logo_img = models.ImageField(upload_to=ruta_de_imagen, null=True, blank=True, default="static/defaults/logo.png")
 
     automatic_approve = models.BooleanField(default=False)
     no_preguntar_adoptado = models.BooleanField(default=False)
