@@ -10,6 +10,9 @@ from forms_builder.forms import fields
 from forms_builder.forms import settings
 from forms_builder.forms.utils import now, slugify, unique_slug
 
+# El largo de Field.slug (ver el campo).
+SLUG_MAX_LENGTH = 200
+
 
 STATUS_DRAFT = 1
 STATUS_PUBLISHED = 2
@@ -156,8 +159,11 @@ class AbstractField(models.Model):
     """
 
     label = models.CharField(_("Label"), max_length=settings.LABEL_MAX_LENGTH)
-    slug = models.SlugField(_('Slug'), max_length=100, blank=True,
-            default="")
+    # 200 y NULL, como está la columna en la base de producción desde siempre: las
+    # migraciones decían 100, y los slugs largos que ya existen (hasta 195 caracteres,
+    # sacados de preguntas largas) no entraban en una base nueva (staging, tests).
+    slug = models.SlugField(_('Slug'), max_length=SLUG_MAX_LENGTH, blank=True,
+            null=True, default="")
     field_type = models.IntegerField(_("Type"), choices=fields.NAMES)
     required = models.BooleanField(_("Required"), default=True)
     visible = models.BooleanField(_("Visible"), default=True)
@@ -274,7 +280,9 @@ class Field(AbstractField):
         if self.order is None:
             self.order = self.form.fields.count()
         if not self.slug:
-            slug = slugify(self).replace('-', '_')
+            # el slug sale de la pregunta, que puede ser mucho más larga que la columna:
+            # se corta dejando lugar para el sufijo que agrega unique_slug ("-12")
+            slug = slugify(self).replace('-', '_')[:SLUG_MAX_LENGTH - 10]
             self.slug = unique_slug(self.form.fields, "slug", slug)
         super(Field, self).save(*args, **kwargs)
 
