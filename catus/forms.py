@@ -172,10 +172,12 @@ class AnimalImageForm(ModelForm):
 
         foto = self.cleaned_data.get("image")
 
-        #None es "no subieron nada" (el campo puede venir vacío en una fila del formset), y
-        #un ImageFieldFile sin archivo nuevo es la foto que ya estaba guardada: esa ya se
-        #decodificó cuando se subió, y volver a leerla en cada edición sale caro.
-        if not foto or not hasattr(foto, "file"):
+        #None es "no subieron nada" (el campo puede venir vacío en una fila del formset), y lo
+        #que no es una subida es la foto que ya estaba guardada: esa se validó cuando se
+        #subió. Antes se miraba hasattr(foto, "file"), que con la foto guardada ABRE el
+        #archivo: si faltaba en el disco tiraba FileNotFoundError (hasattr no la ataja) y
+        #editar ese animal daba 500; si estaba, la volvía a decodificar en cada edición.
+        if not foto or not isinstance(foto, UploadedFile):
             return foto
 
         try:

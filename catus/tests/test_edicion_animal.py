@@ -86,6 +86,19 @@ class EditarSinTocarFotosTest(TestCase):
 
         self.assertEqual(formset.save(), [], "el recorte guardado hizo que se reescribieran las fotos")
 
+    def test_una_foto_que_falta_en_el_disco_no_rompe_la_edicion(self):
+        """clean_image abría la foto ya guardada para ver si se podía decodificar: si el
+        archivo no estaba en el disco, FileNotFoundError y editar ese animal (aunque fuera
+        solo para cambiarle la edad) daba 500."""
+
+        import os
+        os.remove(self.primera.image.path)
+
+        formset = self.build_formset()
+
+        self.assertTrue(formset.is_valid(), formset.errors or formset.non_form_errors())
+        self.assertEqual(formset.save(), [])
+
     def test_el_recorte_sobrevive_a_guardar_sin_tocarlo(self):
 
         crop = (0.0, 0.25, 1.0, 0.5625)
