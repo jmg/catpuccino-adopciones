@@ -708,12 +708,20 @@
         }
         $.post("/animal/photos/", data, function(response) {
 
-            // lightSlider sale sin adjuntar destroy() cuando el contenedor no existe
+            // lightSlider sale sin adjuntar sus métodos cuando el contenedor no existe
             // todavía (pasa al entrar a /pre-adopcion/ sin animal elegido). Sin este
             // chequeo, la llamada siguiente tiraba TypeError y las fotos no volvían a
             // aparecer en toda la sesión.
-            if (slider && typeof slider.destroy === "function") {
-                slider.destroy()
+            //
+            // Al carrusel viejo no se le llama a destroy(): el de lightSlider 1.1.6 deja
+            // sus slides en null sin cancelar el reacomodo que el loop programa al dar la
+            // vuelta (medio segundo, en resetSlide), y si las fotos llegaban en ese medio
+            // segundo ese timer tiraba TypeError. Se frena y se saca entero de la página,
+            // con los envoltorios que le agrega lightSlider; si quedaba un reacomodo
+            // pendiente, corre sobre nodos sueltos.
+            if (slider && typeof slider.pause === "function") {
+                slider.pause()
+                slider.closest(".lSSlideOuter").remove()
             }
             slider = null
 
