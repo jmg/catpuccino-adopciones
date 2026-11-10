@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
 import json
+import re
 import logging
 import requests
 import urllib
@@ -24,6 +25,83 @@ class FacebookApiService:
 
     #Instagram no acepta más de 10 fotos en un carrusel (ni menos de 2)
     MAX_IMAGENES_POR_POST = 10
+
+    #Y rechaza el post entero si el texto pasa de 2200 caracteres o de 30 hashtags (error
+    #36004/2207010). Con el posteo automático salen los textos de los rescatistas tal cual
+    #los escribieron, y el 2026-11-10 dos de los cinco primeros no salieron por eso.
+    #Se apunta a 2150 y no a 2200: Instagram no dice cómo cuenta, y 50 caracteres menos de
+    #descripción no se notan; un post rechazado, sí.
+    MAX_CARACTERES_TEXTO = 2150
+    MAX_HASHTAGS_TEXTO = 30
+
+    #La línea de guiones de tools/generartexto.txt: arriba queda lo del animal (el
+    #encabezado y la descripción del rescatista), abajo el link al formulario y los hashtags,
+    #que son lo que tiene que salir siempre.
+    SEPARADOR_DEL_TEXTO = re.compile(r"\n-{10,}\n")
+    HASHTAG = re.compile(r"#(?=\w)")
+
+    @classmethod
+    def largo_para_instagram(cls, texto):
+        """El largo contando en UTF-16, donde un emoji ocupa 2: del lado seguro."""
+
+        return len(texto.encode("utf-16-le")) // 2
+
+    @classmethod
+    def recortar_texto(cls, texto, maximo):
+        """Corta el texto en una palabra entera, con "…", para que entre en `maximo`."""
+
+        if cls.largo_para_instagram(texto) <= maximo:
+            return texto
+
+        if maximo < 1:
+            return ""
+
+        usado, hasta = 0, 0
+        for posicion, letra in enumerate(texto):
+            ancho = 2 if ord(letra) > 0xFFFF else 1
+            if usado + ancho > maximo - 1:
+                break
+            usado += ancho
+            hasta = posicion + 1
+
+        corte = texto[:hasta]
+
+        #hasta el último espacio, si no queda demasiado lejos: una palabra de 200 letras no
+        #puede dejar la descripción vacía
+        espacio = max(corte.rfind(" "), corte.rfind("\n"))
+        if espacio > 0 and len(corte) - espacio < 200:
+            corte = corte[:espacio]
+
+        return corte.rstrip() + "…"
+
+    @classmethod
+    def ajustar_texto(cls, texto):
+        """El texto, dentro de los límites de Instagram.
+
+        Lo que se recorta es siempre la parte del rescatista: los hashtags que sobran se
+        quedan como palabras y la descripción se corta al final. El encabezado con el
+        nombre (que es como get_post_for encuentra después el post), el link al formulario
+        y los hashtags de la organización no se tocan.
+        """
+
+        separador = cls.SEPARADOR_DEL_TEXTO.search(texto)
+        if separador:
+            arriba, abajo = texto[:separador.start()], texto[separador.start():]
+        else:
+            arriba, abajo = texto, ""
+
+        sobran = len(cls.HASHTAG.findall(texto)) - cls.MAX_HASHTAGS_TEXTO
+        if sobran > 0:
+            posiciones = [hashtag.start() for hashtag in cls.HASHTAG.finditer(arriba)]
+            for posicion in reversed(posiciones[-sobran:]):
+                arriba = arriba[:posicion] + arriba[posicion + 1:]
+
+        disponible = cls.MAX_CARACTERES_TEXTO - cls.largo_para_instagram(abajo)
+        arriba = cls.recortar_texto(arriba, disponible)
+
+        #si el template cambia y ya no hay separador, o lo de abajo solo no entra, mejor un
+        #post sin el final que ningún post
+        return cls.recortar_texto(arriba + abajo, cls.MAX_CARACTERES_TEXTO)
 
     def __init__(self, token=None, account=None, raw_data=False):
 
@@ -297,6 +375,11 @@ class FacebookApiService:
             ig_text = soup.text
         except:
             pass
+
+        ajustado = cls.ajustar_texto(ig_text)
+        if ajustado != ig_text:
+            logger.info("El texto del animal %s pasaba los límites de Instagram: se recortó la descripción.", animal.id)
+        ig_text = ajustado
 
         #en local se reemplazaba la imagen por una URL fija de otro sitio, pero se
         #publicaba igual en la cuenta real de la organización: probar la integración

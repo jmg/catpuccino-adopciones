@@ -927,3 +927,102 @@ class ReclamoAntesDeTocarGraphTest(PublicacionConGraphFalso):
 
         self.falla_si = None
         self.assertEqual(FacebookApiService.publish(animal, "texto"), "Publicado!")
+
+
+def texto_del_posteo(animal):
+    """El texto como lo arma el cron antes de llamar a publish()."""
+
+    from catus.services.base import BaseService
+    from catus.utils import clean_html
+
+    return clean_html(BaseService().render("tools/generartexto.txt", {"animal": animal}))
+
+
+class TextoDentroDeLosLimitesTest(TestCase):
+    """El 2026-11-10, con el posteo automático recién prendido, dos de los cinco primeros
+    animales no salieron: sus descripciones dejaban el texto en 2588 y 2736 caracteres, e
+    Instagram rechaza el post entero pasados los 2200 (error 36004/2207010). Cada corrida
+    los volvía a intentar, les gastaba un intento y les ocupaba un lugar de la tanda.
+    """
+
+    def setUp(self):
+
+        self.usuario = make_user()
+        self.palabras = ["palabra{}".format(numero) for numero in range(600)]
+
+    def animal(self, datos):
+
+        return make_animal(nombre="Willy", cargado_por=self.usuario, datos=datos)
+
+    def largo(self, texto):
+
+        return FacebookApiService.largo_para_instagram(texto)
+
+    def test_un_texto_que_entra_no_se_toca(self):
+
+        texto = texto_del_posteo(self.animal("<p>Es muy mimosa.</p>"))
+
+        self.assertEqual(FacebookApiService.ajustar_texto(texto), texto)
+
+    def test_la_descripcion_larga_se_recorta_y_lo_demas_queda_entero(self):
+
+        texto = texto_del_posteo(self.animal("<p>{}</p>".format(" ".join(self.palabras))))
+        self.assertGreater(self.largo(texto), FacebookApiService.MAX_CARACTERES_TEXTO)
+
+        ajustado = FacebookApiService.ajustar_texto(texto)
+
+        self.assertLessEqual(self.largo(ajustado), FacebookApiService.MAX_CARACTERES_TEXTO)
+        self.assertIn("¡Willy en Adopción Responsable!", ajustado, "se perdió el encabezado")
+        self.assertIn("adopciones.catpuccino.org", ajustado, "se perdió el link al formulario")
+        self.assertTrue(ajustado.rstrip().endswith("#darenadopcion"), "se perdieron los hashtags")
+
+        #se corta en una palabra entera, no en el medio de una
+        recortada = ajustado.split("…")[0].split()[-1]
+        self.assertIn(recortada, self.palabras)
+
+    def test_los_emojis_cuentan_doble(self):
+
+        texto = texto_del_posteo(self.animal("<p>{}</p>".format("🐱 " * 900)))
+
+        ajustado = FacebookApiService.ajustar_texto(texto)
+
+        self.assertLessEqual(self.largo(ajustado), FacebookApiService.MAX_CARACTERES_TEXTO)
+        self.assertIn("…", ajustado, "no recortó la descripción")
+
+    def test_los_hashtags_de_mas_del_rescatista_quedan_como_palabras(self):
+
+        hashtags = " ".join("#rescate{}".format(numero) for numero in range(12))
+        texto = texto_del_posteo(self.animal("<p>Busca hogar {}</p>".format(hashtags)))
+        self.assertGreater(len(FacebookApiService.HASHTAG.findall(texto)), FacebookApiService.MAX_HASHTAGS_TEXTO)
+
+        ajustado = FacebookApiService.ajustar_texto(texto)
+
+        self.assertEqual(len(FacebookApiService.HASHTAG.findall(ajustado)), FacebookApiService.MAX_HASHTAGS_TEXTO)
+        self.assertIn("rescate11", ajustado, "el hashtag se borró en vez de quedar como palabra")
+        abajo = texto[FacebookApiService.SEPARADOR_DEL_TEXTO.search(texto).start():]
+        self.assertTrue(ajustado.endswith(abajo), "se tocaron los hashtags de la organización")
+
+    def test_sin_el_separador_del_template_igual_entra(self):
+
+        ajustado = FacebookApiService.ajustar_texto(" ".join(self.palabras))
+
+        self.assertLessEqual(self.largo(ajustado), FacebookApiService.MAX_CARACTERES_TEXTO)
+        self.assertTrue(ajustado.endswith("…"))
+
+
+class PublishConTextoLargoTest(PublicacionConGraphFalso):
+    """Lo que llega a Instagram, por el mismo camino que el cron."""
+
+    def test_el_texto_que_llega_a_instagram_entra_en_el_limite(self):
+
+        animal = self.animal_con_fotos(2, datos="<p>{}</p>".format("Es muy dulce y juguetona. " * 150))
+        texto = texto_del_posteo(animal)
+        self.assertGreater(len(texto), FacebookApiService.MAX_CARACTERES_TEXTO)
+
+        self.assertEqual(FacebookApiService.publish(animal, texto), "Publicado!")
+
+        caption = self.carruseles()[0]["caption"]
+        self.assertLessEqual(FacebookApiService.largo_para_instagram(caption), FacebookApiService.MAX_CARACTERES_TEXTO)
+        self.assertTrue(caption.startswith("🐱 ¡Willy en Adopción Responsable!"))
+        animal.refresh_from_db()
+        self.assertTrue(animal.instagram_publicado)
