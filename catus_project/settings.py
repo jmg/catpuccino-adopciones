@@ -217,6 +217,11 @@ STATIC_URL = '/static/'
 FORMS_BUILDER_HELPTEXT_MAX_LENGTH = 1000
 FORMS_BUILDER_LABEL_MAX_LENGTH = 1000
 
+#El desplegable "Gato a adoptar" del formulario público lleva los ids de todos los gatos en
+#adopción separados por coma: con 1000 caracteres entraban unos 190, y el 2026-11-11 ya
+#iba por 918. 5000 alcanzan para casi mil.
+FORMS_BUILDER_CHOICES_MAX_LENGTH = 5000
+
 LOGIN_URL = "/accounts/login/"
 
 LOGIN_REDIRECT_URL = "/accounts/profile/"

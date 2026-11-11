@@ -112,3 +112,45 @@ class SincronizarDesplegableTest(TestCase):
         self.assertEqual(self.campo_gatos.choices, "0")
         self.assertNotIn(",,", self.campo_gatos.choices)
         self.assertFalse(self.campo_gatos.choices.endswith(","))
+
+
+class DesplegableDentroDelAltaTest(TestCase):
+    """El alta guarda el animal y sus fotos adentro de un transaction.atomic(), todo o nada.
+
+    La columna choices era varchar(1000) y la lista de gatos iba por 918 caracteres el
+    2026-11-11. Pasado el límite, MySQL (estricto) rechaza el UPDATE del desplegable y Django
+    deja la transacción del alta marcada para deshacer aunque el signal atrape el error: la
+    consulta siguiente fallaba y quien cargaba cualquier animal veía un 500.
+    """
+
+    def setUp(self):
+        self.form = Form.objects.create(title="Pre Adopción")
+        make_field(self.form, ANIMAL_FIELD_LABELS["G"], choices="0")
+        make_field(self.form, ANIMAL_FIELD_LABELS["P"], choices="0")
+
+    def test_un_error_de_la_base_en_el_desplegable_no_tumba_el_alta(self):
+
+        from unittest import mock
+        from django.db import DataError, transaction
+        from catus.models import Animal
+
+        with mock.patch.object(Field, "_save_table", side_effect=DataError("Data too long for column 'choices'")):
+            with self.assertLogs("catus.signals", level="ERROR"):
+                with transaction.atomic():
+                    gato = make_animal(nombre="Willy", tipo="G", estado="D", aprobado=True)
+
+                    #lo que sigue en el alta después de guardar el animal
+                    gato.nombre = "Willy II"
+                    gato.save()
+
+        self.assertTrue(Animal.objects.filter(nombre="Willy II").exists())
+
+    def test_la_columna_alcanza_para_muchos_gatos(self):
+        """Con 1000 caracteres entraban unos 190 gatos; con ids de 4 cifras, cada uno ocupa 5."""
+
+        self.assertGreaterEqual(Field._meta.get_field("choices").max_length, 5000)
+
+        lista = ",".join(["0"] + [str(1000 + n) for n in range(900)])
+        campo = make_field(self.form, "Otro campo", choices=lista)
+        campo.refresh_from_db()
+        self.assertEqual(campo.choices, lista)

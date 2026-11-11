@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
@@ -60,9 +61,15 @@ def _update_form_field():
     #tampoco puede fallar en silencio, porque si se desincroniza la gente no puede
     #elegir al animal que quiere adoptar. Y un problema con los gatos no tiene por
     #qué dejar desactualizados a los perros.
+    #Cada uno va en su propio savepoint. El alta guarda el animal adentro de un
+    #transaction.atomic() (todo o nada), y un error de la base acá -la lista de gatos que
+    #ya no entra en la columna choices- dejaba esa transacción marcada para deshacer aunque
+    #el except lo atrapara: la consulta siguiente del alta fallaba y quien cargaba el animal
+    #veía un 500. Con el savepoint, lo único que vuelve atrás es el desplegable.
     for tipo in ANIMAL_FIELD_LABELS:
         try:
-            _update_animal_field(tipo)
+            with transaction.atomic():
+                _update_animal_field(tipo)
         except Exception:
             logger.exception("No se pudo actualizar el campo de animales (%s) del formulario", tipo)
 
