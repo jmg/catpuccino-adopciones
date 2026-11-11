@@ -58,7 +58,13 @@ var sliders = [];
 
 function initializeImages() {
 
+  //dispose() de Bootstrap 4 no frena los temporizadores del carrusel: deja corriendo el
+  //setInterval que arranca al pasarle el mouse y el cycle() que programa un toque para
+  //3,5 s después. Al reordenar la portada esos temporizadores le caían a un carrusel ya
+  //liberado (ADOPCIONES-3WS40: "Cannot read properties of null (reading 'interval')").
   sliders.map(function(slider) {
+    slider.pause()
+    clearTimeout(slider.touchTimeout)
     slider.dispose()
   })
 
