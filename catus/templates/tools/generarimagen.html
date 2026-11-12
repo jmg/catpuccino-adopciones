@@ -1429,10 +1429,17 @@
 
         $.post("/tools/publish/", params, function(response) {
 
-            if (response == "Publicado!") {
-                $.info(response);
+            // La respuesta trae el nombre del animal, que lo escribe el rescatista, y
+            // alertify lo mete con innerHTML: un nombre con <img onerror=…> corría en la
+            // sesión del equipo. Se muestra como texto.
+            var texto = $("<div>").text(String(response)).html();
+
+            // Con más de 10 fotos el "Publicado!" viene con un aviso detrás y salía como
+            // error aunque el post se hubiera publicado.
+            if (String(response).indexOf("Publicado!") === 0) {
+                $.info(texto);
             } else {
-                $.alert(response);
+                $.alert(texto);
             }
 
             $(btn).attr('disabled', false);
