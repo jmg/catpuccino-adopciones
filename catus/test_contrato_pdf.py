@@ -68,6 +68,9 @@ class ContractPdfTest(TestCase):
         self.assertEqual(response.content, b"%PDF-1.4 con el DNI")
 
     def test_the_adopters_submit_gets_a_signed_link_and_the_mail_still_carries_the_pdf(self):
+        # The adopter accepts a contract that is not accepted yet: once accepted, another
+        # submit only returns the PDF and mails nobody (test_contrato_una_sola_vez).
+        type(self.contrato).objects.filter(id=self.contrato.id).update(contrato_aceptado=False)
         views = importlib.import_module("catus.views.contrato")
         data = {
             "persona_nombre": "Ana Adoptante", "persona_dni": "30111222", "persona_fecha_nacimiento": "01/01/1990",
