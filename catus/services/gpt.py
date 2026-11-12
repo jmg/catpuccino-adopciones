@@ -210,7 +210,13 @@ class GPTService(BaseService):
 
         return data
 
-    def pull_data_from_ig(self, url):
+    def pull_data_from_ig(self, url, pedido=None):
+        """Los datos del animal que trae un post de Instagram.
+
+        `pedido` es la fila de ChatGTPResponse que la vista anota antes de llamar, la que
+        cuentan los topes: la respuesta se guarda ahí. Antes se creaba una segunda fila, y
+        el tope total del sitio (que cuenta todas) cortaba a las 15 lecturas y no a las 30.
+        """
 
         if not es_url_de_instagram(url):
             raise ValueError("El link tiene que ser de un post de Instagram (https://www.instagram.com/...).")
@@ -239,10 +245,16 @@ class GPTService(BaseService):
         )
         content = response["choices"][0]["message"]["content"]
 
-        ChatGTPResponse.objects.create(
-            ig_url_for_chatgpt=url,
-            chatgpt_response=content,
-        )
+        if pedido is not None:
+            pedido.chatgpt_response = content
+            pedido.save(update_fields=["chatgpt_response"])
+        else:
+            #la columna es de 255: con MySQL estricto una URL más larga daba DataError
+            #después de haberle pagado la llamada a OpenAI
+            ChatGTPResponse.objects.create(
+                ig_url_for_chatgpt=(url or "")[:255],
+                chatgpt_response=content,
+            )
 
         data = self.parse_response(content)
         data["images"] = images

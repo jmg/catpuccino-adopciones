@@ -549,6 +549,51 @@ class TopeDePedidosAInstagramTest(AnimalViewTestCase):
         self.assertLessEqual(settings.GPT_IG_MAX_TOTAL_POR_DIA, 30)
         self.assertGreater(settings.GPT_IG_MAX_TOTAL_POR_DIA, 0)
 
+    def pedir_sin_simular_el_servicio(self, user):
+        """Como pedir(), pero con el GPTService de verdad: solo se simulan Instagram y OpenAI.
+
+        Los otros tests reemplazan pull_data_from_ig entero, y por eso no veían que el
+        servicio creaba su propia fila además de la que anota la vista.
+        """
+
+        from unittest import mock
+
+        from catus.views.animal import PullDataFromIg
+
+        pagina = b'<html><head><meta property="og:title" content="Willy busca hogar"></head><body></body></html>'
+        respuesta = {"choices": [{"message": {"content": '{"nombre": "Willy", "tipo": "gato"}'}}]}
+
+        request = self.factory.get("/animal/pulldatafromig/", {"url": "https://www.instagram.com/p/abc/"})
+        request.user = user
+
+        with mock.patch("catus.services.gpt.descargar", return_value=pagina):
+            with mock.patch("catus.services.gpt.openai.ChatCompletion.create", return_value=respuesta) as create:
+                response = PullDataFromIg.as_view()(request)
+
+        return response, create
+
+    @override_settings(GPT_IG_MAX_POR_DIA=5, GPT_IG_MAX_TOTAL_POR_DIA=3)
+    def test_cada_lectura_cuenta_una_sola_vez_en_el_tope_total(self):
+        """En producción cada lectura dejaba dos filas (la de la vista y la del servicio)
+        y el tope total de 30 cortaba a las 15 (revisión de la semana del 2026-11-12)."""
+
+        import json
+
+        from catus.models import ChatGTPResponse
+
+        for _ in range(3):
+            response, create = self.pedir_sin_simular_el_servicio(self.duenio)
+            self.assertTrue(create.called, "se cortó una lectura antes de llegar al tope total")
+            self.assertEqual(json.loads(response.content.decode())["Nombre"], "Willy")
+
+        self.assertEqual(ChatGTPResponse.objects.count(), 3)
+        self.assertFalse(ChatGTPResponse.objects.filter(pedido_por__isnull=True).exists())
+        self.assertEqual(ChatGTPResponse.objects.exclude(chatgpt_response__isnull=True).count(), 3,
+                         "la respuesta del modelo no quedó guardada en el pedido")
+
+        response, create = self.pedir_sin_simular_el_servicio(self.intruso)
+        self.assertFalse(create.called, "pasado el tope total se llamó igual a OpenAI")
+
 
 class ImagenDeInstagramAlEditarTest(EditarAnimalTestCase):
     """La imagen del posteo lleva el nombre, la edad y el sexo quemados en el pixel.

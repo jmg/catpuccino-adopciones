@@ -691,12 +691,12 @@ class PullDataFromIg(LoginRequiredMixin, BaseView):
 
         #el pedido se anota antes de hacerlo: contando solo los que salen bien alcanza
         #con hacerlos fallar para gastar llamadas sin tope
-        ChatGTPResponse.objects.create(pedido_por=self.request.user, ig_url_for_chatgpt=(url or "")[:255])
+        pedido = ChatGTPResponse.objects.create(pedido_por=self.request.user, ig_url_for_chatgpt=(url or "")[:255])
 
         #depende de Instagram y de la API de OpenAI: cuando algo de eso falla, el
         #rescatista tiene que poder seguir cargando el animal a mano
         try:
-            data = GPTService().pull_data_from_ig(url)
+            data = GPTService().pull_data_from_ig(url, pedido=pedido)
         except ValueError as error:
             return self.json_response({"error": str(error)})
         except Exception as error:
