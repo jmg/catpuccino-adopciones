@@ -186,6 +186,16 @@ class EditView(TemplateView):
 
         else:
             post_context = {}
+
+            #El adoptante acepta una sola vez. Un doble toque, o volver a tocar porque la
+            #descarga no mostró nada (en el navegador de Instagram pasa), eran otro POST
+            #completo: el PDF de nuevo, los tres mails reenviados y el animal marcado como
+            #adoptado otra vez. Ya aceptado, solo se le devuelve el contrato.
+            if self.is_persona and contrato.contrato_aceptado:
+                post_context["status"] = "success"
+                post_context["contrato_url"], _, _ = generate_contrato_pdf(contrato)
+                return HttpResponse(json.dumps(post_context))
+
             if not self.is_persona:
                 contrato_form = ContratoForm(self.request.POST, instance=contrato)
             else:
@@ -233,6 +243,12 @@ class EditView(TemplateView):
 
                     post_context["contrato_url"], pdf_file, pdf_name = generate_contrato_pdf(contrato)
 
+                    #Dos POST que llegan juntos pasan los dos el chequeo de arriba: lo acepta
+                    #el que gana este UPDATE, y solo ese manda los mails y marca el animal.
+                    if not Contrato.objects.filter(id=contrato.id, contrato_aceptado=False).update(contrato_aceptado=True):
+                        return HttpResponse(json.dumps(post_context))
+                    contrato.contrato_aceptado = True
+
                     #Email para el encargado de la adopción
                     subject = "Contrato de adopción responsable completado para: {}".format(gato)
                     content = "{} ha completado el contrato de adopción responsable usando la web de Catpuccino Adopciones.".format(contrato.adoptante.persona_nombre)
@@ -242,9 +258,6 @@ class EditView(TemplateView):
                         "content": pdf_file,
                         "content_type": "application/pdf",
                     }
-
-                    contrato.contrato_aceptado = True
-                    contrato.save()
 
                     def _send_email():
                         send_html_email(subject, content, settings.SEND_MAIL, [gato.cargado_por.email, settings.SEND_MAIL], file=file)
