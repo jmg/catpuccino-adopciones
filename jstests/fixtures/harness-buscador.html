@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness del buscador de la portada</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+    .autocomplete-suggestions { border: 1px solid #999; background: #fff; overflow: auto; }
+    .autocomplete-suggestion { padding: 2px 5px; white-space: nowrap; overflow: hidden; }
+</style>
+</head>
+<body>
+
+<!--
+  El buscador "Por zona o nombre" de la portada (catus/templates/home/index.html) con lo
+  mínimo: la caja con data-zones como la arma views/home.py (zonas unidas con "||", ya
+  escapadas por el template para el atributo) y tres tarjetas con los data-* de
+  adoption/card.html. jQuery, el plugin de autocompletado e index.js se cargan de
+  catus/static, los mismos archivos que sirve el sitio.
+
+  Las zonas son las que un rescatista puede escribir: una con HTML, una solo con números
+  (un código postal) y una que se llama "null".
+-->
+<input data-zones="1636||CABA||&lt;img src=x onerror=&quot;window.__xss=1&quot;&gt;||null" id="filter-zone" type="text" name="zone">
+<select id="filter-type"><option value="all" selected>Todos</option><option value="G">Gatos</option><option value="P">Perros</option></select>
+<select id="filter-sort"><option value="">Ordenar</option><option value="asc">Más viejos</option><option value="desc">Más nuevos</option></select>
+
+<div id="animal-list" data-cols="12">
+  <div class="animal-card col-md-12" data-id="1">
+    <div class="post-preview" data-zone="1636" data-name="Uno" data-type="G"></div>
+  </div>
+  <div class="animal-card col-md-12" data-id="2">
+    <div class="post-preview" data-zone="CABA" data-name="2024" data-type="P"></div>
+  </div>
+  <div class="animal-card col-md-12" data-id="3">
+    <div class="post-preview" data-zone="null" data-name="Tres" data-type="G"></div>
+  </div>
+</div>
+<div id="cargar-mas-container"><button id="cargar-mas">Cargar más</button><span id="cargar-mas-cuenta"></span></div>
+
+<script src="/static/vendor/jquery/jquery.min.js"></script>
+<script src="/static/vendor/bootstrap/js/bootstrap.min.js"></script>
+<script src="/static/js/jquery.autocomplete.min.js"></script>
+<script src="/static/js/index.js"></script>
+</body>
+</html>

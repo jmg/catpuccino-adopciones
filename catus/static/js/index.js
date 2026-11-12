@@ -188,13 +188,50 @@ function scrollToAnimals() {
   }, 250);
 }
 
+function textoDelAtributo(el, nombre) {
+
+  var valor = el ? el.getAttribute(nombre) : null
+  return valor == null ? "" : String(valor)
+}
+
+function escaparHtml(texto) {
+
+  return String(texto)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+// Las sugerencias del buscador son las zonas que escribieron los rescatistas. El plugin
+// (jquery.autocomplete 1.4.11) las mete con .html() y, con la caja vacía, sin escapar:
+// una zona con <img onerror=…> corría en el navegador de cualquiera que tocara "Buscar",
+// el equipo incluido. Acá se escapa siempre, y lo que coincide se resalta sobre el texto
+// ya escapado.
+function sugerenciaEscapada(suggestion, currentValue) {
+
+  var valor = String(suggestion.value)
+  var buscado = String(currentValue || "")
+  var desde = buscado ? valor.toLowerCase().indexOf(buscado.toLowerCase()) : -1
+
+  if (desde === -1) {
+    return escaparHtml(valor)
+  }
+
+  var hasta = desde + buscado.length
+  return escaparHtml(valor.slice(0, desde)) + "<strong>" + escaparHtml(valor.slice(desde, hasta)) + "</strong>" + escaparHtml(valor.slice(hasta))
+}
+
 function _filter(zone, type) {
 
   zone = zone.toLowerCase()
 
   $(".post-preview").each(function() {
 
-    var filterZone = $(this).data("zone").toLowerCase().indexOf(zone) !== -1 || $(this).data("name").toLowerCase().indexOf(zone) !== -1
+    //attr y no data(): data() convierte "1636" en número y "null" en null, y ahí
+    //toLowerCase() tiraba un TypeError que dejaba sin andar el buscador y el filtro
+    var filterZone = textoDelAtributo(this, "data-zone").toLowerCase().indexOf(zone) !== -1 || textoDelAtributo(this, "data-name").toLowerCase().indexOf(zone) !== -1
     var filterType = $(this).data("type") == type || type == "all"
 
     //qué se muestra lo decide paginar(): acá solo se marca si la tarjeta coincide
@@ -309,7 +346,7 @@ $(document).ready(function() {
       scrollToAnimals()
     })
 
-    var zonesData = $("#filter-zone").data("zones")
+    var zonesData = textoDelAtributo($("#filter-zone")[0], "data-zones")
     if (!!zonesData) {
       var zones = zonesData.split("||").map(function(zone) {
         return { value: zone }
@@ -318,6 +355,7 @@ $(document).ready(function() {
       $("#filter-zone").autocomplete({
         lookup: zones,
         minChars: 0,
+        formatResult: sugerenciaEscapada,
         onSelect: function (suggestion) {
           filterAnimals()
         }
