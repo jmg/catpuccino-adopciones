@@ -1,4 +1,5 @@
 import hashlib
+import html
 import json
 import logging
 import random
@@ -9,6 +10,7 @@ from forms_builder.forms.models import Form, Field, FieldEntry
 from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
+from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
 from catus.services.images import shrink_uploads
 from catus.services import throttle
 from catus.views.contrato import mail_del_adoptante
@@ -86,6 +88,8 @@ class PreAdoptionView(BaseView):
         context["form_type"] = self.form_type
         context["animal_type"] = self.animal_type
         context["is_user"] = True if user_id else False
+        #la persona tiene que saber, antes de mandarlo, que el formulario se comparte
+        context["comparte_con_buenadoptante"] = self.form_type == "preadoption" and BuenAdoptanteService().activo()
 
         if self.form_type == "preadoption":
 
@@ -227,9 +231,44 @@ class PreAdoptionView(BaseView):
         )
         estado.save()
 
+        #BuenAdoptante, antes de que el formulario le llegue a nadie: con 1★ o 2★ se frena.
+        #Si no contesta, el formulario pasa como siempre y el cron lo manda después.
+        if self.form_type == "preadoption":
+            actividad = BuenAdoptanteService().registrar_solicitud(estado)
+            if actividad is not None and actividad.bloqueo:
+                estado.estado = "B"
+                estado.save(update_fields=["estado"])
+                self.avisar_bloqueo(estado, actividad, animal_name)
+                response_context["success"] = False
+                response_context["bloqueado"] = True
+                return self._post_response(response_context)
+
         self.send_email(form_entry, form_for_form, animal_name, estado)
         response_context["success"] = True
         return self._post_response(response_context)
+
+    def avisar_bloqueo(self, estado, actividad, animal_name):
+        """Al equipo, no al rescatista: el formulario frenado lo revisa el equipo."""
+
+        #get_animal devuelve el Animal o, si no lo encuentra, el nombre que se escribió
+        animal_name = str(animal_name) if animal_name else "sin animal"
+        calificacion = CALIFICACIONES.get(actividad.nivel, "sin dato")
+        subject = "Formulario frenado por BuenAdoptante ({}): {}".format(calificacion, animal_name)
+        content = (
+            "<p>Un formulario de pre-adopción para <b>{animal}</b> no se le mandó al rescatista: "
+            "BuenAdoptante califica a la persona como <b>{calificacion}</b>.</p>"
+            "<p>Formulario: <a href='https://{host}/formularios/{hash}/'>https://{host}/formularios/{hash}/</a><br>"
+            "Perfil en BuenAdoptante: <a href='{perfil}'>{perfil}</a></p>"
+            "<p>Si te parece un error: en el formulario pasalo a \"No asignado\" (así aparece en el panel del "
+            "rescatista) y mandale el link.</p>"
+        ).format(
+            animal=html.escape(animal_name), calificacion=calificacion, host=settings.HOST,
+            hash=estado.hash, perfil=html.escape(actividad.perfil_url or "-"),
+        )
+        try:
+            send_html_email(subject, content, settings.SEND_MAIL, [settings.SEND_MAIL])
+        except Exception as e:
+            logger.warning("No se pudo avisar del formulario frenado %s: %s", estado.id, type(e).__name__)
 
     def find_form_same_person(self, form_entry, persona_nombre, tipo):
 

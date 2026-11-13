@@ -265,7 +265,7 @@
                         {{ form.button_text|safe }} <i class="fa fa-paper-plane ml-2"></i>
                     </button>
                     <small class="d-block text-muted mt-3">
-                        Al enviar el formulario aceptás los <a href="/terminos/" target="_blank">Términos y condiciones</a> y la <a href="/privacidad/" target="_blank">Política de privacidad</a>. Tus datos los recibe quien publicó al animal y el equipo de Catpuccino Adopciones.
+                        Al enviar el formulario aceptás los <a href="/terminos/" target="_blank">Términos y condiciones</a> y la <a href="/privacidad/" target="_blank">Política de privacidad</a>. Tus datos los recibe quien publicó al animal y el equipo de Catpuccino Adopciones.{% if comparte_con_buenadoptante %} También se comparten con <a href="https://buenadoptante.org" target="_blank" rel="noopener">BuenAdoptante</a>, el registro de adoptantes que usan los rescates, para consultar antecedentes de adopción.{% endif %}
                     </small>
                 </div>
 
@@ -284,6 +284,21 @@
             <div id="response-text" class="alert alert-success" role="alert">
                 {{form.response}}
                 <br><br>
+
+                <div class="text-center">
+                    <img src="/static/logo_2.png" style="width: 250px;">
+                    <br><br>
+                    Atte. Equipo de Catpuccino Adopciones
+                </div>
+            </div>
+            {% elif bloqueado %}
+
+            {% comment %}
+            BuenAdoptante califica a la persona con 1★ o 2★. El mensaje no dice por qué ni
+            nombra a BuenAdoptante: el formulario lo revisa el equipo (ver avisar_bloqueo).
+            {% endcomment %}
+            <div id="response-text-bloqueado" class="alert alert-secondary" role="alert">
+                No pudimos recibir tu formulario. Si creés que se trata de un error, escribinos a <a href="mailto:catpuccino.ok@gmail.com">catpuccino.ok@gmail.com</a>.
 
                 <div class="text-center">
                     <img src="/static/logo_2.png" style="width: 250px;">
@@ -351,7 +366,7 @@
 
         }, true);
 
-        {% if is_post and success %}
+        {% if is_post and success or is_post and bloqueado %}
             try {
                 clearForm();
             } catch(e) {}

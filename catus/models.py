@@ -7,6 +7,7 @@ from django.utils import timezone
 import random
 from django.db.models import F
 
+import json
 import os
 import pathlib
 import re
@@ -110,6 +111,10 @@ class Animal(BaseEntity):
     instagram_error = models.TextField(null=True, blank=True)
 
     mail_preguntar_adopcion_enviado = models.BooleanField(default=False)
+
+    #el panel del rescatista pregunta "¿se adoptó?" por los animales con formularios
+    #que siguen publicados; "Todavía no" lo deja de preguntar hasta esta fecha
+    pregunta_adopcion_hasta = models.DateTimeField(null=True, blank=True)
 
     custom_link = models.CharField(max_length=255, null=True, blank=True)
 
@@ -303,6 +308,9 @@ class EstadoFormulario(BaseEntity):
         ("D", "Descartado"),
         ("U", "Duplicado"),
         ("T", "Transitado"),
+        #BuenAdoptante calificó a la persona con 1★ o 2★: el formulario no le llega al
+        #rescatista, solo lo ve el equipo (ver services/buenadoptante.py)
+        ("B", "Bloqueado por BuenAdoptante"),
     )
 
     fecha_ingreso = models.DateTimeField(null=True, blank=True)
@@ -362,6 +370,8 @@ class EstadoFormulario(BaseEntity):
             return "light"
         elif self.estado == "U":
             return "warning"
+        elif self.estado == "B":
+            return "dark"
 
 
 class CatusUser(AbstractUser):
@@ -610,3 +620,69 @@ class RevisionIALlamada(BaseEntity):
         #se hace por este índice y no barriendo las llamadas de toda la historia.
         #indexes y no index_together, que Django 5.1 sacó (0035 renombra el que creó 0033)
         indexes = [models.Index(fields=["pedido_por", "created_at"], name="catus_revia_pedido_fecha_idx")]
+
+
+class ActividadBuenAdoptante(BaseEntity):
+    """Lo que se le manda a BuenAdoptante (buenadoptante.org), el registro de adoptantes
+    que comparten los rescates: una solicitud por cada formulario de pre-adopción y una
+    adopción cuando se concreta. Ver catus/services/buenadoptante.py.
+
+    Cada fila es un envío con su `external_id`, que BuenAdoptante usa para no registrar
+    dos veces lo mismo: un reintento con el mismo id devuelve la respuesta original. Si
+    BuenAdoptante no contesta, la fila queda pendiente ("P") y la manda el cron
+    enviar_buenadoptante. Lo que devolvió (calificación, marcas, alertas, perfil) queda
+    acá para mostrárselo al rescatista.
+    """
+
+    TIPOS = (
+        ("adoption_request", "Solicitud de adopción"),
+        ("adoption", "Adopción"),
+    )
+
+    ESTADOS = (
+        ("P", "Pendiente"),
+        ("OK", "Enviada"),
+        ("E", "Rechazada"),
+    )
+
+    estado_formulario = models.ForeignKey("EstadoFormulario", null=True, blank=True, on_delete=models.SET_NULL)
+    animal = models.ForeignKey("Animal", null=True, blank=True, on_delete=models.SET_NULL)
+
+    tipo = models.CharField(max_length=20, choices=TIPOS)
+    external_id = models.CharField(max_length=100, unique=True)
+    estado = models.CharField(max_length=2, choices=ESTADOS, default="P")
+
+    intentos = models.PositiveIntegerField(default=0)
+    ultimo_intento = models.DateTimeField(null=True, blank=True)
+    #el motivo del último fallo, para el equipo (sin datos de la persona)
+    error = models.CharField(max_length=255, null=True, blank=True)
+
+    #lo que contestó BuenAdoptante
+    match = models.CharField(max_length=20, null=True, blank=True)
+    #risk.worstRating.ratingLevel: la peor calificación de todos los perfiles que
+    #coincidieron (0 sin calificar, 1 peligroso ... 5 excelente)
+    nivel = models.PositiveSmallIntegerField(null=True, blank=True)
+    marcas = models.TextField(null=True, blank=True)
+    alertas = models.TextField(null=True, blank=True)
+    perfil_url = models.CharField(max_length=255, null=True, blank=True)
+    activity_id = models.CharField(max_length=64, null=True, blank=True)
+
+    #el formulario se frenó por esta respuesta
+    bloqueo = models.BooleanField(default=False)
+    #a un formulario que ya había llegado, el reintento le encontró 1★ o 2★: se avisó
+    avisado = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [models.Index(fields=["estado", "ultimo_intento"], name="catus_ba_estado_intento_idx")]
+
+    def get_marcas(self):
+        try:
+            return json.loads(self.marcas or "[]")
+        except ValueError:
+            return []
+
+    def get_alertas(self):
+        try:
+            return json.loads(self.alertas or "[]")
+        except ValueError:
+            return []

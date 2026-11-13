@@ -39,7 +39,7 @@ class IndexView(BaseView):
             context["forms_counts"] = EstadoFormulario.objects.filter(
                 gato__cargado_por=self.request.user,
                 gato__estado="D",
-            ).count()
+            ).exclude(estado="B").count()
 
         return BaseView.render_to_response(self, context)
 

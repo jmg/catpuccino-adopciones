@@ -5,6 +5,125 @@
 {% block css %}
 {{ block.super }}
 <style>
+    /* "¿Quién los adoptó?": la pregunta tiene que verse al entrar, antes que todo lo demás */
+    .pregunta-adopcion {
+        background: #fbf6ff;
+        border: 2px solid var(--primary-color);
+        border-radius: 14px;
+        padding: 18px 20px 8px;
+        margin-bottom: 20px;
+    }
+
+    .pregunta-adopcion-cabecera {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 10px;
+    }
+
+    .pregunta-adopcion-icono {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--primary-color);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+    }
+
+    .pregunta-adopcion-titulo {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--primary-dark);
+        margin: 2px 0 4px;
+    }
+
+    .pregunta-adopcion-texto {
+        margin: 0;
+        color: #4a4a5a;
+    }
+
+    .pregunta-adopcion-fila {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 16px;
+        padding: 12px 0;
+        border-top: 1px solid rgba(138, 43, 226, 0.15);
+    }
+
+    .pregunta-adopcion-nombre {
+        font-weight: 700;
+        margin-right: 4px;
+    }
+
+    .pregunta-adopcion-estado {
+        color: #4a4a5a;
+    }
+
+    .pregunta-adopcion-acciones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .elegir-adoptante {
+        text-align: left;
+    }
+
+    .elegir-adoptante-lista {
+        max-height: 45vh;
+        overflow-y: auto;
+        margin: 10px 0 4px;
+    }
+
+    .elegir-adoptante-item {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 10px 8px;
+        border-radius: 8px;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .elegir-adoptante-item:hover {
+        background: #f4ecfc;
+    }
+
+    .elegir-adoptante-item input {
+        margin-top: 4px;
+    }
+
+    .elegir-adoptante-item small {
+        display: block;
+        color: #6a6a7a;
+    }
+
+    .elegir-adoptante-otra {
+        border-top: 1px solid #eee;
+    }
+
+    .elegir-adoptante-vacio {
+        color: #6a6a7a;
+        padding: 8px;
+        margin: 0;
+    }
+
+    @media (max-width: 576px) {
+        .pregunta-adopcion {
+            padding: 14px 14px 6px;
+        }
+
+        .pregunta-adopcion-acciones {
+            width: 100%;
+        }
+    }
+
     .dashboard-container {
         background-color: var(--white);
         border-radius: 15px;
@@ -623,6 +742,49 @@
 {% block content %}
 
 <div class="container dashboard-container">
+{% if adoptados_sin_adoptante or animales_por_confirmar %}
+{% comment %}
+Casi nadie marca la adopción en el sitio ni dice quién adoptó: se pregunta al entrar, arriba
+de todo (ProfileView.adoptados_sin_adoptante y animales_por_confirmar). Elegir a la persona
+deja el animal vinculado a su formulario y registra la adopción en BuenAdoptante.
+{% endcomment %}
+<div id="pregunta-adopcion" class="pregunta-adopcion">
+    <div class="pregunta-adopcion-cabecera">
+        <span class="pregunta-adopcion-icono"><i class="fa fa-heart"></i></span>
+        <div>
+            <h2 class="pregunta-adopcion-titulo">¿Quién los adoptó?</h2>
+            <p class="pregunta-adopcion-texto">Contanos quién adoptó a cada uno: el animal queda vinculado a su formulario y la adopción queda registrada.</p>
+        </div>
+    </div>
+
+    {% for animal in adoptados_sin_adoptante %}
+    <div class="pregunta-adopcion-fila" id="pregunta-adopcion-{{animal.id}}">
+        <div class="pregunta-adopcion-animal">
+            <span class="pregunta-adopcion-nombre">{{animal.nombre}}</span>
+            <span class="pregunta-adopcion-estado">fue adoptad{% if animal.sexo == "H" %}a{% else %}o{% endif %}. ¿Quién {% if animal.sexo == "H" %}la{% else %}lo{% endif %} adoptó?</span>
+        </div>
+        <div class="pregunta-adopcion-acciones">
+            <button type="button" class="btn btn-primary btn-sm" onclick="marcarAdoptado('{{animal.id}}', '{{animal.nombre|escapejs}}')">Elegir a la persona</button>
+            <button type="button" class="btn btn-link btn-sm" onclick="posponerPregunta('{{animal.id}}', true)">No mandó formulario</button>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% for animal in animales_por_confirmar %}
+    <div class="pregunta-adopcion-fila" id="pregunta-adopcion-{{animal.id}}">
+        <div class="pregunta-adopcion-animal">
+            <span class="pregunta-adopcion-nombre">{{animal.nombre}}</span>
+            <span class="pregunta-adopcion-estado">sigue {{animal.get_estado_display|lower}}. ¿Ya se adoptó?</span>
+        </div>
+        <div class="pregunta-adopcion-acciones">
+            <button type="button" class="btn btn-primary btn-sm" onclick="marcarAdoptado('{{animal.id}}', '{{animal.nombre|escapejs}}')">Sí, ¿quién lo adoptó?</button>
+            <button type="button" class="btn btn-link btn-sm" onclick="posponerPregunta('{{animal.id}}', false)">Todavía no</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 
     <ul class="nav nav-tabs dashboard-tabs compact-tabs" id="profile-tabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -729,7 +891,7 @@
                             {% endif %}
 
                             {% if animal.estado != "A" %}
-                                    <a id="update-estado-animal-adoptado-{{animal.id}}" onclick="marcarAdoptado('{{animal.id}}')" class="action-btn" data-tippy-content="Marcar como adoptado">
+                                    <a id="update-estado-animal-adoptado-{{animal.id}}" onclick="marcarAdoptado('{{animal.id}}', '{{animal.nombre|escapejs}}')" class="action-btn" data-tippy-content="Marcar como adoptado">
                                 <i class="fa fa-paw"></i>
                                     </a>
                             {% endif %}
@@ -902,6 +1064,7 @@
 {% block js %}
 {{ block.super }}
 <script src="/static/js/tinymce/tinymce.min.js"></script>
+{{ candidatos_json|json_script:"candidatos-por-animal" }}
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
 <!-- Agregar la librería Tippy.js -->
 <script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
@@ -1117,8 +1280,33 @@ function logout() {
     })
 }
 
+// Quienes mandaron formulario por cada animal en adopción o reservado, para elegir quién
+// lo adoptó. Los nombres los escribe cualquiera desde el formulario público.
+var candidatosPorAnimal = {};
+try {
+    candidatosPorAnimal = JSON.parse(document.getElementById("candidatos-por-animal").textContent) || {};
+} catch (e) {}
+
+function escaparHtml(texto) {
+    return String(texto)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function sacarPregunta(animalId) {
+    $("#pregunta-adopcion-" + animalId).remove();
+    if (!$(".pregunta-adopcion-fila").length) {
+        $("#pregunta-adopcion").remove();
+    }
+}
+
 function updateAnimal(animalId, options) {
-    $.post(options.url, {animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, function(response) {
+    var datos = $.extend({animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, options.datos || {});
+    $.post(options.url, datos, function(response) {
+        sacarPregunta(animalId);
         $.info("¡" + response.nombre + options.successMessage)
         $("#" + options.removeUpdateAnimalId + animalId).remove();
         $("#publicado-expired-text-" + animalId).hide()
@@ -1131,14 +1319,96 @@ function updateAnimal(animalId, options) {
     }, 'json')
 }
 
-function marcarAdoptado(animalId) {
+function enviarAdoptado(animalId, formularioId) {
     updateAnimal(animalId, {
         url: "/animal/marcaradoptado/",
+        datos: formularioId ? {estado_formulario_id: formularioId} : {},
         badge: "info",
         successMessage: " marcado como adoptado! Ya no aparecerá en la web.",
         text: "Adoptado",
         removeUpdateAnimalId: "update-estado-animal-adoptado-",
     })
+}
+
+// "¿Quién lo adoptó?": los que mandaron formulario por este animal y un buscador por
+// nombre entre todos los formularios de pre-adopción del rescatista (alguien que pidió
+// un gato puede terminar adoptando otro). Elegir a la persona deja el animal vinculado a
+// su formulario y registra la adopción en BuenAdoptante.
+function itemCandidato(candidato) {
+    var detalle = [];
+    if (candidato.animal) { detalle.push("pidió a " + candidato.animal); }
+    if (candidato.fecha) { detalle.push("formulario del " + candidato.fecha); }
+    return '<label class="elegir-adoptante-item">' +
+        '<input type="radio" name="adoptante" value="' + escaparHtml(candidato.id) + '">' +
+        '<span><b>' + escaparHtml(candidato.persona) + '</b>' +
+        (detalle.length ? '<small>' + escaparHtml(detalle.join(" · ")) + '</small>' : '') +
+        '</span></label>';
+}
+
+function marcarAdoptado(animalId, nombre) {
+    var candidatos = candidatosPorAnimal[String(animalId)] || [];
+    if (!window.Swal) {
+        enviarAdoptado(animalId, "");
+        return;
+    }
+
+    var lista = candidatos.map(itemCandidato).join("") ||
+        '<p class="elegir-adoptante-vacio">Este animal no recibió formularios. Buscá a la persona por su nombre.</p>';
+
+    Swal.fire({
+        title: nombre ? "¿Quién adoptó a " + escaparHtml(nombre) + "?" : "¿Quién lo adoptó?",
+        html:
+            '<div class="elegir-adoptante">' +
+            '<input type="search" id="buscar-adoptante" class="form-control" placeholder="Buscar por nombre entre tus formularios" autocomplete="off">' +
+            '<div id="lista-adoptantes" class="elegir-adoptante-lista">' + lista + '</div>' +
+            '<label class="elegir-adoptante-item elegir-adoptante-otra"><input type="radio" name="adoptante" value="otra"><span>Otra persona (no mandó formulario)</span></label>' +
+            '</div>',
+        showCancelButton: true,
+        confirmButtonText: "Marcar adoptado",
+        cancelButtonText: "Cancelar",
+        focusConfirm: false,
+        didOpen: function() {
+            var espera = null;
+            $("#buscar-adoptante").on("input", function() {
+                var texto = $.trim($(this).val());
+                clearTimeout(espera);
+                if (texto.length < 2) {
+                    $("#lista-adoptantes").html(lista);
+                    return;
+                }
+                espera = setTimeout(function() {
+                    $.getJSON("/animal/buscarformularios/", {animal_id: animalId, q: texto}, function(respuesta) {
+                        var resultados = (respuesta && respuesta.resultados) || [];
+                        $("#lista-adoptantes").html(resultados.length ? resultados.map(itemCandidato).join("")
+                            : '<p class="elegir-adoptante-vacio">No hay formularios con ese nombre.</p>');
+                    });
+                }, 300);
+            });
+        },
+        preConfirm: function() {
+            var elegido = $("input[name=adoptante]:checked").val();
+            if (!elegido) {
+                Swal.showValidationMessage("Elegí a la persona, o \"Otra persona\"");
+                return false;
+            }
+            return elegido;
+        }
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        enviarAdoptado(animalId, result.value === "otra" ? "" : result.value);
+    });
+}
+
+function posponerPregunta(animalId, paraSiempre) {
+    $.post("/animal/posponerpreguntaadopcion/", {
+        animal_id: animalId,
+        para_siempre: paraSiempre ? "1" : "0",
+        csrfmiddlewaretoken: "{{csrf_token}}"
+    }, function() {
+        sacarPregunta(animalId);
+    }, 'json');
 }
 
 function marcarEnAdopcion(animalId) {

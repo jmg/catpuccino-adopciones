@@ -11,6 +11,7 @@ from catus.models import Contrato, Animal, EstadoFormulario, ContratoPersona
 from catus.forms import ContratoPersonaForm
 from catus.services.adoption import AdoptionService
 from catus.services.contrato import *
+from catus.services.buenadoptante import BuenAdoptanteService
 from catus.utils import send_html_email
 
 from django.conf import settings
@@ -309,6 +310,10 @@ class EditView(TemplateView):
 
                     estado_form.estado = "A"
                     estado_form.save()
+
+                    #la adopción firmada va a BuenAdoptante (la manda el cron)
+                    if gato:
+                        BuenAdoptanteService().registrar_adopcion(estado_form, gato)
             else:
                 post_context["errors"] = "{}".format(contrato_form.errors)
                 post_context["status"] = "fail"

@@ -32,6 +32,7 @@ URLS_SOLO_POST = [
     "/animal/marcaradoptado/",
     "/animal/marcarenadopcion/",
     "/animal/marcarexpirado/",
+    "/animal/posponerpreguntaadopcion/",
     "/animal/actualizarfechaingreso/",
     "/animal/addcomment/",
     "/facebook/login/",
