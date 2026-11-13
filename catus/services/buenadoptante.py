@@ -63,6 +63,16 @@ MAX_RESPUESTA = 2000
 #cuántas veces reintenta el cron antes de dejar un envío por imposible
 MAX_INTENTOS = 12
 
+#lo que la gente escribe en Instagram o Facebook cuando no tiene, sin puntos ni guiones bajos,
+#y los pedazos de link que no son una cuenta (instagram.com/p/…, /reel/…, facebook.com/share/…)
+RELLENO_REDES = {
+    "no", "nop", "nope", "ninguno", "ninguna", "notengo", "notiene", "noposeo", "noposee", "nouso", "nousa",
+    "na", "none", "nada", "nadie", "sin", "sinredes", "noredes", "privado", "privada", "xxx", "xxxx", "xxxxx",
+    "asd", "asdf", "asdasd", "test", "prueba", "instagram", "facebook", "ig", "fb",
+    "p", "reel", "reels", "stories", "explore", "accounts", "tv", "share", "sharer", "people", "groups",
+    "pages", "watch", "photo", "photophp", "profilephp", "storyphp", "permalinkphp", "homephp", "lphp",
+}
+
 
 def descripcion_alerta(alerta):
 
@@ -135,13 +145,16 @@ class BuenAdoptanteService:
         if nombre:
             persona["fullName"] = nombre[:200]
 
+        #solo lo que tiene forma de mail: uno cortado o de relleno (no@no.com) no es de nadie
         email = self._buscar(respuestas, "email")
-        if email:
+        usuario = email.split("@")[0].lower() if "@" in email else ""
+        if re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", email) and len(usuario) >= 2 \
+                and re.sub(r"[._]", "", usuario) not in RELLENO_REDES:
             persona["email"] = email[:254]
 
-        celular = self._buscar(respuestas, "celular", "teléfono", "telefono")
+        celular = self._telefono(self._buscar(respuestas, "celular", "teléfono", "telefono"))
         if celular:
-            persona["phone"] = celular[:200]
+            persona["phone"] = celular
 
         partes = [self._buscar(respuestas, "direccion", "dirección"), self._buscar(respuestas, "localidad"), self._buscar(respuestas, "partido")]
         direccion = ", ".join(p for p in partes if p)
@@ -163,24 +176,48 @@ class BuenAdoptanteService:
     def _handle(self, valor, dominio):
         """El usuario de una red, o "" si lo que escribió no es uno.
 
-        Un nombre con espacios ("Ana Pérez") no identifica a nadie en BuenAdoptante, y
-        "no tengo" tampoco: se manda solo lo que parece una cuenta.
+        Un dato que no es de una sola persona no se manda: con un match ambiguo se frena
+        según la peor calificación de todos los que coinciden (decisión del 2026-11-13), así
+        que "xx" en Instagram frenaría a quien sea si alguien mal calificado escribió lo mismo.
+        No es una cuenta: un nombre con espacios ("Ana Pérez"), "no tengo" y parecidos, lo
+        muy corto (Facebook pide 5 caracteres; en Instagram, menos de 3 es relleno), lo que no
+        tiene letras, y los links que no son a un perfil (una publicación, "profile.php").
         """
 
         valor = (valor or "").strip()
         if not valor:
             return ""
 
+        #facebook.com/profile.php?id=100012345: la cuenta es el número
+        numero = re.search(re.escape(dominio) + r"/profile\.php\?(?:[^#\s]*&)?id=(\d{5,20})", valor)
+        if numero:
+            return numero.group(1)
+
         enlace = re.search(re.escape(dominio) + r"/([A-Za-z0-9._]+)", valor)
         if enlace:
             valor = enlace.group(1)
 
         valor = valor.lstrip("@").strip().strip("/")
-        if not re.fullmatch(r"[A-Za-z0-9._]{2,60}", valor):
+        minimo = 5 if dominio == "facebook.com" else 3
+        if not re.fullmatch(r"[A-Za-z0-9._]{%d,60}" % minimo, valor) or not re.search(r"[A-Za-z]", valor):
             return ""
-        if valor.lower() in ("no", "nop", "ninguno", "ninguna", "notengo", "na", "n.a", "none"):
+        if re.sub(r"[._]", "", valor.lower()) in RELLENO_REDES:
             return ""
         return valor
+
+    def _telefono(self, valor):
+        """El celular tal como lo escribió (BuenAdoptante lo normaliza: probado con espacios,
+        +54 9, 011 15, sin código de área, con texto y con dos números), o "" si no es uno:
+        menos de 8 dígitos, todos iguales o 12345678. Por lo mismo que en _handle."""
+
+        valor = (valor or "").strip()
+        digitos = re.sub(r"\D", "", valor)
+        if len(digitos) < 8:
+            return ""
+        ultimos = digitos[-8:]
+        if len(set(ultimos)) == 1 or ultimos in ("12345678", "23456789", "87654321", "98765432"):
+            return ""
+        return valor[:200]
 
     def contenido(self, respuestas):
         """Las respuestas para formContent, dentro del tope de la API."""

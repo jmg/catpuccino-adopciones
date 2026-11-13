@@ -259,6 +259,33 @@ class PersonaDelFormularioTest(TestCase):
         for valor, esperado in casos.items():
             self.assertEqual(servicio._handle(valor, "instagram.com"), esperado, valor)
 
+    def test_un_dato_que_no_es_de_una_sola_persona_no_se_manda(self):
+        """Con un match ambiguo se frena según la peor calificación de todos los que
+        coinciden: "xx" en Instagram o "0000000000" en el celular frenaría a cualquiera que
+        coincida en eso con alguien mal calificado."""
+
+        servicio = BuenAdoptanteService()
+        instagram = {"A": "", "aa": "", "xx": "", "..": "", "12": "", "1234": "", "nada": "", "No.Tengo": "",
+                     "https://www.instagram.com/p/C1abc/": "", "https://instagram.com/reel/xyz": "",
+                     "ana": "ana", "@ana_88": "ana_88"}
+        for valor, esperado in instagram.items():
+            self.assertEqual(servicio._handle(valor, "instagram.com"), esperado, valor)
+
+        facebook = {"Ana": "", "anap": "", "https://facebook.com/profile.php": "", "https://www.facebook.com/share/abc12/": "",
+                    "https://www.facebook.com/profile.php?id=100012345678": "100012345678",
+                    "https://m.facebook.com/profile.php?ref=x&id=100012345678": "100012345678",
+                    "facebook.com/ana.perez.77": "ana.perez.77"}
+        for valor, esperado in facebook.items():
+            self.assertEqual(servicio._handle(valor, "facebook.com"), esperado, valor)
+
+        for valor, esperado in {"no tengo": "", "0": "", "1234567": "", "0000000000": "", "11 1111-1111": "",
+                                "1234 5678": "", "11 4000-7001": "11 4000-7001", "+54 9 11 4000-7001": "+54 9 11 4000-7001"}.items():
+            self.assertEqual(servicio._telefono(valor), esperado, valor)
+
+        for valor, se_manda in {"ana@ejemplo.com": True, "lucia@": False, "lucia": False, "no@no.com": False,
+                                "a@a.com": False, "nada@gmail.com": False, "ANA.P@GMAIL.COM": True}.items():
+            self.assertEqual("email" in servicio.persona({"Nombre y Apellido": "Ana Pérez", "Email": valor}), se_manda, valor)
+
     def test_sin_nada_que_identifique_no_se_manda(self):
 
         from catus.services.buenadoptante import Rechazo
