@@ -34,27 +34,19 @@
             <div class="buenadoptante-section {% if buenadoptante.mala %}buenadoptante-mala{% endif %}">
                 <div class="section-header">
                     <h3><i class="fa fa-user-check mr-2"></i> BuenAdoptante</h3>
-                    {% if buenadoptante.enviado %}
                     <span class="badge {% if buenadoptante.mala %}badge-danger{% elif buenadoptante.nivel >= 4 %}badge-success{% else %}badge-secondary{% endif %}">{{buenadoptante.calificacion}}{% if buenadoptante.nivel %} · {{buenadoptante.nivel}}★{% endif %}</span>
-                    {% endif %}
                 </div>
-                {% if buenadoptante.enviado %}
-                    {% if buenadoptante.mala %}
-                    <p class="mb-2"><b>BuenAdoptante no recomienda entregarle animales a esta persona.</b></p>
-                    {% endif %}
-                    {% for alerta in buenadoptante.alertas %}
-                    <p class="mb-1"><i class="fa fa-exclamation-triangle mr-1"></i> {{alerta}}</p>
-                    {% endfor %}
-                    {% for marca in buenadoptante.marcas %}
-                    <p class="mb-1 text-muted"><i class="fa fa-info-circle mr-1"></i> {{marca}}</p>
-                    {% endfor %}
-                    {% if buenadoptante.perfil_url %}
-                    <a href="{{buenadoptante.perfil_url}}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary mt-2">Ver su perfil en BuenAdoptante</a>
-                    {% endif %}
-                {% elif buenadoptante.pendiente %}
-                    <p class="mb-0 text-muted">Todavía no tenemos la respuesta de BuenAdoptante: se vuelve a consultar en unos minutos.</p>
-                {% else %}
-                    <p class="mb-0 text-muted">No se pudo consultar a esta persona en BuenAdoptante.</p>
+                {% if buenadoptante.mala %}
+                <p class="mb-2"><b>BuenAdoptante no recomienda entregarle animales a esta persona.</b></p>
+                {% endif %}
+                {% for alerta in buenadoptante.alertas %}
+                <p class="mb-1"><i class="fa fa-exclamation-triangle mr-1"></i> {{alerta}}</p>
+                {% endfor %}
+                {% for marca in buenadoptante.marcas %}
+                <p class="mb-1 text-muted"><i class="fa fa-info-circle mr-1"></i> {{marca}}</p>
+                {% endfor %}
+                {% if buenadoptante.perfil_url %}
+                <a href="{{buenadoptante.perfil_url}}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary mt-2">Ver su perfil en BuenAdoptante</a>
                 {% endif %}
             </div>
             {% endif %}

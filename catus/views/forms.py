@@ -78,19 +78,26 @@ class FormView(LoginRequiredMixin, BaseView):
         })
 
     def buenadoptante(self, estado_form):
-        """Lo que dijo BuenAdoptante de esta persona, para el recuadro del formulario."""
+        """Lo que dijo BuenAdoptante de esta persona, para el recuadro del formulario, o None.
+
+        Solo cuando hay algo que mirar: una calificación, o una alerta aunque nadie la haya
+        calificado. "Sin calificar", "todavía no contestó" o "no se pudo consultar" no le dicen
+        nada al rescatista, así que no se muestra el recuadro (pedido del equipo).
+        """
 
         actividad = ActividadBuenAdoptante.objects.filter(estado_formulario=estado_form, tipo="adoption_request").first()
-        if actividad is None:
+        if actividad is None or actividad.estado != "OK":
+            return None
+
+        alertas = [descripcion_alerta(a) for a in actividad.get_alertas()]
+        if not actividad.nivel and not alertas:
             return None
 
         return {
-            "enviado": actividad.estado == "OK",
-            "pendiente": actividad.estado == "P",
             "nivel": actividad.nivel,
             "calificacion": CALIFICACIONES.get(actividad.nivel, "Sin dato"),
             "mala": BuenAdoptanteService().bloquea(actividad.nivel),
-            "alertas": [descripcion_alerta(a) for a in actividad.get_alertas()],
+            "alertas": alertas,
             "marcas": [descripcion_marca(m) for m in actividad.get_marcas()],
             "perfil_url": actividad.perfil_url,
         }

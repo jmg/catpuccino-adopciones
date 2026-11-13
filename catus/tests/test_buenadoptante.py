@@ -484,6 +484,25 @@ class QuienLoAdoptoTest(TestCase):
         self.assertNotIn(self.frenado, list(contexto["estado_forms"]))
         self.assertEqual(self.client.get("/formularios/frenado/").status_code, 403)
 
+    def test_el_recuadro_sale_solo_si_hay_algo_que_mirar(self):
+        """Pedido del equipo: "Sin calificar", "todavía no contestó" o "no se pudo consultar"
+        no le dicen nada al rescatista. Una alerta sí, aunque nadie la haya calificado."""
+
+        alerta = json.dumps([{"type": "too_many_requests", "count": 6, "periodDays": 30}])
+        for estado, nivel, alertas, se_ve in (("OK", 0, "[]", False), ("P", None, "[]", False), ("E", None, "[]", False),
+                                               ("OK", 3, "[]", True), ("OK", 5, "[]", True), ("OK", 0, alerta, True)):
+            with self.subTest(estado=estado, nivel=nivel, alertas=alertas):
+                ActividadBuenAdoptante.objects.all().delete()
+                ActividadBuenAdoptante.objects.create(
+                    estado_formulario=self.ana, animal=self.gato, tipo="adoption_request", external_id="caso-ana",
+                    estado=estado, nivel=nivel, alertas=alertas, marcas="[]", perfil_url="https://ba.test/adopter/p-1")
+
+                pagina = self.client.get("/formularios/ana/").content.decode()
+
+                self.assertEqual("Ver su perfil en BuenAdoptante" in pagina, se_ve)
+                if se_ve and alertas != "[]":
+                    self.assertIn("Pidió adoptar en muchos rescates distintos", pagina)
+
     def test_el_equipo_si_ve_los_frenados(self):
 
         equipo = make_user(email="equipo@catpuccino.test", is_superuser=True, is_staff=True)
