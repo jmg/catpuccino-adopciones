@@ -901,11 +901,31 @@
         setCookie("{{hidden_terms_cookie}}", "0");
     }
 
+    {# El por qué está en views/adoption.py (MENSAJE_NOMBRE). Este script sale también en la página de formulario frenado, que no tiene que nombrar a nadie. #}
+    // Lo mismo que es_nombre_y_apellido (views/adoption.py): al menos dos palabras con
+    // letras y que no sea un mail.
+    function esNombreYApellido(texto) {
+        var palabras = $.trim(texto || "").split(/\s+/).filter(function (p) {
+            return /[A-Za-zÀ-ɏ]/.test(p);
+        });
+        return palabras.length >= 2 && (texto || "").indexOf("@") === -1;
+    }
+
     function prepareSubmit(form) {
 
         // Only a bot leaves this filled in: a browser's autofill must not lose a real
         // adopter's form, and the visitor never sees that it was dropped.
         form.elements["{{honeypot_field}}"].value = "";
+
+        // Antes de enviar: si lo frena el servidor, hay que volver y adjuntar las fotos de nuevo.
+        {% if campo_nombre %}
+        var nombre = form.elements["{{ campo_nombre|escapejs }}"];
+        if (nombre && !esNombreYApellido(nombre.value)) {
+            alert("{{ mensaje_nombre|escapejs }}");
+            nombre.focus();
+            return false;
+        }
+        {% endif %}
 
         var total = 0;
         $(form).find("input[type=file]").each(function() {

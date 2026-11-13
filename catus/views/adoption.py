@@ -3,6 +3,7 @@ import html
 import json
 import logging
 import random
+import re
 import uuid
 from forms_builder.forms.forms import FormForForm
 from forms_builder.forms.models import Form, Field, FieldEntry
@@ -29,6 +30,19 @@ FORM_MAX_PER_HOUR = 10          # per address: someone can apply for several ani
 RECEIPTS_MAX_PER_DAY = 5        # per mailbox: the receipt goes to whatever was typed
 HONEYPOT_FIELD = "sitio_web"    # hidden from people, see preadoption.html
 logger = logging.getLogger(__name__)
+
+#BuenAdoptante rechaza la consulta entera si el nombre es una sola palabra, un mail o un
+#teléfono (full_name_required): ese formulario no se revisaba ni se registraba. Pasaba en 1
+#de cada 25. preadoption.html hace el mismo control antes de enviar (esNombreYApellido).
+MENSAJE_NOMBRE = "Poné tu nombre y apellido, por ejemplo: Ana Pérez."
+
+
+def es_nombre_y_apellido(texto):
+    """Al menos dos palabras con letras, y que no sea un mail."""
+
+    texto = texto or ""
+    palabras = [p for p in texto.split() if re.search(r"[^\W\d_]", p)]
+    return len(palabras) >= 2 and "@" not in texto
 
 
 class ListView(BaseView):
@@ -90,6 +104,9 @@ class PreAdoptionView(BaseView):
         context["is_user"] = True if user_id else False
         #la persona tiene que saber, antes de mandarlo, que el formulario se comparte
         context["comparte_con_buenadoptante"] = self.form_type == "preadoption" and BuenAdoptanteService().activo()
+        #prepareSubmit controla el nombre antes de enviar, para no perder las fotos adjuntas
+        context["campo_nombre"] = self._campo_nombre(context["form_for_form"])
+        context["mensaje_nombre"] = MENSAJE_NOMBRE
 
         if self.form_type == "preadoption":
 
@@ -151,6 +168,18 @@ class PreAdoptionView(BaseView):
         forms = Form.objects.all()[self.form_index:self.form_index + 1]
         return forms[0] if forms else None
 
+    def _campo_nombre(self, form_for_form):
+        """La clave de "Nombre y Apellido" en el formulario de pre-adopción, o None. Se busca
+        por etiqueta, como la busca BuenAdoptanteService: si la cambian en el admin, no se
+        controla (y tampoco se manda)."""
+
+        if self.form_type != "preadoption" or form_for_form is None:
+            return None
+        for clave, campo in form_for_form.fields.items():
+            if "nombre y apellido" in (campo.label or "").lower():
+                return clave
+        return None
+
     def _rejected(self):
         """Why this post is not even read, or None. The size comes first, so that a
         file that is too big does not use up the visitor's attempts."""
@@ -193,6 +222,13 @@ class PreAdoptionView(BaseView):
 
         if form_for_form.errors:
             response_context["errors"] = form_for_form.errors
+            response_context["success"] = False
+            return self._post_response(response_context)
+
+        #lo mismo que controla el navegador; esto es para quien llega sin ese JS
+        campo_nombre = self._campo_nombre(form_for_form)
+        if campo_nombre and not es_nombre_y_apellido(form_for_form.cleaned_data.get(campo_nombre)):
+            response_context["errors"] = MENSAJE_NOMBRE
             response_context["success"] = False
             return self._post_response(response_context)
 

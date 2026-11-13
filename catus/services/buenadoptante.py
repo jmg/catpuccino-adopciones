@@ -281,7 +281,11 @@ class BuenAdoptanteService:
 
     def _llamar(self, cuerpo):
 
-        headers = {"Authorization": "Bearer {}".format(settings.BUENADOPTANTE_API_KEY), "Content-Type": "application/json"}
+        #con nombre propio: el filtro anti-bots de BuenAdoptante (Cloudflare) contesta 403
+        #"error code: 1010" a los clientes genéricos (lo hizo con el de Python), y un 403 acá
+        #se reintenta sin fin mientras los formularios pasan sin revisar
+        headers = {"Authorization": "Bearer {}".format(settings.BUENADOPTANTE_API_KEY), "Content-Type": "application/json",
+                   "User-Agent": "CatpuccinoAdopciones/1.0 (+https://{})".format(settings.HOST)}
         if settings.BUENADOPTANTE_DRY_RUN:
             headers["X-Dry-Run"] = "1"
 

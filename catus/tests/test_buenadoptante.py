@@ -61,10 +61,10 @@ class FormularioDePreadopcion:
         }
         self.form = form
 
-    def enviar(self, instagram="https://www.instagram.com/ana.gomez/"):
+    def enviar(self, instagram="https://www.instagram.com/ana.gomez/", nombre="Ana Gómez"):
         post = {
             self.campos["animal"].slug: str(self.gato.id),
-            self.campos["nombre"].slug: "Ana Gómez",
+            self.campos["nombre"].slug: nombre,
             self.campos["email"].slug: "ana@ejemplo.test",
             self.campos["celular"].slug: "11 5555-1234",
             self.campos["instagram"].slug: instagram,
@@ -159,6 +159,8 @@ class EnvioDelFormularioTest(FormularioDePreadopcion, TestCase):
         llamada = post.call_args
         self.assertEqual(llamada[0][0], "https://ba.test/api/v1/search")
         self.assertEqual(llamada[1]["headers"]["Authorization"], "Bearer ba_test_clave")
+        self.assertTrue(llamada[1]["headers"]["User-Agent"].startswith("CatpuccinoAdopciones/"),
+                        "su filtro anti-bots frena a los clientes sin nombre propio (403 1010)")
         self.assertTrue(llamada[1]["timeout"], "sin timeout el formulario podría quedar colgado")
         cuerpo = llamada[1]["json"]
         estado = EstadoFormulario.objects.get()
@@ -195,6 +197,40 @@ class EnvioDelFormularioTest(FormularioDePreadopcion, TestCase):
         pagina = self.client.get("/pre-adopcion/").content.decode()
 
         self.assertIn("También se comparten con", pagina)
+
+    def test_sin_nombre_y_apellido_no_se_recibe(self):
+        """Con una sola palabra BuenAdoptante rechaza la consulta entera (full_name_required)
+        y el formulario pasaba sin revisar: pasaba en 12 de 314 formularios en 90 días."""
+
+        for nombre in ("Lu", "  Ana  ", "ana@ejemplo.test", "Ana 1234"):
+            with self.subTest(nombre=nombre), \
+                    mock.patch("catus.services.buenadoptante.requests.post") as post, \
+                    mock.patch("catus.views.adoption.send_html_email") as mails:
+                pagina = self.enviar(nombre=nombre).content.decode()
+
+                self.assertFalse(EstadoFormulario.objects.exists())
+                self.assertFalse(post.called)
+                self.assertFalse(mails.called)
+                self.assertIn("Poné tu nombre y apellido", pagina)
+
+    def test_el_navegador_controla_el_nombre_antes_de_enviar(self):
+
+        pagina = self.client.get("/pre-adopcion/").content.decode()
+
+        self.assertIn('form.elements["{}"]'.format(self.campos["nombre"].slug), pagina)
+        self.assertIn("esNombreYApellido(nombre.value)", pagina)
+
+
+class NombreYApellidoTest(TestCase):
+
+    def test_casos(self):
+        from catus.views.adoption import es_nombre_y_apellido
+
+        for nombre, valido in (("Ana Pérez", True), ("María José Pérez", True), ("Ña Ñu", True), ("  ana   pérez ", True),
+                               ("Lu", False), ("", False), (None, False), ("Ana 1234", False),
+                               ("ana@ejemplo.test", False), ("Ana ana@ejemplo.test", False), ("11 4000-7001", False)):
+            with self.subTest(nombre=nombre):
+                self.assertEqual(es_nombre_y_apellido(nombre), valido)
 
 
 class PersonaDelFormularioTest(TestCase):
