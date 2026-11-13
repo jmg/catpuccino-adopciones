@@ -1,16 +1,46 @@
-<h4>
-Formulario de pre-adopción{% if animal %} para {{animal}}{% endif %}
-</h4>
+{% extends "email/base.html" %}
+{% comment %}
+El formulario nuevo, al rescatista y al equipo (PreAdoptionView.send_email). Las respuestas
+las escribe cualquiera que complete el formulario público: salen siempre escapadas, nunca
+con |safe (test_seguridad). Las fotos son URL del sitio que arma la vista (_datos_del_mail).
+{% endcomment %}
+{% block preheader %}{{ titulo }}. Sus datos y todas sus respuestas.{% endblock %}
+{% block content %}
+{% include "email/_titulo.html" %}
+<p style="margin:0;color:#4a5568;">Abajo están sus datos y todas sus respuestas. Desde el sitio podés cambiarle el estado y seguir la adopción.</p>
 
-<hr>
-<a href="https://{{settings.HOST}}/formularios/{{form_hash}}/">Ver formulario en la web</a>
-<hr>
+{% if url_formulario %}{% include "email/_boton.html" with url=url_formulario texto="Ver el formulario en el sitio" %}{% endif %}
 
-{% for field, value in fields %}
-{{ field }}:<br>
-{{ value|linebreaks }}<br>
+{% if ficha %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f5fd;border-radius:10px;">
+  <tr><td style="padding:8px 18px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      {% for etiqueta, valor in ficha %}
+      <tr>
+        <td class="mail-ficha-etiqueta" width="38%" style="padding:8px 12px 8px 0;font-size:13px;color:#6b6f80;vertical-align:top;{% if not forloop.first %}border-top:1px solid #ece4f7;{% endif %}">{{ etiqueta }}</td>
+        <td class="mail-ficha-valor" style="padding:8px 0;font-size:15px;color:#2d3748;vertical-align:top;word-break:break-word;{% if not forloop.first %}border-top:1px solid #ece4f7;{% endif %}">{{ valor|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </td></tr>
+</table>
+{% endif %}
+
+{% if respuestas %}
+<h2 style="margin:32px 0 4px;font-size:18px;line-height:1.3;color:#2d3748;">Sus respuestas</h2>
+{% for r in respuestas %}
+<div style="padding:14px 0;{% if not forloop.first %}border-top:1px solid #efeaf5;{% endif %}">
+  <p style="margin:0 0 4px;font-size:13px;font-weight:700;line-height:1.4;color:#7020a0;">{{ r.pregunta }}</p>
+  {% if r.foto %}
+  <a href="{{ r.valor }}" style="text-decoration:none;"><img src="{{ r.valor }}" width="260" alt="{{ r.pregunta }}" style="display:block;width:260px;max-width:100%;height:auto;border:0;border-radius:8px;"></a>
+  {% elif r.archivo %}
+  <a href="{{ r.valor }}" style="color:#7020a0;font-weight:600;">Ver el archivo adjunto</a>
+  {% else %}
+  <div style="font-size:15px;color:#2d3748;">{{ r.valor|default:"—"|linebreaksbr }}</div>
+  {% endif %}
+</div>
 {% endfor %}
+{% endif %}
 
-<hr>
-<a href="https://{{settings.HOST}}/formularios/{{form_hash}}/">Ver formulario en la web</a>
-<br>
+{% if url_formulario %}{% include "email/_boton.html" with url=url_formulario texto="Ver el formulario en el sitio" margen="28px 0 4px" %}{% endif %}
+{% endblock %}

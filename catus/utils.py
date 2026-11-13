@@ -1,3 +1,4 @@
+import html
 import math
 import re
 from urllib.parse import urljoin, urlparse
@@ -5,11 +6,54 @@ from urllib.parse import urljoin, urlparse
 import requests
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.html import strip_tags
+from django.utils.safestring import mark_safe
 import time
 
 
+def envolver_mail(contenido):
+    """El HTML de un mail dentro del marco del sitio (email/base.html).
+
+    Las plantillas de email/ ya extienden ese marco y llegan como documento completo: esas
+    pasan tal cual. Lo demás es HTML que arma el código (avisos al equipo, el mail del
+    contrato), con lo que escribió la gente ya escapado ahí: se mete adentro del marco.
+    """
+
+    if re.search(r"<html[\s>]", contenido[:3000], re.IGNORECASE):
+        return contenido
+    resumen = texto_plano(contenido)[:140]
+    return render_to_string("email/base.html", {"contenido": mark_safe(contenido), "preheader": resumen})
+
+
+def _link_en_texto(coincidencia):
+
+    url = coincidencia.group(1)
+    texto = " ".join(strip_tags(coincidencia.group(2)).split())
+    if not texto or texto == url or url.startswith("mailto:"):
+        return texto or url
+    return "{} ({})".format(texto, url)
+
+
+def texto_plano(contenido):
+    """La versión de texto de un mail HTML, para los clientes que no muestran HTML (y para los
+    filtros de spam, que miran que las dos versiones digan lo mismo). Antes iba el HTML crudo,
+    con las etiquetas a la vista."""
+
+    texto = re.sub(r"(?is)<(head|style|script)\b.*?</\1\s*>", "", contenido)
+    texto = re.sub(r'(?is)<div class="preheader".*?</div>', "", texto)
+    texto = re.sub(r'(?is)<a\b[^>]*?href=["\']([^"\']*)["\'][^>]*>(.*?)</a\s*>', _link_en_texto, texto)
+    texto = re.sub(r"(?i)<br\s*/?>", "\n", texto)
+    texto = re.sub(r"(?i)</(p|div|tr|li|h[1-6]|table)\s*>", "\n", texto)
+    texto = html.unescape(strip_tags(texto))
+    lineas = [" ".join(linea.split()) for linea in texto.splitlines()]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()
+
+
 def send_html_email(subject, content, from_email, to_email, fail_silently=False, bcc=None, cc=None, file=None, reply_to=None):
+
+    content = envolver_mail(content)
 
     if not isinstance(to_email, list):
         to_email = [to_email]
@@ -29,7 +73,7 @@ def send_html_email(subject, content, from_email, to_email, fail_silently=False,
     if not isinstance(reply_to, list):
         reply_to = [reply_to]
 
-    msg = EmailMultiAlternatives(subject=subject, body=content, from_email=from_email, to=to_email, bcc=bcc, cc=cc, reply_to=reply_to)
+    msg = EmailMultiAlternatives(subject=subject, body=texto_plano(content), from_email=from_email, to=to_email, bcc=bcc, cc=cc, reply_to=reply_to)
     msg.attach_alternative(content, "text/html")
 
     if not isinstance(file, list):

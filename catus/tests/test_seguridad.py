@@ -92,14 +92,20 @@ class RespuestasNoConfiablesTest(TestCase):
     def test_el_mail_de_aviso_tampoco(self):
         """email/form.html la imprimía con {{value|safe|linebreaks}} y el mail lo abre el equipo."""
 
-        self.responder("Nombre y Apellido", 'Ana <img src=x onerror="alert(1)">')
+        from catus.views.adoption import PreAdoptionView
 
-        fields = self.service.get_formatted_fields(self.entry.fields.all())
-        html = self.render_real("email/form.html", {"fields": fields})
+        #el nombre va a la ficha y al título; la otra, a las respuestas
+        self.responder("Nombre y Apellido", 'Ana <img src=x onerror="alert(1)">')
+        self.responder("1. ¿Por qué querés adoptar?", 'Porque <img src=x onerror="alert(2)">')
+
+        fields = self.service.get_formatted_fields(self.entry.fields.all(), photos_raw=True)
+        html = self.render_real("email/form.html", PreAdoptionView()._datos_del_mail(fields, "Michi"))
 
         self.assertNotIn("<img src=x", html)
         self.assertNotIn('onerror="alert(1)"', html)
+        self.assertNotIn('onerror="alert(2)"', html)
         self.assertIn("&lt;img src=x", html, "la respuesta tiene que salir escapada, no desaparecer")
+        self.assertIn("Porque &lt;img src=x", html)
 
     def test_la_foto_adjunta_si_se_ve_en_la_pagina(self):
         """El <img> de la foto lo arma el servicio, así que el template lo tiene que mostrar."""

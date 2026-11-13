@@ -1,9 +1,23 @@
-¡Los adopotantes ya pueden ver a <b>{{animal.nombre}}</b> en <a href="{{settings.SSL_HOST}}">{{settings.SSL_HOST}}</a>!
-<br><br>
-Cuando completen un formulario de pre-adopción te enviaremos un mail a esta misma dirección.
-<br><br>
-También podés compartir el link para que completen el formulario de pre-adopción para <b>{{animal.nombre}}</b>: <a href="{{settings.SSL_HOST}}{{animal.get_adoption_url}}">{{settings.SSL_HOST}}{{animal.get_adoption_url}}</a>.<br>
-Y el link a todos los animales que cargaste en nuestra web: <a href="{{settings.SSL_HOST}}{{animal.cargado_por.get_handle_url}}">{{settings.SSL_HOST}}{{animal.cargado_por.get_handle_url}}</a>.<br>
-<br><br>
-Atte. Equipo Catpuccino Adopciones.
-<br>
+{% extends "email/base.html" %}
+{% comment %}
+Al rescatista, cuando su animal queda publicado (MailService.send_mail_aprobacion). Los links
+los arma el servicio: el del formulario puede ser un link propio del animal (custom_link).
+{% endcomment %}
+{% block preheader %}Los adoptantes ya pueden ver a {{ animal.nombre }} en el sitio.{% endblock %}
+{% block content %}
+{% include "email/_titulo.html" with antetitulo="Publicación aprobada" titulo="¡"|add:animal.nombre|add:" ya está publicado!" %}
+<p style="margin:0 0 14px;">Los adoptantes ya pueden ver a <b>{{ animal.nombre }}</b> en el sitio. Cuando alguien complete un formulario de pre-adopción, te va a llegar un mail a esta dirección.</p>
+
+{% include "email/_boton.html" with url=link_formulario texto="Ver el formulario de "|add:animal.nombre %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f5fd;border-radius:10px;">
+  <tr><td style="padding:14px 18px;">
+    <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#7020a0;">Compartí el formulario de {{ animal.nombre }}</p>
+    <p style="margin:0 0 14px;font-size:14px;word-break:break-all;"><a href="{{ link_formulario }}" style="color:#2d3748;">{{ link_formulario }}</a></p>
+    <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#7020a0;">Todos los animales que cargaste</p>
+    <p style="margin:0;font-size:14px;word-break:break-all;"><a href="{{ link_perfil }}" style="color:#2d3748;">{{ link_perfil }}</a></p>
+  </td></tr>
+</table>
+
+<p style="margin:24px 0 0;">¡Gracias por publicar con nosotros!<br><b>Equipo de Catpuccino Adopciones</b></p>
+{% endblock %}

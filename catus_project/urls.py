@@ -41,7 +41,10 @@ urlpatterns += [
 
     path('accounts/login/', auth_views.LoginView.as_view(authentication_form=UserLoginForm), name='login'),
     # Its own form, from when Django's (2.0) mailed the address typed (CVE-2019-19844).
-    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(form_class=PasswordResetForm, html_email_template_name='registration/password_reset_email.html')),
+    # The text part used to be the HTML template too, tags and all.
+    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(
+        form_class=PasswordResetForm, email_template_name='registration/password_reset_email.txt',
+        html_email_template_name='registration/password_reset_email.html')),
     path('accounts/logout/', logout_view, name='logout'),
     path('accounts/', include('django.contrib.auth.urls')),
 

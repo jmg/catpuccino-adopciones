@@ -1,12 +1,23 @@
-¡Gracias por completar el formulario {% if tipo == 'preadoption' %}de Pre-adopción{% if animal.nombre %} para {{ animal.nombre }}{% endif %}{% else %}de Tránsito{% endif %}!
-<br><br>
-Su transitante lo va a estar revisando y en caso de proceder con la adopción se va a comunicar con vos a la brevedad.
+{% extends "email/base.html" %}
+{% comment %}
+La confirmación a quien completó el formulario (PreAdoptionView.send_email). "animal" es un
+Animal o, con la opción "otro", el nombre que escribió la persona; en tránsito no hay animal.
+{% endcomment %}
+{% block preheader %}Recibimos tu formulario{% if tipo == 'preadoption' and animal.nombre %} para {{ animal.nombre }}{% endif %}. Te contamos cómo sigue.{% endblock %}
+{% block content %}
+{% if tipo == 'preadoption' %}
+{% if animal.nombre %}{% include "email/_titulo.html" with antetitulo="Formulario de pre-adopción recibido" titulo="¡Gracias por querer adoptar a "|add:animal.nombre|add:"!" %}{% else %}{% include "email/_titulo.html" with antetitulo="Formulario de pre-adopción recibido" titulo="¡Gracias por completar el formulario!" %}{% endif %}
+<p style="margin:0 0 14px;">Ya tenemos tu formulario. {% if animal.nombre %}La persona que tiene a <b>{{ animal.nombre }}</b>{% else %}La persona que tiene al animal{% endif %} en tránsito lo va a revisar y, si avanza con la adopción, se va a comunicar con vos a la brevedad.</p>
 {% if animal.cargado_por.get_instagram %}
-<br>
-También podés contactarte con el/ella a <a href="{{animal.cargado_por.get_instagram_link}}">{{ animal.cargado_por.get_instagram }}</a>.
+<p style="margin:0;">Si querés, también podés escribirle por Instagram:</p>
+{% include "email/_boton.html" with url=animal.cargado_por.get_instagram_link texto="Escribirle a "|add:animal.cargado_por.get_instagram margen="16px 0 8px" %}
 {% endif %}
-<br><br>
-¡Muchas gracias!
-<br><br>
-Atte.<br>
-<b>Equipo Catpuccino Adopciones</b><br>
+{% else %}
+{% include "email/_titulo.html" with antetitulo="Formulario de tránsito recibido" titulo="¡Gracias por ofrecerte como tránsito!" %}
+<p style="margin:0 0 14px;">Ya tenemos tu formulario. El equipo lo va a revisar y se va a comunicar con vos a la brevedad.</p>
+{% endif %}
+{% if settings %}
+<p style="margin:20px 0 0;color:#4a5568;">Mientras tanto, podés conocer a todos los gatos y perros que buscan familia en <a href="https://{{ settings.HOST }}/adopciones/" style="color:#7020a0;font-weight:600;">{{ settings.HOST }}</a>.</p>
+{% endif %}
+<p style="margin:24px 0 0;">¡Muchas gracias!<br><b>Equipo de Catpuccino Adopciones</b></p>
+{% endblock %}

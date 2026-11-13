@@ -1,17 +1,51 @@
+{% extends "email/base.html" %}
 {% load catus_html %}
-<b>{{animal.nombre}}</b><hr>
+{% comment %}
+Un animal nuevo para revisar, al equipo (MailService.send_new_animal_mail). El nombre y el
+texto los escribe cualquiera que se registre: el nombre sale escapado y la descripción pasa
+por |html_seguro, como en el sitio.
+{% endcomment %}
+{% block preheader %}{{ animal.nombre }} espera la aprobación del equipo.{% endblock %}
+{% block content %}
+{% include "email/_titulo.html" with antetitulo="Nuevo animal para revisar" titulo=animal.nombre %}
 
-{% for img in animal.get_images %}
-    <img src="{{settings.SSL_HOST}}{{ img.image.url }}" style="max-width: 500px">
-    <br><br>
-{% endfor %}
-<br>
-<br>
-<b>Cargado por:</b> {{animal.cargado_por.email}} (<a href='{{animal.cargado_por.get_instagram_link}}'>{{animal.cargado_por.get_instagram}}</a>)<br>
-<b>Sexo:</b> {{animal.get_sexo_display|default_if_none:'Desconocido'}}<br>
-<b>Edad:</b> {{animal.edad|default_if_none:'Desconocido'}}<br>
-<b>Descripcion:</b> {{animal.datos|html_seguro}}
+{% with imagenes=animal.get_images %}{% if imagenes %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;">
+  <tr>
+  {% for img in imagenes|slice:":4" %}
+    <td class="mail-foto" width="50%" style="padding:0 {% if forloop.counter|divisibleby:2 %}0{% else %}8px{% endif %} 8px 0;vertical-align:top;">
+      <img src="{{ settings.SSL_HOST }}{{ img.image.url }}" width="264" alt="Foto de {{ animal.nombre }}" style="display:block;width:100%;max-width:264px;height:auto;border:0;border-radius:8px;">
+    </td>
+    {% if forloop.counter|divisibleby:2 and not forloop.last %}</tr><tr>{% endif %}
+  {% endfor %}
+  </tr>
+</table>
+{% if imagenes|length > 4 %}<p style="margin:0 0 8px;font-size:13px;color:#6b6f80;">Y {{ imagenes|length|add:"-4" }} foto{{ imagenes|length|add:"-4"|pluralize }} más en el sitio.</p>{% endif %}
+{% endif %}{% endwith %}
 
-<hr>
-<a href="{{settings.SSL_HOST}}/animal/aprobar/?id={{animal.id}}">Aprobar!</a>
-<hr>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f5fd;border-radius:10px;margin:8px 0 0;">
+  <tr><td style="padding:8px 18px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td class="mail-ficha-etiqueta" width="32%" style="padding:8px 12px 8px 0;font-size:13px;color:#6b6f80;vertical-align:top;">Cargado por</td>
+        <td class="mail-ficha-valor" style="padding:8px 0;font-size:15px;vertical-align:top;word-break:break-word;">{{ animal.cargado_por.email }}{% if animal.cargado_por.get_instagram %} · <a href="{{ animal.cargado_por.get_instagram_link }}" style="color:#7020a0;">{{ animal.cargado_por.get_instagram }}</a>{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="mail-ficha-etiqueta" style="padding:8px 12px 8px 0;font-size:13px;color:#6b6f80;vertical-align:top;border-top:1px solid #ece4f7;">Sexo</td>
+        <td class="mail-ficha-valor" style="padding:8px 0;font-size:15px;vertical-align:top;border-top:1px solid #ece4f7;">{{ animal.get_sexo_display|default_if_none:'Desconocido' }}</td>
+      </tr>
+      <tr>
+        <td class="mail-ficha-etiqueta" style="padding:8px 12px 8px 0;font-size:13px;color:#6b6f80;vertical-align:top;border-top:1px solid #ece4f7;">Edad</td>
+        <td class="mail-ficha-valor" style="padding:8px 0;font-size:15px;vertical-align:top;border-top:1px solid #ece4f7;">{{ animal.edad|default_if_none:'Desconocida' }}</td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+
+{% if animal.datos %}
+<h2 style="margin:24px 0 6px;font-size:16px;color:#2d3748;">Descripción</h2>
+<div style="font-size:15px;color:#2d3748;">{{ animal.datos|html_seguro }}</div>
+{% endif %}
+
+{% include "email/_boton.html" with url=link_aprobar texto="Aprobar" %}
+{% endblock %}

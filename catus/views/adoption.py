@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import random
+import re
 import uuid
 from forms_builder.forms.forms import FormForForm
 from forms_builder.forms.models import Form, Field, FieldEntry
@@ -261,6 +262,45 @@ class PreAdoptionView(BaseView):
                 form_field.value = value
                 form_field.save()
 
+    #los datos de contacto van juntos, en una ficha, arriba de las respuestas del mail
+    DATOS_DE_LA_PERSONA = ("Nombre y Apellido", "Edad", "Profesión", "Celular", "Email", "Direccion",
+                           "Partido", "Localidad", "Facebook", "Instagram")
+
+    def _datos_del_mail(self, fields, animal=None):
+        """Las respuestas del formulario ordenadas para email/form.html: la ficha de la
+        persona, el resto de las respuestas, y las fotos aparte (se ven en el mail en vez de
+        un link largo). Con photos_raw los archivos llegan como URL del sitio.
+
+        "animal" es un Animal o, con la opción "otro", el nombre que escribió la persona."""
+
+        ficha, respuestas = [], []
+        for etiqueta, valor in fields:
+            etiqueta = (etiqueta or "").strip()
+            if etiqueta in self.DATOS_DE_LA_PERSONA:
+                ficha.append((etiqueta, valor))
+                continue
+            es_archivo = isinstance(valor, str) and valor.startswith(("https://{}/".format(settings.HOST), "http://{}/".format(settings.HOST)))
+            es_foto = es_archivo and re.search(r"\.(jpe?g|png|gif|webp|heic|heif)$", valor.lower()) is not None
+            respuestas.append({"pregunta": etiqueta, "valor": valor, "foto": es_foto, "archivo": es_archivo})
+
+        nombre = " ".join(str(next((valor for etiqueta, valor in ficha if etiqueta == "Nombre y Apellido"), "") or "").split())
+        nombre_animal = (getattr(animal, "nombre", None) or (str(animal) if animal else "")).strip()
+
+        if self.form_type == "transit":
+            antetitulo = "Nuevo formulario de tránsito"
+            titulo = "{} se ofrece como tránsito".format(nombre) if nombre else "Alguien se ofrece como tránsito"
+        else:
+            antetitulo = "Nuevo formulario de pre-adopción"
+            if nombre and nombre_animal:
+                titulo = "{} quiere adoptar a {}".format(nombre, nombre_animal)
+            elif nombre_animal:
+                titulo = "Alguien quiere adoptar a {}".format(nombre_animal)
+            else:
+                titulo = "{} completó un formulario".format(nombre) if nombre else "Llegó un formulario nuevo"
+
+        return {"ficha": ficha, "respuestas": respuestas, "nombre": nombre, "nombre_animal": nombre_animal,
+                "antetitulo": antetitulo, "titulo": titulo}
+
     def send_email(self, form_entry, form_for_form, animal, estado):
 
         if self.form_type == "preadoption":
@@ -276,9 +316,11 @@ class PreAdoptionView(BaseView):
                 subject = "Nuevo formulario de tránsito - Gatos"
 
         form_fields = self._get_form_fields(form_entry)
-        fields = AdoptionService().get_formatted_fields(form_fields)
+        fields = AdoptionService().get_formatted_fields(form_fields, photos_raw=True)
 
-        email_context = {"animal": animal, "fields": fields, "form_hash": estado.hash, "settings": settings}
+        email_context = dict(self._datos_del_mail(fields, animal), animal=animal, tipo=self.form_type,
+                             form_hash=estado.hash, settings=settings,
+                             url_formulario="https://{}/formularios/{}/".format(settings.HOST, estado.hash))
         content = self.render(self._get_email_template(), email_context)
 
         to_emails = ["catpuccino.ok@gmail.com"]
@@ -311,6 +353,7 @@ class PreAdoptionView(BaseView):
         email_context = {
             "animal": animal,
             "tipo": self.form_type,
+            "settings": settings,
         }
 
         subject = "Catpuccino Adopciones - Formulario Recibido"
