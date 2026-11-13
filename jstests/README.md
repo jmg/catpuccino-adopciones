@@ -37,8 +37,7 @@ npx playwright test --ui    # modo interactivo, para mirar qué pasa
 ```
 
 Nada de esto toca el sitio: `jstests/` está fuera de `catus/static/`, así que
-`collectstatic` no lo copia, y `deploy.sh` (que es un `git pull` sin instalar nada) lo
-ignora. `node_modules/` está en `.gitignore`.
+`collectstatic` no lo copia y no se sirve. `node_modules/` está en `.gitignore`.
 
 ## Cómo está armado
 

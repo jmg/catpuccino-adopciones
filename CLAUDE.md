@@ -53,8 +53,8 @@ used to break and for whom. When touching that code, keep the assertion.
 wraps the same commands behind the author's venv. `./start.sh [port]` and `./run_dev.sh`
 start the server the same way.
 
-**Production runs on DeployCloud** (app `adopciones`), not on the old droplet: `./deploy.sh`
-and `server.sh` are the droplet's and no longer deploy anything. The image is built by
+**Production runs on DeployCloud** (app `adopciones`), not on the old droplet, whose
+`deploy.sh`/`server.sh` were removed from the repo. The image is built by
 `deploycloud/build.sh adopciones` in the **catpuccino** repo, from the **`deploycloud`
 branch as committed** (`git archive`, so push before building), with the packages that
 `requirements.txt` names pinned by `constraints.prod.txt`; `deploycloud/scan.sh` fails the
