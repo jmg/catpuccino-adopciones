@@ -5,45 +5,71 @@
 {% block css %}
 {{ block.super }}
 <style>
-    /* "¿Quién los adoptó?": la pregunta tiene que verse al entrar, antes que todo lo demás */
+    /* "¿Quién los adoptó?": la pregunta tiene que verse al entrar, antes que todo lo demás,
+       pero sin tapar el panel: se ve compacta, con pocas filas, y se puede cerrar */
     .pregunta-adopcion {
+        position: relative;
         background: #fbf6ff;
         border: 2px solid var(--primary-color);
-        border-radius: 14px;
-        padding: 18px 20px 8px;
-        margin-bottom: 20px;
+        border-radius: 12px;
+        padding: 10px 14px 4px;
+        margin-bottom: 16px;
+        font-size: 0.9rem;
     }
 
     .pregunta-adopcion-cabecera {
         display: flex;
-        gap: 14px;
-        align-items: flex-start;
-        margin-bottom: 10px;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 4px;
+        padding-right: 32px;
     }
 
     .pregunta-adopcion-icono {
         flex: 0 0 auto;
-        width: 40px;
-        height: 40px;
+        width: 28px;
+        height: 28px;
         border-radius: 50%;
         background: var(--primary-color);
         color: #fff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
+        font-size: 13px;
     }
 
     .pregunta-adopcion-titulo {
-        font-size: 1.3rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: var(--primary-dark);
-        margin: 2px 0 4px;
+        margin: 0;
     }
 
     .pregunta-adopcion-texto {
         margin: 0;
         color: #4a4a5a;
+        font-size: 0.85rem;
+    }
+
+    /* cierra la tarjeta entera por dos semanas (ocultarPreguntas) */
+    .pregunta-adopcion-cerrar {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--primary-dark);
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .pregunta-adopcion-cerrar:hover,
+    .pregunta-adopcion-cerrar:focus {
+        background: rgba(138, 43, 226, 0.1);
     }
 
     .pregunta-adopcion-fila {
@@ -51,9 +77,15 @@
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
-        gap: 8px 16px;
-        padding: 12px 0;
+        gap: 4px 12px;
+        padding: 6px 0;
         border-top: 1px solid rgba(138, 43, 226, 0.15);
+    }
+
+    /* tres a la vista y el resto detrás de "Ver más". Es por posición: al responder una
+       fila se borra y la siguiente sube sola. El 3 también está en PREGUNTAS_A_LA_VISTA. */
+    .pregunta-adopcion:not(.expandida) .pregunta-adopcion-fila:nth-child(n+4) {
+        display: none;
     }
 
     .pregunta-adopcion-nombre {
@@ -68,12 +100,35 @@
     .pregunta-adopcion-acciones {
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: 4px;
+    }
+
+    .pregunta-adopcion-acciones .btn {
+        padding: 2px 10px;
+        font-size: 0.85rem;
     }
 
     /* la acción secundaria, en el violeta del sitio y no en el azul de Bootstrap */
-    .pregunta-adopcion-acciones .btn-link {
+    .pregunta-adopcion-acciones .btn-link,
+    .pregunta-adopcion-ver-mas {
         color: var(--primary-dark);
+    }
+
+    .pregunta-adopcion-ver-mas {
+        display: block;
+        width: 100%;
+        padding: 6px 0;
+        border: 0;
+        border-top: 1px solid rgba(138, 43, 226, 0.15);
+        background: transparent;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .pregunta-adopcion-ver-mas[hidden] {
+        display: none;
     }
 
     .elegir-adoptante {
@@ -121,11 +176,11 @@
 
     @media (max-width: 576px) {
         .pregunta-adopcion {
-            padding: 14px 14px 6px;
+            padding: 8px 12px 2px;
         }
 
-        .pregunta-adopcion-acciones {
-            width: 100%;
+        .pregunta-adopcion-texto {
+            display: none;
         }
     }
 
@@ -754,14 +809,17 @@ de todo (ProfileView.adoptados_sin_adoptante y animales_por_confirmar). Elegir a
 deja el animal vinculado a su formulario y registra la adopción en BuenAdoptante.
 {% endcomment %}
 <div id="pregunta-adopcion" class="pregunta-adopcion">
+    <button type="button" class="pregunta-adopcion-cerrar" onclick="ocultarPreguntas()" title="Ocultar por dos semanas" aria-label="Ocultar por dos semanas">&times;</button>
     <div class="pregunta-adopcion-cabecera">
         <span class="pregunta-adopcion-icono"><i class="fa fa-heart"></i></span>
         <div>
             <h2 class="pregunta-adopcion-titulo">¿Quién los adoptó?</h2>
-            <p class="pregunta-adopcion-texto">Contanos quién adoptó a cada uno: el animal queda vinculado a su formulario y la adopción queda registrada.</p>
+            <p class="pregunta-adopcion-texto">Elegí a la persona y la adopción queda registrada.</p>
         </div>
     </div>
 
+    {% comment %}Solo filas acá adentro: el CSS muestra las tres primeras por posición.{% endcomment %}
+    <div class="pregunta-adopcion-filas">
     {% for animal in adoptados_sin_adoptante %}
     <div class="pregunta-adopcion-fila" id="pregunta-adopcion-{{animal.id}}">
         <div class="pregunta-adopcion-animal">
@@ -787,6 +845,8 @@ deja el animal vinculado a su formulario y registra la adopción en BuenAdoptant
         </div>
     </div>
     {% endfor %}
+    </div>
+    <button type="button" class="pregunta-adopcion-ver-mas" id="pregunta-adopcion-ver-mas" onclick="verMasPreguntas()" hidden>Ver más</button>
 </div>
 {% endif %}
 
@@ -1301,12 +1361,52 @@ function escaparHtml(texto) {
         .replace(/'/g, "&#39;");
 }
 
+//las filas de "¿Quién los adoptó?" que se ven sin tocar "Ver más" (el CSS usa el mismo número)
+var PREGUNTAS_A_LA_VISTA = 3;
+
+function actualizarVerMas() {
+    var resto = $(".pregunta-adopcion-fila").length - PREGUNTAS_A_LA_VISTA;
+    var boton = $("#pregunta-adopcion-ver-mas");
+    if (resto > 0 && !$("#pregunta-adopcion").hasClass("expandida")) {
+        boton.text("Ver " + resto + " más").prop("hidden", false);
+    } else {
+        boton.prop("hidden", true);
+    }
+}
+
+function verMasPreguntas() {
+    $("#pregunta-adopcion").addClass("expandida");
+    actualizarVerMas();
+}
+
 function sacarPregunta(animalId) {
     $("#pregunta-adopcion-" + animalId).remove();
     if (!$(".pregunta-adopcion-fila").length) {
         $("#pregunta-adopcion").remove();
     }
+    actualizarVerMas();
 }
+
+//la × de la tarjeta: "Todavía no" para todos los que pregunta, así vuelve en dos semanas
+//(o antes, si aparece otro animal para preguntar). Se cierra en el acto: si el pedido
+//falla, la tarjeta vuelve la próxima vez que entre, que es lo mismo que no cerrarla.
+function ocultarPreguntas() {
+    var ids = $(".pregunta-adopcion-fila").map(function () {
+        return this.id.replace("pregunta-adopcion-", "");
+    }).get();
+    $("#pregunta-adopcion").remove();
+    if (!ids.length) {
+        return;
+    }
+    $.post("/animal/posponerpreguntaadopcion/", $.param({
+        animal_ids: ids,
+        para_siempre: "0",
+        csrfmiddlewaretoken: "{{csrf_token}}"
+    }, true));
+    $.info("Listo, te lo volvemos a preguntar en dos semanas.");
+}
+
+$(actualizarVerMas);
 
 function updateAnimal(animalId, options) {
     var datos = $.extend({animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, options.datos || {});

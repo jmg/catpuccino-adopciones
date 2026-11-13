@@ -412,6 +412,25 @@ class QuienLoAdoptoTest(TestCase):
         contexto = self.client.get("/accounts/profile/").context
         self.assertNotIn(self.gato, contexto["animales_por_confirmar"])
 
+    def test_cerrar_la_tarjeta_posterga_todas_sus_preguntas(self):
+        """La × de la tarjeta manda todos sus animales juntos (ocultarPreguntas). Con un id
+        ajeno metido a mano, ese no se toca."""
+
+        self.assertIn('onclick="ocultarPreguntas()"', self.client.get("/accounts/profile/").content.decode())
+
+        self.client.post("/animal/posponerpreguntaadopcion/",
+                         {"animal_ids": [self.gato.id, self.hermano.id, self.ajeno.id], "para_siempre": "0"})
+
+        for animal in (self.gato, self.hermano, self.ajeno):
+            animal.refresh_from_db()
+        en_dos_semanas = timezone.now() + timedelta(days=13)
+        self.assertGreater(self.gato.pregunta_adopcion_hasta, en_dos_semanas)
+        self.assertGreater(self.hermano.pregunta_adopcion_hasta, en_dos_semanas)
+        self.assertIsNone(self.ajeno.pregunta_adopcion_hasta)
+        respuesta = self.client.get("/accounts/profile/")
+        self.assertEqual(respuesta.context["animales_por_confirmar"], [])
+        self.assertNotIn('id="pregunta-adopcion"', respuesta.content.decode())
+
     def test_el_rescatista_no_ve_los_frenados(self):
 
         contexto = self.client.get("/accounts/profile/").context
