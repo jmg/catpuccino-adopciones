@@ -373,6 +373,9 @@ class BuenAdoptanteService:
         if activity_id:
             actividad.activity_id = str(activity_id)[:64]
 
+        #worstRating junta TODOS los perfiles que coincidieron por algún dato, también en un
+        #match ambiguo: quien usa el celular de un familiar con 1★ queda frenado. Es a
+        #propósito: el equipo lo decidió así el 2026-11-13, en vez de dejarlo pasar con aviso.
         actividad.bloqueo = actividad.tipo == "adoption_request" and self.bloquea(actividad.nivel)
 
     def bloquea(self, nivel):

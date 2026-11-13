@@ -116,6 +116,16 @@ class EnvioDelFormularioTest(FormularioDePreadopcion, TestCase):
 
         self.assertEqual(EstadoFormulario.objects.get().estado, "B")
 
+    def test_un_telefono_compartido_con_alguien_peligroso_se_frena(self):
+        """El celular es de un familiar con 1★ y otro nombre: BuenAdoptante contesta
+        ambiguous (name_mismatch) con la calificación de ese perfil en risk. Se frena igual;
+        el equipo lo decidió así el 2026-11-13 en vez de dejarlo pasar con aviso."""
+
+        self.enviar_con(respuesta_api(nivel=1, match="ambiguous"))
+
+        self.assertEqual(EstadoFormulario.objects.get().estado, "B")
+        self.assertEqual(ActividadBuenAdoptante.objects.get().match, "ambiguous")
+
     def test_con_calificacion_regular_le_llega_al_rescatista(self):
 
         _, _, mails = self.enviar_con(respuesta_api(nivel=3))
