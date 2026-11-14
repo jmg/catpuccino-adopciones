@@ -853,13 +853,20 @@ class BuscarFormularios(LoginRequiredMixin, BaseView):
 
 
 class MarcarEnAdopcion(UpdateAnimal):
+    """Volver a publicar. A uno expirado le arranca de nuevo el mes (fecha_ingreso): si
+    no, expirar_animales lo volvía a sacar en la corrida siguiente."""
 
     response_status = "en adopción"
 
     def update(self, animal, post_data=None):
 
+        if animal.estado == "E":
+            animal.fecha_ingreso = timezone.now()
+            animal.pregunta_adopcion_hasta = None
+
         animal.estado = "D"
         animal.fecha_adopcion = None
+        animal.expiro_el = None
 
 
 class MarcarExpirado(UpdateAnimal):
@@ -868,7 +875,9 @@ class MarcarExpirado(UpdateAnimal):
 
     def update(self, animal, post_data=None):
 
+        #a mano: sin expiro_el, el panel no pregunta si sigue en adopción
         animal.estado = "E"
+        animal.expiro_el = None
 
 
 class ActualizarFechaIngreso(UpdateAnimal):

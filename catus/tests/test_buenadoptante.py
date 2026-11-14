@@ -567,7 +567,7 @@ class QuienLoAdoptoTest(TestCase):
         """La × de la tarjeta manda todos sus animales juntos (ocultarPreguntas). Con un id
         ajeno metido a mano, ese no se toca."""
 
-        self.assertIn('onclick="ocultarPreguntas()"', self.client.get("/accounts/profile/").content.decode())
+        self.assertIn('onclick="ocultarPreguntas(this)"', self.client.get("/accounts/profile/").content.decode())
 
         self.client.post("/animal/posponerpreguntaadopcion/",
                          {"animal_ids": [self.gato.id, self.hermano.id, self.ajeno.id], "para_siempre": "0"})

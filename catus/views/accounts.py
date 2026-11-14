@@ -47,6 +47,7 @@ class ProfileView(LoginRequiredMixin, BaseView):
         context["adoptados_sin_adoptante"] = adoptados
         context["animales_por_confirmar"] = por_confirmar
         #lo que lee el JS del panel (json_script): sin las fechas como objeto
+        context["expirados_por_republicar"] = self.expirados_por_republicar(context["animals"])
         context["candidatos_json"] = {
             str(animal_id): [{"id": c["id"], "persona": c["persona"], "fecha": c["fecha"]} for c in lista]
             for animal_id, lista in candidatos.items()
@@ -57,6 +58,18 @@ class ProfileView(LoginRequiredMixin, BaseView):
     def get_animals(self):
 
         return Animal.objects.filter(cargado_por=self.request.user).order_by("-id")
+
+    def expirados_por_republicar(self, animales):
+        """Los animales de esta cuenta que el cron sacó del sitio por llevar un mes
+        publicados (expirar_animales), para la tarjeta "¿Siguen en adopción?" del panel.
+        Los que expiró una persona a mano no tienen expiro_el y no se preguntan. "No
+        republicar" y la × usan pregunta_adopcion_hasta, como la otra tarjeta."""
+
+        ahora = timezone.now()
+        expirados = [a for a in animales if a.estado == "E" and a.expiro_el and a.aprobado
+                     and (a.pregunta_adopcion_hasta is None or a.pregunta_adopcion_hasta < ahora)]
+        expirados.sort(key=lambda a: a.expiro_el, reverse=True)
+        return expirados
 
     #formularios que no cuentan como candidatos a adoptante
     ESTADOS_NO_CANDIDATOS = ("B", "D", "U")

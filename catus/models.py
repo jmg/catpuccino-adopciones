@@ -116,6 +116,11 @@ class Animal(BaseEntity):
     #que siguen publicados; "Todavía no" lo deja de preguntar hasta esta fecha
     pregunta_adopcion_hasta = models.DateTimeField(null=True, blank=True)
 
+    #cuándo lo expiró el cron expirar_animales por llevar un mes publicado. Vacío en los
+    #que expiró una persona a mano: por esos no se pregunta. El panel pregunta por los que
+    #lo tienen ("¿siguen en adopción?") y republicarlo lo vacía.
+    expiro_el = models.DateTimeField(null=True, blank=True)
+
     custom_link = models.CharField(max_length=255, null=True, blank=True)
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)

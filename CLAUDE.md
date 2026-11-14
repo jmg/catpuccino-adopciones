@@ -248,6 +248,15 @@ is off — the default; production sets `"0"` explicitly — or when there is no
 per person, `GPT_IG_MAX_TOTAL_POR_DIA` 30 site-wide). Production pins openai 0.28.1 (the 0.x API);
 both SDK generations are supported.
 
+**Listings expire after a month** (`management/commands/expirar_animales.py`, a daily cron).
+An approved animal in `D` whose `fecha_ingreso` is over 30 days old goes to `E` and gets
+`expiro_el`; reserved ones are left alone. It uses one `UPDATE` plus a single dropdown sync
+rather than `save()` per animal. The rescuer's panel then asks "¿Siguen en adopción?"
+(`ProfileView.expirados_por_republicar`) for animals with `expiro_el` — not for ones a person
+expired by hand — and republishing (`MarcarEnAdopcion`) is one click per animal on purpose,
+restarting the month by resetting `fecha_ingreso`. Almost nobody marks adoptions on the site:
+when this shipped, 262 of 309 public animals were over a month old and 218 over a year.
+
 **Duplicate listings** (`services/duplicados.py`). On create only, before anything is saved,
 `EditView` checks the account's own `D`/`R` animals from the last 90 days and, on a match,
 saves nothing and links to the existing one. Two rules: the same name, type, sex, age and
