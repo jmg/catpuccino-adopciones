@@ -46,7 +46,7 @@ sendgrid==3.6.5
 sendgrid-django==4.2.0
 sentry-sdk==2.72.0
 simplejson==4.2.0
-soupsieve==3.0.3
+soupsieve==4.0.0
 sqlparse==0.6.0
 supervisor==4.3.0
 tqdm==4.70.1
