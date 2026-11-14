@@ -401,6 +401,29 @@ class CronTest(TestCase):
 
         self.assertEqual([a.subject for a in avisos_de_coincidencia()], ["BuenAdoptante ya conocía a Ana Gómez (Excelente)"])
 
+    def test_una_adopcion_de_alguien_conocido_tambien_avisa(self):
+        """Pedido del equipo: el aviso sale en cualquier coincidencia, también al registrar una
+        adopción, y aunque el formulario sea de antes de prender la integración."""
+
+        self.gato.estado = "A"
+        self.gato.fecha_adopcion = timezone.now()
+        self.gato.save()
+        BuenAdoptanteService().registrar_adopcion(self.estado, self.gato)
+
+        self.correr(respuesta_api(nivel=0, match="found"))
+
+        avisos = avisos_de_coincidencia()
+        self.assertEqual([a.subject for a in avisos], ["BuenAdoptante ya conocía a Ana Gómez (Sin calificar, adopción registrada)"])
+        self.assertIn("Se registró en su perfil la adopción de Michi.", avisos[0].alternatives[0][0])
+
+    def test_una_adopcion_de_alguien_nuevo_no_avisa(self):
+
+        BuenAdoptanteService().registrar_adopcion(self.estado, self.gato)
+
+        self.correr(respuesta_api(nivel=0, match="not_found"))
+
+        self.assertEqual(avisos_de_coincidencia(), [])
+
     def test_manda_la_adopcion_con_el_animal(self):
 
         self.gato.estado = "A"

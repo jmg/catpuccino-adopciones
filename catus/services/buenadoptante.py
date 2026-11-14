@@ -439,14 +439,16 @@ class BuenAdoptanteService:
         return destinatarios
 
     def hubo_coincidencia(self, actividad):
+        """BuenAdoptante ya conocía a la persona: en una solicitud o en una adopción, sea de un
+        formulario de antes o de después de prender la integración (pedido del equipo)."""
 
-        return (actividad is not None and actividad.tipo == "adoption_request" and actividad.estado == "OK"
-                and actividad.match in ("found", "ambiguous"))
+        return (actividad is not None and actividad.estado == "OK" and actividad.match in ("found", "ambiguous"))
 
     def avisar_coincidencia(self, actividad):
-        """Un mail por formulario cuyo adoptante BuenAdoptante ya conocía (pedido del equipo,
-        para seguir de cerca cómo matchea). Si el formulario se frenó, este aviso no sale: el
-        de bloqueo va a los mismos destinatarios. No levanta nada."""
+        """Un mail por cada envío cuya persona BuenAdoptante ya conocía (pedido del equipo, para
+        seguir de cerca cómo matchea): el de un formulario nuevo y el de una adopción registrada.
+        Si el formulario se frenó, este aviso no sale: el de bloqueo va a los mismos
+        destinatarios. No levanta nada."""
         from catus.utils import send_html_email
 
         destinatarios = self.destinatarios_coincidencias()
@@ -463,9 +465,12 @@ class BuenAdoptanteService:
             nombre_animal = (animal.nombre if animal else "") or "un animal"
             calificacion = CALIFICACIONES.get(actividad.nivel, "sin dato")
 
-            subject = "BuenAdoptante ya conocía a {} ({})".format(" ".join(persona.split())[:80], calificacion)
-            content = self.contenido_aviso(actividad, persona, nombre_animal, calificacion,
-                                           "El formulario le llegó al rescatista como siempre.")
+            adopcion = actividad.tipo == "adoption"
+            subject = "BuenAdoptante ya conocía a {} ({}{})".format(
+                " ".join(persona.split())[:80], calificacion, ", adopción registrada" if adopcion else "")
+            que_paso = ("Se registró en su perfil la adopción de {}.".format(nombre_animal) if adopcion
+                        else "El formulario le llegó al rescatista como siempre.")
+            content = self.contenido_aviso(actividad, persona, nombre_animal, calificacion, que_paso)
             send_html_email(subject, content, settings.SEND_MAIL, destinatarios)
             return True
         except Exception as e:
