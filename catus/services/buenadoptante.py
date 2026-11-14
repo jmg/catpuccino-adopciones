@@ -478,7 +478,8 @@ class BuenAdoptanteService:
         import html
 
         ETIQUETAS_DATO = {"email": "el mail", "phone": "el celular", "social": "una red social", "documentId": "el documento"}
-        por = ", ".join(ETIQUETAS_DATO.get(c, c) for c in getattr(actividad, "coincidio_por", []) or [])
+        datos = [ETIQUETAS_DATO.get(c, c) for c in getattr(actividad, "coincidio_por", []) or []]
+        por = " y ".join([", ".join(datos[:-1]), datos[-1]]) if len(datos) > 1 else "".join(datos)
         if actividad.match == "ambiguous":
             motivo = getattr(actividad, "motivo_ambiguo", "")
             como = ("Coincidencia ambigua: el dato es de alguien con otro nombre (por ejemplo, un celular familiar)."
