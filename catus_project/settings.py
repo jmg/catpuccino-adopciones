@@ -300,6 +300,15 @@ except (TypeError, ValueError):
     BUENADOPTANTE_BLOQUEAR_HASTA = 2
 #solo para probar en staging: BuenAdoptante contesta pero no guarda nada
 BUENADOPTANTE_DRY_RUN = _config_bool("BUENADOPTANTE_DRY_RUN", False)
+#a quién avisarle cada vez que BuenAdoptante ya conocía a la persona de un formulario
+#(lista, o direcciones separadas por coma). Sin la clave, al mail del equipo.
+_avisar_coincidencias = app_config.get("BUENADOPTANTE_AVISAR_COINCIDENCIAS_A")
+if _avisar_coincidencias is None:
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [SEND_MAIL] if SEND_MAIL else []
+elif isinstance(_avisar_coincidencias, str):
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [d.strip() for d in _avisar_coincidencias.split(",") if d.strip()]
+else:
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [str(d).strip() for d in _avisar_coincidencias if str(d).strip()]
 
 #Posteo automatico en Instagram: al aprobar un animal, el posteo queda agendado y sale
 #solo cuando pasa la demora. Arranca APAGADO a proposito. Publicar en la cuenta de la

@@ -41,6 +41,8 @@ class Command(BaseCommand):
                     actividad.avisado = True
                     actividad.save(update_fields=["avisado"])
                     avisos += 1
+                elif servicio.avisar_coincidencia(actividad):
+                    avisos += 1
             else:
                 fallidas += 1
 
@@ -70,6 +72,8 @@ class Command(BaseCommand):
         destinatarios = [settings.SEND_MAIL]
         if animal is not None and animal.cargado_por is not None and animal.cargado_por.email:
             destinatarios.append(animal.cargado_por.email)
+        #y a quien sigue las coincidencias: para este formulario no sale otro aviso
+        destinatarios = BuenAdoptanteService().destinatarios_coincidencias(ademas=destinatarios)
 
         try:
             send_html_email(subject, content, settings.SEND_MAIL, list(set(destinatarios)))

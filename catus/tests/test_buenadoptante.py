@@ -26,7 +26,13 @@ ACTIVO = dict(
     ENV="TEST", SEND_MAIL="sitio@catpuccino.test", HOST="adopciones.catpuccino.test",
     BUENADOPTANTE_ACTIVO=True, BUENADOPTANTE_API_KEY="ba_test_clave", BUENADOPTANTE_API_URL="https://ba.test",
     BUENADOPTANTE_BLOQUEAR_HASTA=2, BUENADOPTANTE_DRY_RUN=False,
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A=["sitio@catpuccino.test"],
 )
+
+
+def avisos_de_coincidencia():
+    from django.core import mail
+    return [m for m in mail.outbox if m.subject.startswith("BuenAdoptante ya conocía")]
 
 
 def respuesta_api(nivel=0, status=200, match="found", flags=None, alerts=None):
@@ -202,6 +208,45 @@ class EnvioDelFormularioTest(FormularioDePreadopcion, TestCase):
 
         self.assertEqual(EstadoFormulario.objects.get().estado, "N")
 
+    def test_si_buenadoptante_ya_la_conocia_avisa(self):
+        """Pedido del equipo, para seguir de cerca cómo matchea: un mail por formulario."""
+
+        respuesta = respuesta_api(nivel=4)
+        respuesta.json.return_value["profile"]["matchedOn"] = ["phone"]
+        self.enviar_con(respuesta)
+
+        avisos = avisos_de_coincidencia()
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0].subject, "BuenAdoptante ya conocía a Ana Gómez (Bueno)")
+        self.assertEqual(avisos[0].to, ["sitio@catpuccino.test"])
+        html = avisos[0].alternatives[0][0]
+        self.assertIn("Coincidió por el celular.", html)
+        self.assertIn("/formularios/{}/".format(EstadoFormulario.objects.get().hash), html)
+        self.assertIn("El formulario le llegó al rescatista", html)
+
+    def test_si_no_la_conocia_no_avisa(self):
+
+        self.enviar_con(respuesta_api(nivel=0, match="not_found"))
+
+        self.assertEqual(avisos_de_coincidencia(), [])
+
+    @override_settings(BUENADOPTANTE_AVISAR_COINCIDENCIAS_A=["yo@catpuccino.test"])
+    def test_los_avisos_van_a_quien_se_configure_y_un_frenado_no_manda_dos(self):
+        from django.core import mail
+
+        self.enviar_con(respuesta_api(nivel=3, match="ambiguous"))
+        avisos = avisos_de_coincidencia()
+        self.assertEqual([a.to for a in avisos], [["yo@catpuccino.test"]])
+        self.assertIn("Coincidencia ambigua", avisos[0].alternatives[0][0])
+
+        EstadoFormulario.objects.all().delete()
+        ActividadBuenAdoptante.objects.all().delete()
+        mail.outbox.clear()
+        _, _, mails = self.enviar_con(respuesta_api(nivel=1))
+        self.assertEqual(self.destinatarios(mails), [["sitio@catpuccino.test", "yo@catpuccino.test"]],
+                         "el aviso de bloqueo va también a quien sigue las coincidencias")
+        self.assertEqual(avisos_de_coincidencia(), [], "y no sale otro aviso por el mismo formulario")
+
     def test_el_formulario_avisa_que_se_comparte(self):
 
         pagina = self.client.get("/pre-adopcion/").content.decode()
@@ -345,6 +390,16 @@ class CronTest(TestCase):
 
         _, mails = self.correr(respuesta_api(nivel=1))
         self.assertFalse(mails.called, "se avisa una sola vez")
+
+    def test_si_el_reintento_la_encuentra_avisa_la_coincidencia(self):
+
+        ActividadBuenAdoptante.objects.create(estado_formulario=self.estado, animal=self.gato, tipo="adoption_request",
+                                              external_id="catpuccino-solicitud-hash-1", intentos=1,
+                                              ultimo_intento=timezone.now() - timedelta(hours=1))
+
+        self.correr(respuesta_api(nivel=5))
+
+        self.assertEqual([a.subject for a in avisos_de_coincidencia()], ["BuenAdoptante ya conocía a Ana Gómez (Excelente)"])
 
     def test_manda_la_adopcion_con_el_animal(self):
 
@@ -545,3 +600,13 @@ class QuienLoAdoptoTest(TestCase):
         self.gato.refresh_from_db()
         self.assertEqual(self.gato.estado_formulario_id, self.ana.id)
         self.assertTrue(ActividadBuenAdoptante.objects.filter(tipo="adoption", estado_formulario=self.ana).exists())
+
+
+class PoliticaDePrivacidadTest(TestCase):
+
+    def test_nombra_a_buenadoptante_solo_si_se_le_mandan_los_formularios(self):
+
+        with override_settings(BUENADOPTANTE_ACTIVO=False):
+            self.assertNotIn("BuenAdoptante (", self.client.get("/privacidad/").content.decode())
+        with override_settings(**ACTIVO):
+            self.assertIn("BuenAdoptante (", self.client.get("/privacidad/").content.decode())

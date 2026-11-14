@@ -410,6 +410,13 @@ class BuenAdoptanteService:
         if activity_id:
             actividad.activity_id = str(activity_id)[:64]
 
+        #para el aviso de coincidencia (avisar_coincidencia), que sale en el mismo pedido:
+        #no se guardan
+        coincidio = perfil.get("matchedOn") or []
+        actividad.coincidio_por = [str(c) for c in coincidio if isinstance(c, str)][:5] if isinstance(coincidio, list) else []
+        motivo = datos.get("reason")
+        actividad.motivo_ambiguo = motivo[:40] if isinstance(motivo, str) else ""
+
         #worstRating junta TODOS los perfiles que coincidieron por algún dato, también en un
         #match ambiguo: quien usa el celular de un familiar con 1★ queda frenado. Es a
         #propósito: el equipo lo decidió así el 2026-11-13, en vez de dejarlo pasar con aviso.
@@ -419,6 +426,94 @@ class BuenAdoptanteService:
 
         tope = settings.BUENADOPTANTE_BLOQUEAR_HASTA
         return bool(tope) and nivel is not None and 1 <= nivel <= tope
+
+    #---- avisos
+
+    def destinatarios_coincidencias(self, ademas=()):
+        """A quién va el aviso de que BuenAdoptante ya conocía a la persona, sin repetidos."""
+
+        destinatarios = []
+        for direccion in list(ademas) + list(settings.BUENADOPTANTE_AVISAR_COINCIDENCIAS_A or []):
+            if direccion and direccion not in destinatarios:
+                destinatarios.append(direccion)
+        return destinatarios
+
+    def hubo_coincidencia(self, actividad):
+
+        return (actividad is not None and actividad.tipo == "adoption_request" and actividad.estado == "OK"
+                and actividad.match in ("found", "ambiguous"))
+
+    def avisar_coincidencia(self, actividad):
+        """Un mail por formulario cuyo adoptante BuenAdoptante ya conocía (pedido del equipo,
+        para seguir de cerca cómo matchea). Si el formulario se frenó, este aviso no sale: el
+        de bloqueo va a los mismos destinatarios. No levanta nada."""
+        from catus.utils import send_html_email
+
+        destinatarios = self.destinatarios_coincidencias()
+        if not destinatarios or not self.hubo_coincidencia(actividad) or actividad.bloqueo:
+            return False
+
+        try:
+            estado_form = actividad.estado_formulario
+            animal = actividad.animal or (estado_form.gato if estado_form else None)
+            persona = (estado_form.persona_nombre if estado_form else "") or ""
+            if not persona and estado_form is not None:
+                persona = self.persona(self.respuestas(estado_form.form_entry)).get("fullName", "")
+            persona = persona or "Sin nombre"
+            nombre_animal = (animal.nombre if animal else "") or "un animal"
+            calificacion = CALIFICACIONES.get(actividad.nivel, "sin dato")
+
+            subject = "BuenAdoptante ya conocía a {} ({})".format(" ".join(persona.split())[:80], calificacion)
+            content = self.contenido_aviso(actividad, persona, nombre_animal, calificacion,
+                                           "El formulario le llegó al rescatista como siempre.")
+            send_html_email(subject, content, settings.SEND_MAIL, destinatarios)
+            return True
+        except Exception as e:
+            logger.warning("No se pudo avisar de la coincidencia del envío %s: %s", actividad.id, type(e).__name__)
+            return False
+
+    def contenido_aviso(self, actividad, persona, nombre_animal, calificacion, que_paso):
+        """El cuerpo del aviso de coincidencia (y del de bloqueo): quién, por qué dato, qué dice
+        BuenAdoptante y los links. Todo lo que escribió la persona sale escapado."""
+        import html
+
+        ETIQUETAS_DATO = {"email": "el mail", "phone": "el celular", "social": "una red social", "documentId": "el documento"}
+        por = ", ".join(ETIQUETAS_DATO.get(c, c) for c in getattr(actividad, "coincidio_por", []) or [])
+        if actividad.match == "ambiguous":
+            motivo = getattr(actividad, "motivo_ambiguo", "")
+            como = ("Coincidencia ambigua: el dato es de alguien con otro nombre (por ejemplo, un celular familiar)."
+                    if motivo == "name_mismatch" else "Coincidencia ambigua: varios perfiles encajan con el nombre.")
+        else:
+            como = "Coincidió por {}.".format(por) if por else "La encontró por sus datos de contacto."
+
+        filas = [("Persona", html.escape(persona)), ("Animal", html.escape(nombre_animal)),
+                 ("Coincidencia", html.escape(como)),
+                 ("Calificación", "<b>{}</b>{}".format(html.escape(calificacion), " · {}★".format(actividad.nivel) if actividad.nivel else ""))]
+        alertas = [descripcion_alerta(a) for a in actividad.get_alertas()]
+        if alertas:
+            filas.append(("Alertas", "<br>".join(html.escape(a) for a in alertas)))
+        marcas = [descripcion_marca(m) for m in actividad.get_marcas()]
+        if marcas:
+            filas.append(("Marcas", "<br>".join(html.escape(m) for m in marcas)))
+        filas.append(("Qué pasó", html.escape(que_paso)))
+
+        estado_form = actividad.estado_formulario
+        links = []
+        if estado_form is not None:
+            url = "https://{}/formularios/{}/".format(settings.HOST, estado_form.hash)
+            links.append("<a href='{0}'>Ver el formulario</a>".format(html.escape(url)))
+        if actividad.perfil_url:
+            links.append("<a href='{0}'>Ver su perfil en BuenAdoptante</a>".format(html.escape(actividad.perfil_url)))
+
+        cuerpo = "".join(
+            "<tr><td style='padding:6px 12px 6px 0;color:#6b6f80;font-size:13px;vertical-align:top;width:32%;'>{}</td>"
+            "<td style='padding:6px 0;vertical-align:top;'>{}</td></tr>".format(etiqueta, valor) for etiqueta, valor in filas)
+        return (
+            "<p style='margin:0 0 6px;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#7020a0;'>BuenAdoptante</p>"
+            "<h1 style='margin:0 0 16px;font-size:22px;line-height:1.3;color:#2d3748;'>La persona de un formulario ya figuraba en BuenAdoptante</h1>"
+            "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='margin:0 0 16px;'>{}</table>"
+            "<p style='margin:0;'>{}</p>"
+        ).format(cuerpo, " · ".join(links))
 
     def _guardar(self, actividad):
 

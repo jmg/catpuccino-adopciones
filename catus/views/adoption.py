@@ -278,31 +278,29 @@ class PreAdoptionView(BaseView):
                 response_context["success"] = False
                 response_context["bloqueado"] = True
                 return self._post_response(response_context)
+            #si BuenAdoptante ya la conocía, aviso aparte para seguir cómo matchea
+            BuenAdoptanteService().avisar_coincidencia(actividad)
 
         self.send_email(form_entry, form_for_form, animal_name, estado)
         response_context["success"] = True
         return self._post_response(response_context)
 
     def avisar_bloqueo(self, estado, actividad, animal_name):
-        """Al equipo, no al rescatista: el formulario frenado lo revisa el equipo."""
+        """Al equipo, no al rescatista: el formulario frenado lo revisa el equipo. Lleva el
+        mismo detalle que el aviso de coincidencia, y va también a quien recibe esos avisos
+        (BUENADOPTANTE_AVISAR_COINCIDENCIAS_A): para un formulario frenado es el único."""
 
         #get_animal devuelve el Animal o, si no lo encuentra, el nombre que se escribió
         animal_name = str(animal_name) if animal_name else "sin animal"
+        servicio = BuenAdoptanteService()
         calificacion = CALIFICACIONES.get(actividad.nivel, "sin dato")
         subject = "Formulario frenado por BuenAdoptante ({}): {}".format(calificacion, animal_name)
-        content = (
-            "<p>Un formulario de pre-adopción para <b>{animal}</b> no se le mandó al rescatista: "
-            "BuenAdoptante califica a la persona como <b>{calificacion}</b>.</p>"
-            "<p>Formulario: <a href='https://{host}/formularios/{hash}/'>https://{host}/formularios/{hash}/</a><br>"
-            "Perfil en BuenAdoptante: <a href='{perfil}'>{perfil}</a></p>"
-            "<p>Si te parece un error: en el formulario pasalo a \"No asignado\" (así aparece en el panel del "
-            "rescatista) y mandale el link.</p>"
-        ).format(
-            animal=html.escape(animal_name), calificacion=calificacion, host=settings.HOST,
-            hash=estado.hash, perfil=html.escape(actividad.perfil_url or "-"),
-        )
+        content = servicio.contenido_aviso(
+            actividad, estado.persona_nombre or "Sin nombre", animal_name, calificacion,
+            "Se frenó: el rescatista no lo recibió. Si te parece un error, en el formulario pasalo a "
+            "\"No asignado\" (así aparece en el panel del rescatista) y mandale el link.")
         try:
-            send_html_email(subject, content, settings.SEND_MAIL, [settings.SEND_MAIL])
+            send_html_email(subject, content, settings.SEND_MAIL, servicio.destinatarios_coincidencias(ademas=[settings.SEND_MAIL]))
         except Exception as e:
             logger.warning("No se pudo avisar del formulario frenado %s: %s", estado.id, type(e).__name__)
 

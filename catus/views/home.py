@@ -73,6 +73,14 @@ class PrivacyView(TemplateView):
     url = r"^privacidad/$"
     extra_context = {"legal_page": "privacidad"}
 
+    def get_context_data(self, **kwargs):
+        from catus.services.buenadoptante import BuenAdoptanteService
+
+        context = super().get_context_data(**kwargs)
+        #la política dice lo que pasa: BuenAdoptante aparece cuando los formularios se le mandan
+        context["buenadoptante_activo"] = BuenAdoptanteService().activo()
+        return context
+
 
 class TermsView(TemplateView):
 
