@@ -1,0 +1,67 @@
+{% comment %}
+El marco de todos los mails del sitio. Las plantillas de email/ lo extienden; el HTML que se
+arma en el código (avisos, contrato) lo envuelve send_html_email (utils.envolver_mail).
+
+Es HTML de mail, no de página: tablas, estilos en línea y nada de CSS externo, porque Gmail y
+Outlook descartan casi todo lo demás. El marco no lleva ningún <a href>: el mail "¿Sigue en
+adopción?" lleva texto del equipo, y su test controla que ahí no aparezca ningún link
+(test_animales). El logo sale de producción porque el staging está detrás de una contraseña.
+{% endcomment %}<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Catpuccino Adopciones</title>
+<style>
+  a { color: #7020a0; }
+  @media only screen and (max-width: 620px) {
+    .mail-contenedor { width: 100% !important; }
+    .mail-cuerpo { padding: 24px 20px !important; }
+    .mail-cabecera { padding: 16px 20px !important; }
+    .mail-ficha-etiqueta, .mail-ficha-valor { display: block !important; width: 100% !important; }
+    .mail-ficha-etiqueta { padding-bottom: 0 !important; }
+    .mail-ficha-valor { border-top: 0 !important; padding-top: 2px !important; }
+    .mail-foto { width: 46% !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f0fa;">
+<div class="preheader" style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">{% block preheader %}{{ preheader }}{% endblock %}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f0fa;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" class="mail-contenedor" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:14px;overflow:hidden;">
+        <tr>
+          <td class="mail-cabecera" style="background-color:#8a2be2;padding:18px 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="vertical-align:middle;padding-right:12px;">
+                  <img src="https://adopciones.catpuccino.org/static/logo.png" width="40" height="40" alt="" style="display:block;border:0;width:40px;height:40px;">
+                </td>
+                <td style="vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:18px;font-weight:700;color:#ffffff;">
+                  Catpuccino Adopciones
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td class="mail-cuerpo" style="padding:32px 32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#2d3748;">
+            {% block content %}{{ contenido }}{% endblock %}
+          </td>
+        </tr>
+      </table>
+      <table role="presentation" class="mail-contenedor" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+        <tr>
+          <td style="padding:16px 32px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#8a8f98;text-align:center;">
+            {% block pie %}Catpuccino Adopciones · adopciones.catpuccino.org<br>Adopción responsable de gatos y perros{% endblock %}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{% comment %}Botón de mail: una tabla con el fondo en la celda, porque Outlook no pinta el fondo de un <a>. Recibe url y texto.{% endcomment %}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:{{ margen|default:'24px 0' }};">
+  <tr>
+    <td style="border-radius:8px;background-color:#8a2be2;">
+      <a href="{{ url }}" style="display:inline-block;padding:12px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:8px;">{{ texto }}</a>
+    </td>
+  </tr>
+</table>

@@ -15,7 +15,10 @@ class MailService(BaseService):
             return
 
         subject = "Catpuccino Adopciones - Nuevo Ingreso"
-        content = self.render("email/new_animal.html", {"animal": animal, "settings": settings})
+        content = self.render("email/new_animal.html", {
+            "animal": animal, "settings": settings,
+            "link_aprobar": "{}/animal/aprobar/?id={}".format(settings.SSL_HOST, animal.id),
+        })
 
         send_html_email(subject, content, settings.SEND_MAIL, ["catpuccino.ok@gmail.com"])
 
@@ -49,7 +52,14 @@ class MailService(BaseService):
             return
 
         subject = "Catpuccino Adopciones - {} ya está publicado!".format(animal.nombre.capitalize())
-        content = self.render("email/new_animal_aprobacion.html", {"animal": animal, "settings": settings })
+        #el link del formulario puede ser uno propio del animal (custom_link), ya completo
+        link_formulario = animal.get_adoption_url()
+        if not link_formulario.startswith(("http://", "https://")):
+            link_formulario = settings.SSL_HOST + link_formulario
+        content = self.render("email/new_animal_aprobacion.html", {
+            "animal": animal, "settings": settings, "link_formulario": link_formulario,
+            "link_perfil": settings.SSL_HOST + animal.cargado_por.get_handle_url(),
+        })
 
         send_html_email(subject, content, settings.SEND_MAIL, animal.cargado_por.email)
 
