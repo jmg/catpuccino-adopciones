@@ -3,6 +3,7 @@ from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService, d
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
 from catus.services.adoption import AdoptionService
+from catus.services.historial import adopciones_anteriores
 
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
@@ -74,6 +75,7 @@ class FormView(LoginRequiredMixin, BaseView):
             "form_attrs": form_attrs,
             "form_hash": form_hash,
             "buenadoptante": self.buenadoptante(estado_form),
+            "adopciones_anteriores": adopciones_anteriores(estado_form),
             #"extra_forms": extra_forms,
         })
 
