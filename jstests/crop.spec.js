@@ -12,7 +12,8 @@ const {COMBINACIONES, dondeDibujaElServer, medirVistaPrevia, compararConElServer
 
 // el posteo es un lienzo de 1400 con la foto de 1200 adentro
 const CANVAS = 1400;
-const NOMBRE_FONT = 150;
+// el nombre del harness es "Willy": entra con el tamaño más grande de la tarjeta
+const NOMBRE_FONT = 140;
 
 // tolerancia en fracciones: Cropper redondea a pixeles enteros y la foto se muestra
 // escalada, asi que un par de pixeles de deriva sobre 3000 es esperable
@@ -302,19 +303,20 @@ test.describe("la vista previa del posteo", () => {
 
     test("dibuja el nombre en pixeles proporcionales al ancho, no en porcentaje", async ({page}) => {
         /* Un font-size en % se resuelve contra el font-size del padre, no contra el
-         * ancho: el nombre salia de ~1.7px y la barra verde quedaba una astilla. Se ve
-         * distinto en cada pantalla, por eso el test corre en los dos perfiles. */
+         * ancho: el nombre salia de ~1.7px y quedaba una astilla. Se ve distinto en cada
+         * pantalla, por eso el test corre en los dos perfiles. */
 
         await page.evaluate((foto) => window.harness.preparar(foto), FOTOS.paisaje);
         await abrirSelector(page);
 
         const medidas = await page.evaluate(() => {
             const post = document.querySelector(".catus-crop-post");
-            const bar = document.querySelector(".catus-crop-namebar");
+            const nombre = document.querySelector(".catus-crop-card-name");
+            const tarjeta = document.querySelector(".catus-crop-card");
             return {
                 anchoPost: post.clientWidth,
-                fuenteBar: parseFloat(window.getComputedStyle(bar).fontSize),
-                altoBar: bar.getBoundingClientRect().height,
+                fuenteBar: parseFloat(window.getComputedStyle(nombre).fontSize),
+                altoBar: tarjeta.getBoundingClientRect().height,
             };
         });
 
@@ -384,12 +386,11 @@ test.describe("la vista previa del posteo", () => {
 
     for (const combinacion of COMBINACIONES) {
 
-        test(`ubica nombre y edad donde los dibuja el server: ${combinacion.que}`, async ({page}) => {
-            /* La vista previa ponia el renglon de edad y sexo segun la posicion del
-             * NOMBRE, pero el server lo dibuja segun posicion_edad_sexo, que en
-             * /tools/generarimagen/ es otro select. Con los dos en lugares distintos el
-             * renglon se mostraba en la otra punta de la foto, y la persona encuadraba
-             * dejando libre justo el lugar donde no iba a ir. */
+        test(`ubica la tarjeta donde la dibuja el server: ${combinacion.que}`, async ({page}) => {
+            /* La persona encuadra mirando la vista previa: si la tarjeta se mostrara en
+             * otro lado, dejaria libre justo el lugar donde no va a ir. Las posiciones
+             * del nombre y la edad eran del diseno anterior; se siguen mandando, pero la
+             * tarjeta va siempre centrada abajo, igual que en el server. */
 
             await page.evaluate((datos) => window.harness.preparar(datos), {
                 ...FOTOS.paisaje,

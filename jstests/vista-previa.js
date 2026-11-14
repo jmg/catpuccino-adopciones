@@ -1,5 +1,5 @@
 /*
- * Dónde dibuja el server el nombre y la edad, y dónde los muestra la vista previa.
+ * Dónde dibuja el server la tarjeta del posteo, y dónde la muestra la vista previa.
  *
  * Lo usan crop.spec.js (el selector suelto, como en tools/generarimagen.html) y
  * crop-formset.spec.js (el formset de animal/edit.html). No es un spec: playwright sólo
@@ -7,19 +7,17 @@
  */
 
 /*
- * El oráculo: lo que hace ImageService.add_nombre_y_edad (catus/services/images.py) en
- * el lienzo de 1400 del posteo. Sale de leer el server, no el widget:
+ * El oráculo: lo que hace ImageService.medidas_de_la_tarjeta (catus/services/images.py)
+ * en el lienzo de 1400 del posteo. Sale de leer el server, no el widget:
  *
- *   - la barra del nombre termina en position_text_name_y_end + 20: 1180 con
- *     "Izquierda (abajo)", 280 con cualquier otra cosa;
- *   - con "Izquierda (arriba)" arranca en 100, el borde de la foto. Con "abajo" arranca
- *     a la altura del texto, que con Impact 150 queda entre 996 y 1011 según las letras
- *     del nombre (medido con Pillow: "Juggy" 996, "Willy" 999, "Pancho" 1011);
- *   - el renglón de edad y sexo va en y=1205 con posicion_edad_sexo "Izquierda (abajo)"
- *     y en y=305 con cualquier otra cosa. No mira posicion_nombre para nada.
+ *   - la foto ocupa todo el lienzo y la tarjeta termina en y=1310 (TARJETA_ABAJO);
+ *   - va centrada: (1400 - ancho) // 2;
+ *   - nunca sale de la franja que muestra la grilla del perfil, x entre 190 y 1210
+ *     (FRANJA_SEGURA): achica el nombre o lo pasa a dos renglones;
+ *   - el nombre y el renglón de edad y sexo van adentro.
  *
- * Las dos posiciones se eligen por separado en los selects de /tools/generarimagen/, así
- * que las cuatro combinaciones salen de la pantalla.
+ * Las posiciones del nombre y la edad eran del diseño anterior: las pantallas las siguen
+ * mandando, pero no mueven la tarjeta. Por eso las cuatro combinaciones esperan lo mismo.
  */
 const ABAJO = "Izquierda (abajo)";
 const ARRIBA = "Izquierda (arriba)";
@@ -32,23 +30,20 @@ const COMBINACIONES = [
 ];
 
 // en unidades del lienzo de 1400: en una vista previa de 240 px un pixel son casi 6
-const TOLERANCIA_LIENZO = 2;
+const TOLERANCIA_LIENZO = 6;
 
-function dondeDibujaElServer(posicionNombre, posicionEdadSexo) {
+function dondeDibujaElServer() {
+    /* No depende de las posiciones: la tarjeta va siempre en el mismo lugar. */
 
-    return {
-        barra: posicionNombre === ABAJO
-            ? {arribaEntre: [996, 1011], abajo: 1180}
-            : {arribaEntre: [100, 100], abajo: 280},
-        renglon: posicionEdadSexo === ABAJO ? 1205 : 305,
-    };
+    return {abajo: 1310, centro: 700, franja: [190, 1210]};
 }
 
 function medirVistaPrevia(page) {
-    /* Dónde quedaron la barra y el renglón en la vista previa, en unidades del lienzo.
+    /* Dónde quedaron la tarjeta, el nombre y el renglón en la vista previa, en unidades
+     * del lienzo.
      *
-     * Se mide la caja que se ve, no el style: un top en % se resuelve contra el alto del
-     * .catus-crop-post, y es eso lo que hay que comparar con el server. */
+     * Se mide la caja que se ve, no el style, contra el alto del .catus-crop-post, que
+     * es lo que hay que comparar con el server. */
 
     return page.evaluate(() => {
 
@@ -58,42 +53,56 @@ function medirVistaPrevia(page) {
 
         function enLienzo(selector) {
             const nodo = document.querySelector(".catus-crop-post " + selector);
-            if (!nodo) {
+            if (!nodo || nodo.style.display === "none") {
                 return null;
             }
             const r = nodo.getBoundingClientRect();
             return {
+                izquierda: (r.left - caja.left - post.clientLeft) * escala,
+                derecha: (r.right - caja.left - post.clientLeft) * escala,
                 arriba: (r.top - caja.top - post.clientTop) * escala,
                 abajo: (r.bottom - caja.top - post.clientTop) * escala,
             };
         }
 
-        return {barra: enLienzo(".catus-crop-namebar"), renglon: enLienzo(".catus-crop-subtitle")};
+        return {
+            tarjeta: enLienzo(".catus-crop-card"),
+            nombre: enLienzo(".catus-crop-card-name"),
+            renglon: enLienzo(".catus-crop-card-line"),
+        };
     });
 }
 
 function compararConElServer(expect, medido, esperado, contexto) {
     /* Con expect.soft: si la vista previa se corre, el test lista TODO lo que no
-     * coincide (la barra y el renglón) en vez de cortar en lo primero. */
+     * coincide en vez de cortar en lo primero. */
 
-    const [desde, hasta] = esperado.barra.arribaEntre;
+    expect(medido.tarjeta, `${contexto}: no hay tarjeta`).not.toBeNull();
+    expect(medido.nombre, `${contexto}: no hay nombre en la tarjeta`).not.toBeNull();
 
-    expect(medido.barra, `${contexto}: no hay barra del nombre`).not.toBeNull();
-    expect(medido.renglon, `${contexto}: no hay renglón de edad y sexo`).not.toBeNull();
+    const {tarjeta} = medido;
+    const centro = (tarjeta.izquierda + tarjeta.derecha) / 2;
 
-    expect.soft(Math.abs(medido.renglon.arriba - esperado.renglon),
-        `${contexto}: la edad va en ${medido.renglon.arriba} y el server la escribe en ${esperado.renglon}`)
+    expect.soft(Math.abs(tarjeta.abajo - esperado.abajo),
+        `${contexto}: la tarjeta termina en ${tarjeta.abajo} y el server la termina en ${esperado.abajo}`)
         .toBeLessThanOrEqual(TOLERANCIA_LIENZO);
-
-    expect.soft(medido.barra.arriba,
-        `${contexto}: la barra empieza en ${medido.barra.arriba} y el server entre ${desde} y ${hasta}`)
-        .toBeGreaterThanOrEqual(desde - TOLERANCIA_LIENZO);
-    expect.soft(medido.barra.arriba,
-        `${contexto}: la barra empieza en ${medido.barra.arriba} y el server entre ${desde} y ${hasta}`)
-        .toBeLessThanOrEqual(hasta + TOLERANCIA_LIENZO);
-    expect.soft(Math.abs(medido.barra.abajo - esperado.barra.abajo),
-        `${contexto}: la barra termina en ${medido.barra.abajo} y el server en ${esperado.barra.abajo}`)
+    expect.soft(Math.abs(centro - esperado.centro),
+        `${contexto}: la tarjeta está centrada en ${centro} y el server en ${esperado.centro}`)
         .toBeLessThanOrEqual(TOLERANCIA_LIENZO);
+    expect.soft(tarjeta.izquierda, `${contexto}: la tarjeta sale de la franja por la izquierda`)
+        .toBeGreaterThanOrEqual(esperado.franja[0] - TOLERANCIA_LIENZO);
+    expect.soft(tarjeta.derecha, `${contexto}: la tarjeta sale de la franja por la derecha`)
+        .toBeLessThanOrEqual(esperado.franja[1] + TOLERANCIA_LIENZO);
+
+    for (const [que, caja] of [["el nombre", medido.nombre], ["el renglón de edad y sexo", medido.renglon]]) {
+        if (!caja) {
+            continue;
+        }
+        expect.soft(caja.izquierda, `${contexto}: ${que} sale de la tarjeta`).toBeGreaterThanOrEqual(tarjeta.izquierda);
+        expect.soft(caja.derecha, `${contexto}: ${que} sale de la tarjeta`).toBeLessThanOrEqual(tarjeta.derecha);
+        expect.soft(caja.arriba, `${contexto}: ${que} sale de la tarjeta`).toBeGreaterThanOrEqual(tarjeta.arriba);
+        expect.soft(caja.abajo, `${contexto}: ${que} sale de la tarjeta`).toBeLessThanOrEqual(tarjeta.abajo);
+    }
 }
 
 module.exports = {ABAJO, ARRIBA, COMBINACIONES, dondeDibujaElServer, medirVistaPrevia, compararConElServer};

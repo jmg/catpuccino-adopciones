@@ -171,8 +171,20 @@ single image or carousel container, polls `wait_for_media_ready`, publishes, the
 an "adoptado" comment when the animal's `estado` changes. Tokens are refreshed by
 `refresh_token`.
 
-**Square crop for Instagram.** Posts are 1200×1200 inside a 1400×1400 white frame, so every
-photo has to be cropped square. `AnimalImage.crop_x/y/w/h` hold the chosen crop as fractions
+**The post image** (`ImageService.generate_logo_image`). The photo fills the 1400×1400 square
+and a white card with the name (violet, Open Sans ExtraBold), age · sex and the black logo
+sits centered at the bottom, in the site's colours. The card stays inside x 190–1210
+(`FRANJA_SEGURA`), the band the profile grid still shows once it crops square posts to 3:4;
+the old design (white frame, green name bar, logo in a circle) lost the first letter of the
+name and half the logo there. The name shrinks, or wraps to two lines, until it fits, and
+is laid out by baseline from fixed font metrics, so names with and without descenders sit
+at the same height. The per-photo name size and name/age positions (`image_font_size`,
+`image_posicion_*`) belonged to the old design: they are still stored and passed around, but
+no longer move anything. The fonts are `.woff2`, which the production Pillow reads directly.
+The crop preview in `crop-widget.js` mirrors the card's geometry (`medidas_de_la_tarjeta`);
+change both together, and `jstests/vista-previa.js` checks they agree.
+
+**Square crop for Instagram.** Every photo has to be cropped square for the post. `AnimalImage.crop_x/y/w/h` hold the chosen crop as fractions
 (0–1) of the source photo, so it survives rescaling; `get_crop()`/`set_crop()` wrap them.
 `ImageService.crop_to_square()` honours that crop and otherwise falls back to the old
 `centered` heuristic, and `suggest_crop()` proposes one by scanning edge energy for the

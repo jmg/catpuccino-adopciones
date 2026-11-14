@@ -103,7 +103,7 @@ class OptimizeTest(ImageServiceTestCase):
 
 
 class GenerateLogoImageTest(ImageServiceTestCase):
-    """El posteo final: 1200 de foto dentro de un lienzo de 1400 con marco blanco."""
+    """El posteo final: la foto en todo el lienzo de 1400 y la tarjeta encima."""
 
     def setUp(self):
         super().setUp()
@@ -152,28 +152,30 @@ class GenerateLogoImageTest(ImageServiceTestCase):
             self.assertEqual(posteo.size, (1400, 1400))
 
 
+def blancos_por_renglon(posteo, desde_y, hasta_y):
+    """Desde y hasta qué x hay blanco puro en esa franja: la tarjeta, sobre una foto gris."""
+
+    pixeles = posteo.convert("RGB").load()
+    xs = [x for y in range(desde_y, hasta_y, 4) for x in range(posteo.size[0])
+          if all(canal > 245 for canal in pixeles[x, y])]
+    return (min(xs), max(xs)) if xs else (None, None)
+
+
 class EdadYSexoQueEntraTest(ImageServiceTestCase):
-    """El renglón de abajo del posteo: la edad y el sexo.
+    """El renglón de la edad y el sexo, dentro de la tarjeta.
 
     El ajuste de tamaño de letra cubría sólo el nombre, así que este renglón seguía
-    saliéndose del lienzo: la edad la escribe el rescatista a mano y "aproximadamente
-    3 años y medio - Macho y Hembra" mide 1661 px con los 60 fijos de siempre, sobre
-    1220 de ancho útil. El texto salía cortado por la derecha y no lo veía nadie,
-    porque el posteo lo arma el cron y ahí no hay previsualización que mirar.
+    saliéndose: la edad la escribe el rescatista a mano y "aproximadamente 3 años y
+    medio - Macho y Hembra" no entraba con el tamaño fijo de siempre. El texto salía
+    cortado y no lo veía nadie, porque el posteo lo arma el cron y ahí no hay
+    previsualización que mirar.
     """
 
     EDAD_LARGA = "aproximadamente 3 años y medio"
 
-    #el marco blanco del lienzo: la foto va de 100 a 1300
-    BORDE_DE_LA_FOTO = 1300
-
     def ancho_disponible(self):
 
-        return (
-            self.service.LADO_LIENZO_POSTEO
-            - self.service.MARGEN_TEXTO_EDAD_SEXO_X
-            - self.service.MARGEN_BORDE_POSTEO
-        )
+        return self.service.ancho_para_el_texto_de_la_tarjeta(self.service.logo_para_la_tarjeta())
 
     def ancho_dibujado(self, texto, tamano):
 
@@ -186,73 +188,160 @@ class EdadYSexoQueEntraTest(ImageServiceTestCase):
 
         return self.service.texto_de_edad_y_sexo(make_animal(**kwargs))
 
-    def test_con_los_60_de_siempre_no_entraba(self):
+    def test_con_la_letra_mas_grande_no_entraba(self):
         """Si esto dejara de ser cierto, el test de acá abajo no mediría nada."""
 
-        self.assertGreater(self.ancho_dibujado(self.texto(), 60), self.ancho_disponible())
+        self.assertGreater(self.ancho_dibujado(self.texto(), max(self.service.TAMANOS_EDAD_SEXO)), self.ancho_disponible())
 
-    def test_una_edad_larga_entra_en_el_lienzo(self):
+    def test_una_edad_larga_entra_en_la_tarjeta(self):
 
         texto = self.texto()
 
         tamano = self.service.tamano_de_letra_para_edad_y_sexo(texto)
 
         self.assertLessEqual(
-            self.service.MARGEN_TEXTO_EDAD_SEXO_X + self.ancho_dibujado(texto, tamano),
-            self.service.LADO_LIENZO_POSTEO - self.service.MARGEN_BORDE_POSTEO,
-            "'{}' se sale del lienzo con letra de {}".format(texto, tamano),
+            self.ancho_dibujado(texto, tamano), self.ancho_disponible(),
+            "'{}' se sale de la tarjeta con letra de {}".format(texto, tamano),
         )
 
-    def test_una_edad_corta_conserva_el_tamano_de_siempre(self):
-        """Achicar el renglón que ya entraba cambiaría el posteo de todos los animales."""
+    def test_una_edad_corta_va_con_la_letra_mas_grande(self):
 
         self.assertEqual(
             self.service.tamano_de_letra_para_edad_y_sexo(self.texto(edad="2 años", sexo="M")),
-            60,
+            max(self.service.TAMANOS_EDAD_SEXO),
         )
 
     def test_un_animal_sin_edad_muestra_el_sexo(self):
 
         self.assertEqual(self.texto(edad=None, sexo="H"), "Hembra")
 
-    def borde_derecho_del_texto(self, posteo, desde_y, hasta_y):
-        """Hasta qué x llega el texto blanco, dentro de la foto (que va de 100 a 1300)."""
+    def test_desconocido_no_se_escribe(self):
 
-        pixeles = posteo.convert("RGB").load()
+        self.assertEqual(self.texto(edad="2 años", sexo="D"), "2 años")
+        self.assertEqual(self.texto(edad=None, sexo="D"), "")
 
-        borde = 0
-        for y in range(desde_y, hasta_y):
-            for x in range(100, self.BORDE_DE_LA_FOTO):
-                if all(canal > 200 for canal in pixeles[x, y]):
-                    borde = max(borde, x)
+    def test_la_edad_no_se_mete_en_el_logo(self):
+        """Medido sobre el posteo ya armado: el renglón termina antes de que empiece el logo.
 
-        return borde
-
-    def test_la_edad_no_sale_cortada_en_el_posteo(self):
-        """Medido sobre el posteo ya armado: el texto que se pasa llega hasta el borde.
-
-        La foto va sobre negro y el renglón arriba justamente para que el único blanco
-        de esa franja sea la edad: abajo a la derecha está el círculo blanco del logo,
-        que llega hasta el borde siempre y no mediría nada.
+        El texto es gris azulado (más azul que rojo) y el logo es negro puro, así que se
+        los distingue por color aunque estén en la misma franja.
         """
 
         from catus.tests.factories import photo_bytes
 
         animal = make_animal(nombre="Willy", edad=self.EDAD_LARGA, sexo="A")
+        medidas = self.service.medidas_de_la_tarjeta(animal)
+        x0, y0, x1, y1 = medidas["caja"]
+        logo_x = x1 - self.service.TARJETA_PADDING_X - medidas["logo"].size[0]
 
-        posteo = self.service.generate_logo_image(
-            animal, photo_bytes(size=(1200, 1200), color=(0, 0, 0)),
-            nombre_font_size=150,
-            posicion_nombre="Izquierda (arriba)",
-            posicion_edad_sexo="Izquierda (arriba)",
-        )
-
-        #la barra del nombre termina en y=280 y el renglón de la edad arranca en 305
-        with Image.open(posteo) as imagen:
-            borde = self.borde_derecho_del_texto(imagen, 300, 390)
+        with Image.open(self.service.generate_logo_image(animal, photo_bytes(size=(1200, 1200)))) as posteo:
+            pixeles = posteo.convert("RGB").load()
+            borde = 0
+            for y in range(medidas["base_linea"] - 40, medidas["base_linea"] + 2):
+                for x in range(x0, x1):
+                    r, g, b = pixeles[x, y]
+                    if b - r >= 15 and min(r, g, b) < 200:
+                        borde = max(borde, x)
 
         self.assertGreater(borde, 0, "no se encontró el renglón de la edad: el test no mide nada")
-        self.assertLess(
-            borde, self.BORDE_DE_LA_FOTO - 10,
-            "la edad llega al borde de la foto: salió cortada",
-        )
+        self.assertLess(borde, logo_x, "la edad llega hasta el logo")
+
+
+class TarjetaTest(ImageServiceTestCase):
+    """La tarjeta del posteo: dónde va y cómo se acomoda el nombre."""
+
+    NOMBRE_LARGO = "Bartolomeo Maximiliano de los Santos"
+
+    def posteo(self, animal, **kwargs):
+
+        from catus.tests.factories import photo_bytes
+
+        return Image.open(self.service.generate_logo_image(animal, photo_bytes(size=(1200, 1200)), **kwargs))
+
+    def test_queda_dentro_de_lo_que_muestra_la_grilla(self):
+        """La grilla del perfil corta 175 px de cada costado del posteo cuadrado: con el
+        diseño anterior mostraba "ngela" y medio logo. Con el nombre y la edad más largos
+        que se nos ocurren, la tarjeta no sale de la franja segura."""
+
+        animal = make_animal(nombre=self.NOMBRE_LARGO, edad="aproximadamente 3 años y medio", sexo="A")
+        x0, y0, x1, y1 = self.service.medidas_de_la_tarjeta(animal)["caja"]
+
+        with self.posteo(animal) as posteo:
+            desde, hasta = blancos_por_renglon(posteo, y0 + 10, y1 - 10)
+
+        self.assertIsNotNone(desde, "no se encontró la tarjeta: el test no mide nada")
+        izquierda, derecha = self.service.FRANJA_SEGURA
+        self.assertGreaterEqual(desde, izquierda - self.service.TARJETA_BORDE)
+        self.assertLessEqual(hasta, derecha + self.service.TARJETA_BORDE)
+
+    def test_va_centrada_abajo(self):
+
+        animal = make_animal(nombre="Willy", edad="2 años", sexo="M")
+        x0, y0, x1, y1 = self.service.medidas_de_la_tarjeta(animal)["caja"]
+
+        self.assertEqual(y1, self.service.TARJETA_ABAJO)
+        self.assertLessEqual(abs((x0 + x1) / 2 - self.service.LADO_LIENZO_POSTEO / 2), 1)
+
+    def test_los_nombres_se_apoyan_a_la_misma_altura(self):
+        """El que reportó el usuario en la maqueta: "Rocco" quedaba más abajo que "Ángela".
+
+        Se ubicaba cada nombre por la tinta de sus letras, y la g de Ángela, que baja del
+        renglón, subía todo el nombre. Con la letra del mismo tamaño, la base del nombre y
+        el alto de la tarjeta tienen que ser los mismos, tenga o no letras que bajan.
+        """
+
+        angela = self.service.medidas_de_la_tarjeta(make_animal(nombre="Ángela", edad="1 año", sexo="H"))
+        rocco = self.service.medidas_de_la_tarjeta(make_animal(nombre="Rocco", edad="4 años", sexo="M"))
+
+        self.assertEqual(angela["fuente_nombre"].size, rocco["fuente_nombre"].size)
+        self.assertEqual(angela["base_nombre"], rocco["base_nombre"])
+        self.assertEqual(angela["caja"][1], rocco["caja"][1], "las tarjetas no miden lo mismo de alto")
+
+    def test_un_nombre_corto_va_con_la_letra_mas_grande(self):
+
+        ancho = self.service.ancho_para_el_texto_de_la_tarjeta(self.service.logo_para_la_tarjeta())
+
+        self.assertEqual(self.service.nombre_en_renglones("Willy", ancho), (max(self.service.TAMANOS_NOMBRE), ["Willy"]))
+
+    def test_dos_palabras_que_entran_van_en_un_renglon(self):
+
+        ancho = self.service.ancho_para_el_texto_de_la_tarjeta(self.service.logo_para_la_tarjeta())
+
+        self.assertEqual(self.service.nombre_en_renglones("Tomy bicolor", ancho)[1], ["Tomy bicolor"])
+
+    def test_un_nombre_larguisimo_pasa_a_dos_renglones_y_entra(self):
+
+        ancho = self.service.ancho_para_el_texto_de_la_tarjeta(self.service.logo_para_la_tarjeta())
+
+        tamano, renglones = self.service.nombre_en_renglones(self.NOMBRE_LARGO, ancho)
+
+        self.assertEqual(len(renglones), 2)
+        self.assertEqual(" ".join(renglones), self.NOMBRE_LARGO)
+        for renglon in renglones:
+            self.assertLessEqual(self.service.ancho_del_nombre(renglon, tamano), ancho)
+
+    def test_sin_edad_ni_sexo_lleva_solo_el_nombre(self):
+
+        animal = make_animal(nombre="Michi", edad=None, sexo="D")
+
+        medidas = self.service.medidas_de_la_tarjeta(animal)
+
+        self.assertIsNone(medidas["fuente_linea"])
+        with self.posteo(animal) as posteo:
+            self.assertEqual(posteo.size, (1400, 1400))
+
+    def test_las_posiciones_del_diseno_anterior_no_mueven_la_tarjeta(self):
+        """Se siguen guardando y pasando, pero la tarjeta va siempre centrada abajo."""
+
+        from catus.tests.factories import photo_bytes
+
+        animal = make_animal(nombre="Willy", edad="2 años", sexo="M")
+
+        arriba = self.service.generate_logo_image(animal, photo_bytes(size=(1200, 1200)),
+                                                  nombre_font_size=50, posicion_nombre="Izquierda (arriba)",
+                                                  posicion_edad_sexo="Izquierda (arriba)").read()
+        abajo = self.service.generate_logo_image(animal, photo_bytes(size=(1200, 1200)),
+                                                 nombre_font_size=150, posicion_nombre="Izquierda (abajo)",
+                                                 posicion_edad_sexo="Izquierda (abajo)").read()
+
+        self.assertEqual(arriba, abajo)

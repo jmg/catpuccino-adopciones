@@ -24,32 +24,54 @@ class ImageService():
     #tope duro para que una foto muy alargada no se guarde entera
     TOPE_LADO_LARGO = 2600
 
-    #el lienzo del posteo: 1200 de foto + 200 de marco blanco (ver generate_logo_image)
+    #El posteo: la foto ocupa todo el lienzo y abajo, centrada, va una tarjeta blanca con
+    #el nombre, la edad y el sexo, y el logo (ver generate_logo_image). Reemplazó en
+    #noviembre de 2026 al marco blanco con la barra verde y el logo en un círculo, que
+    #tapaba la esquina de la foto y que la grilla del perfil cortaba.
     LADO_LIENZO_POSTEO = 1400
 
-    #add_nombre_y_edad dibuja la barra del nombre desde x=0 hasta 130 + el ancho del texto
-    MARGEN_BARRA_NOMBRE = 130
+    #La grilla del perfil de Instagram muestra las miniaturas en vertical (3:4) y a un
+    #posteo cuadrado le corta 175 px de cada costado. Todo lo que tiene que leerse queda
+    #entre estas dos x: con el diseño anterior la grilla mostraba "ngela" en vez de
+    #"Ángela" y medio logo.
+    FRANJA_SEGURA = (190, 1210)
 
-    #que la barra no llegue a tocar el borde: el mismo margen que se le deja al logo
-    MARGEN_BORDE_POSTEO = 40
+    #la tarjeta: dónde termina (su borde de abajo) y sus márgenes por dentro
+    TARJETA_ABAJO = 1310
+    TARJETA_PADDING_X = 54
+    TARJETA_PADDING_ARRIBA = 60
+    TARJETA_PADDING_ABAJO = 48
+    TARJETA_RADIO = 34
+    TARJETA_BORDE = 4
+    LOGO_ALTO_EN_TARJETA = 104
+    HUECO_TEXTO_LOGO = 44
 
-    #los mismos tamaños que ofrece /tools/generarimagen/: la elección automática no puede
-    #terminar en un tamaño que después nadie pueda reproducir a mano desde la pantalla
-    TAMANOS_NOMBRE = (150, 125, 100, 75, 50)
+    #El nombre va en un renglón con el tamaño más grande que entre, mientras no baje de
+    #MINIMO_NOMBRE_EN_UN_RENGLON; si no, en dos renglones. La edad y el sexo se achican
+    #hasta entrar: los escribe el rescatista y pueden ser larguísimos.
+    TAMANOS_NOMBRE = (140, 126, 112, 100, 88, 76)
+    MINIMO_NOMBRE_EN_UN_RENGLON = 88
+    TAMANOS_EDAD_SEXO = (54, 50, 46, 42, 38, 34)
+    #por debajo de esto el texto ya no se lee; solo se llega con textos absurdos
+    TAMANO_MINIMO = 20
 
-    #el renglón de abajo (edad y sexo) no lo ofrece ninguna pantalla, así que acá los
-    #tamaños son sólo el margen que tiene el ajuste automático para achicarlo
-    TAMANOS_EDAD_SEXO = (60, 50, 40, 30, 25)
+    #Open Sans, la letra del sitio (licencia en static/fonts/OPEN-SANS-LICENSE.txt). En
+    #woff2: el Pillow de la imagen de producción los lee directo.
+    FUENTE_NOMBRE = "opensans-extrabold.woff2"
+    FUENTE_EDAD_SEXO = "opensans-semibold.woff2"
 
-    FUENTE_NOMBRE = "impact.ttf"
-    FUENTE_EDAD_SEXO = "montserrat.ttf"
+    #los colores del sitio (catus/static/css/modern.css)
+    COLOR_TARJETA = (255, 255, 255)
+    COLOR_BORDE_TARJETA = (226, 211, 250)  #lavanda, como el borde de las fichas
+    COLOR_NOMBRE = (138, 43, 226)  #--primary-color
+    COLOR_EDAD_SEXO = (45, 55, 72)  #--text-color
+    COLOR_SEPARADOR = (138, 43, 226)
+    SEPARADOR_EDAD_SEXO = "  ·  "
 
-    #add_nombre_y_edad escribe la edad y el sexo empezando en esta x
-    MARGEN_TEXTO_EDAD_SEXO_X = 140
-
-    #Arriba, que es donde venía cayendo el default de /tools/makeimages/ ("Izquierda").
-    #Abajo la barra del nombre se dibuja DESPUÉS del logo y sobre las mismas coordenadas:
-    #con un nombre largo le pasa por encima y el posteo sale sin logo.
+    #Las posiciones del nombre y la edad eran del diseño anterior, que los dibujaba arriba
+    #o abajo a la izquierda. La tarjeta va siempre centrada abajo, así que ya no mueven
+    #nada en el posteo; se siguen guardando y pasando para no tocar las pantallas que las
+    #leen.
     POSICION_NOMBRE_AUTOMATICA = "Izquierda (arriba)"
     POSICION_EDAD_SEXO_AUTOMATICA = "Izquierda (arriba)"
 
@@ -315,59 +337,111 @@ class ImageService():
         """El tamaño más grande, de los que se ofrecen, con el que el texto entra.
 
         Se mide con la fuente de verdad en vez de estimar por la cantidad de letras: una
-        "i" y una "W" no ocupan lo mismo, y lo que decide si el renglón se sale del
-        lienzo es el ancho en píxeles.
+        "i" y una "W" no ocupan lo mismo, y lo que decide si el renglón se sale de la
+        tarjeta es el ancho en píxeles. Si no entra ni con el más chico, se sigue
+        achicando de a 2 hasta TAMANO_MINIMO: la edad la escribe el rescatista a mano, y
+        un renglón que se sale de la tarjeta (y de lo que muestra la grilla) es peor que
+        uno chico.
         """
 
-        for tamano in sorted(tamanos, reverse=True):
+        candidatos = sorted(tamanos, reverse=True)
+        candidatos += list(range(candidatos[-1] - 2, self.TAMANO_MINIMO - 1, -2))
+
+        for tamano in candidatos:
             if self.ancho_del_texto(texto, fuente, tamano) <= ancho_disponible:
                 return tamano
 
-        #un texto absurdamente largo no entra ni con el más chico: se usa igual, porque
-        #recortarle el nombre (o la edad) al animal es peor que un renglón que se pasa
-        return min(tamanos)
+        return self.TAMANO_MINIMO
 
     def ancho_del_nombre(self, nombre, tamano):
         """Cuánto mide el nombre en píxeles, con la fuente con la que se va a dibujar."""
 
         return self.ancho_del_texto(nombre, self.FUENTE_NOMBRE, tamano)
 
-    def tamano_de_letra_para_el_nombre(self, nombre):
-        """El tamaño más grande, de los que ofrece la pantalla, con el que la barra entra.
+    def logo_para_la_tarjeta(self):
+        """El logo negro del sitio, recortado a lo que tiene dibujado y del alto de la tarjeta."""
 
-        Con el default de 150, "Bartolomeo Maximiliano de los Santos" mide 2356 px sobre
-        un lienzo de 1400: la barra se iba por la derecha y el nombre salía cortado.
-        Mientras las imágenes se armaban a mano no importaba —el que las generaba veía la
-        previsualización y bajaba el tamaño—, pero el cron no mira.
+        logo = Image.open(os.path.join(settings.STATICFILES_DIRS[0], "logo_2.png")).convert("RGBA")
+        logo = logo.crop(logo.getchannel("A").getbbox())
+        alto = self.LOGO_ALTO_EN_TARJETA
+        return logo.resize((round(logo.size[0] * alto / logo.size[1]), alto), Image.LANCZOS)
+
+    def ancho_para_el_texto_de_la_tarjeta(self, logo):
+        """Lo que le queda al texto: la franja segura, menos los márgenes y el logo."""
+
+        izquierda, derecha = self.FRANJA_SEGURA
+        return derecha - izquierda - 2 * self.TARJETA_PADDING_X - logo.size[0] - self.HUECO_TEXTO_LOGO
+
+    def partir_en_dos(self, texto, tamano, ancho_disponible):
+        """El texto en un renglón si entra; si no, en dos, cortando en el espacio que deja
+        los dos renglones más parejos. Una palabra sola no se corta."""
+
+        if self.ancho_del_nombre(texto, tamano) <= ancho_disponible or " " not in texto.strip():
+            return [texto]
+
+        palabras = texto.split()
+        mejor = None
+        for i in range(1, len(palabras)):
+            renglones = [" ".join(palabras[:i]), " ".join(palabras[i:])]
+            mas_largo = max(self.ancho_del_nombre(r, tamano) for r in renglones)
+            if mejor is None or mas_largo < mejor[0]:
+                mejor = (mas_largo, renglones)
+
+        return mejor[1]
+
+    def nombre_en_renglones(self, nombre, ancho_disponible):
+        """(tamaño, renglones) del nombre en la tarjeta.
+
+        Un renglón con el tamaño más grande que entre, mientras no baje de
+        MINIMO_NOMBRE_EN_UN_RENGLON: "Tomy bicolor" va en uno solo. Si no, dos renglones
+        con el tamaño más grande que entre, y si ni así, se sigue achicando: "Bartolomeo
+        Maximiliano de los Santos" mide 2356 px con 150, sobre 1400 de lienzo.
         """
 
-        entra = self.LADO_LIENZO_POSTEO - self.MARGEN_BARRA_NOMBRE - self.MARGEN_BORDE_POSTEO
+        nombre = (nombre or "").strip() or "Sin nombre"
 
-        return self.tamano_que_entra(nombre, self.FUENTE_NOMBRE, entra, self.TAMANOS_NOMBRE)
+        for tamano in self.TAMANOS_NOMBRE:
+            if tamano < self.MINIMO_NOMBRE_EN_UN_RENGLON:
+                break
+            if self.ancho_del_nombre(nombre, tamano) <= ancho_disponible:
+                return tamano, [nombre]
+
+        candidatos = list(self.TAMANOS_NOMBRE)
+        candidatos += list(range(candidatos[-1] - 4, self.TAMANO_MINIMO - 1, -4))
+        for tamano in candidatos:
+            renglones = self.partir_en_dos(nombre, tamano, ancho_disponible)
+            if all(self.ancho_del_nombre(r, tamano) <= ancho_disponible for r in renglones):
+                return tamano, renglones
+
+        return self.TAMANO_MINIMO, self.partir_en_dos(nombre, self.TAMANO_MINIMO, ancho_disponible)
+
+    def partes_de_edad_y_sexo(self, animal):
+        """La edad y el sexo, lo que haya: "Desconocido" no se escribe."""
+
+        partes = []
+        if animal.edad and str(animal.edad).strip():
+            partes.append(str(animal.edad).strip())
+        if animal.sexo != "D":
+            partes.append(animal.get_sexo_display())
+        return partes
 
     def texto_de_edad_y_sexo(self, animal):
-        """El renglón de abajo del posteo."""
+        """El renglón de abajo de la tarjeta, como se lee."""
 
-        if not animal.edad:
-            return animal.get_sexo_display()
+        return self.SEPARADOR_EDAD_SEXO.join(self.partes_de_edad_y_sexo(animal))
 
-        if animal.sexo == "D":
-            return u"{}".format(animal.edad)
+    def tamano_de_letra_para_edad_y_sexo(self, texto, ancho_disponible=None):
+        """El tamaño del renglón de la edad y el sexo: el más grande que entre en la tarjeta.
 
-        return u"{} - {}".format(animal.edad, animal.get_sexo_display())
-
-    def tamano_de_letra_para_edad_y_sexo(self, texto):
-        """Lo mismo que para el nombre, pero para el renglón de abajo.
-
-        El ajuste cubría sólo el nombre, así que la edad seguía saliéndose: la escribe el
-        rescatista a mano y "aproximadamente 3 años y medio - Macho y Hembra" mide 1661 px
-        con los 60 fijos de siempre, sobre 1220 de lienzo útil. Se salía por la derecha y
-        no lo veía nadie, porque el posteo lo arma el cron.
+        El renglón se salía del lienzo: la edad la escribe el rescatista a mano y
+        "aproximadamente 3 años y medio - Macho y Hembra" no entraba con el tamaño fijo de
+        siempre. Se salía por la derecha y no lo veía nadie, porque el posteo lo arma el cron.
         """
 
-        entra = self.LADO_LIENZO_POSTEO - self.MARGEN_TEXTO_EDAD_SEXO_X - self.MARGEN_BORDE_POSTEO
+        if ancho_disponible is None:
+            ancho_disponible = self.ancho_para_el_texto_de_la_tarjeta(self.logo_para_la_tarjeta())
 
-        return self.tamano_que_entra(texto, self.FUENTE_EDAD_SEXO, entra, self.TAMANOS_EDAD_SEXO)
+        return self.tamano_que_entra(texto, self.FUENTE_EDAD_SEXO, ancho_disponible, self.TAMANOS_EDAD_SEXO)
 
     def generar_imagen_para_instagram(self, imagen, forzar=False):
         """Arma y guarda el image_for_instagram de una foto, sin nadie mirando.
@@ -391,14 +465,6 @@ class ImageService():
         if crop is None:
             crop = self.suggest_crop(imagen.image)
 
-        #el tamaño guardado es un techo, no una orden: el default del modelo son 150 y
-        #nadie los eligió, así que bajarlo cuando el nombre no entra no le pisa la decisión
-        #a nadie; al revés, un 50 elegido a mano se respeta
-        tamano = min(
-            imagen.image_font_size or max(self.TAMANOS_NOMBRE),
-            self.tamano_de_letra_para_el_nombre(animal.nombre),
-        )
-
         posicion_nombre = imagen.image_posicion_nombre or self.POSICION_NOMBRE_AUTOMATICA
         posicion_edad_sexo = imagen.image_posicion_edad_sexo or self.POSICION_EDAD_SEXO_AUTOMATICA
 
@@ -407,7 +473,6 @@ class ImageService():
                 animal,
                 imagen.image,
                 centered=imagen.image_centered,
-                nombre_font_size=tamano,
                 posicion_nombre=posicion_nombre,
                 posicion_edad_sexo=posicion_edad_sexo,
                 crop=crop,
@@ -417,11 +482,8 @@ class ImageService():
             with imagen.image.open("rb") as archivo:
                 contenido = archivo.read()
 
-        #image_font_size NO se toca: es lo que eligió una persona en /tools/makeimages/, o
-        #el default. Guardar acá lo que decidió el ajuste automático lo volvía una orden en
-        #vez de un techo, y como la fórmula de arriba es un min(), el tamaño sólo podía
-        #bajar: al corregir un nombre largo por uno corto la letra ya no volvía a crecer,
-        #y encima el camino que rehace la imagen es justamente el de corregir el nombre.
+        #image_font_size NO se toca: es lo que eligió una persona en /tools/makeimages/ con
+        #el diseño anterior. La tarjeta elige el tamaño sola.
         imagen.image_posicion_nombre = posicion_nombre
         imagen.image_posicion_edad_sexo = posicion_edad_sexo
         #el recorte queda guardado: así la pantalla muestra el que se usó y la corrida
@@ -433,16 +495,13 @@ class ImageService():
 
         return True
 
-    def generate_logo_image(self, animal, image_field, centered=True, nombre_font_size=150, posicion_nombre="Izquierda", posicion_edad_sexo="Izquierda", crop=None):
+    def generate_logo_image(self, animal, image_field, centered=True, nombre_font_size=None, posicion_nombre=None, posicion_edad_sexo=None, crop=None):
+        """El posteo: la foto en todo el lienzo y la tarjeta encima.
 
-        img_parts_dir = os.path.join(settings.STATICFILES_DIRS[0])
-
-        base_size = 1200
-        back_margin_white = 200
-
-        logo_size = 250
-        offset = 40
-        offset2 = 40
+        nombre_font_size y las posiciones eran del diseño anterior y ya no cambian nada:
+        la tarjeta elige el tamaño sola y va siempre centrada abajo. Se aceptan para no
+        romper a quien los pasa.
+        """
 
         #self.rotate() endereza por EXIF, igual que hace suggest_crop antes de medir el
         #recorte: sin esto las fracciones se calculaban sobre la foto derecha y se
@@ -450,88 +509,110 @@ class ImageService():
         #por EditView es un no-op —optimize() ya la guarda enderezada y sin EXIF—, pero
         #una foto cargada desde el admin conserva su orientación y salía de costado.
         img = self.rotate(Image.open(image_field)).convert("RGBA")
-        logo = Image.open(os.path.join(img_parts_dir, "logo_2.png")).convert("RGBA")
-        logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
+        image = self.crop_to_square(img, self.LADO_LIENZO_POSTEO, centered=centered, crop=crop)
 
-        img = self.crop_to_square(img, base_size, centered=centered, crop=crop)
-        canvas_size = base_size + back_margin_white
+        self.dibujar_tarjeta(image, animal)
 
-        image = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255))
-        image.paste(img, (100, 100), img)
+        return self.save_image(image)
+
+    def medidas_de_la_tarjeta(self, animal):
+        """Todo lo que hace falta para dibujar la tarjeta, sin dibujarla.
+
+        Las alturas salen de medidas fijas de la letra (la altura de las mayúsculas y lo
+        que bajan la g o la y), no de la tinta de cada nombre: medir la tinta subía
+        "Ángela" (por la g) por encima de "Rocco", y la tarjeta cambiaba de alto con
+        cada nombre.
+        """
+
+        logo = self.logo_para_la_tarjeta()
+        ancho_texto_max = self.ancho_para_el_texto_de_la_tarjeta(logo)
+
+        tamano_nombre, renglones = self.nombre_en_renglones(animal.nombre, ancho_texto_max)
+        fuente_nombre = self.get_font(self.FUENTE_NOMBRE, tamano_nombre)
+
+        partes = self.partes_de_edad_y_sexo(animal)
+        texto = self.SEPARADOR_EDAD_SEXO.join(partes)
+        fuente_linea = None
+        if texto:
+            fuente_linea = self.get_font(
+                self.FUENTE_EDAD_SEXO, self.tamano_de_letra_para_edad_y_sexo(texto, ancho_texto_max))
+
+        alto_mayuscula = -fuente_nombre.getbbox("H", anchor="ls")[1]
+        interlinea = round(tamano_nombre * 1.08)
+
+        ancho_texto = max(fuente_nombre.getbbox(r, anchor="ls")[2] for r in renglones)
+        alto = self.TARJETA_PADDING_ARRIBA + alto_mayuscula + interlinea * (len(renglones) - 1)
+
+        hueco = alto_linea = 0
+        if fuente_linea:
+            #lo que bajan la g o la y del nombre, más un respiro, hasta las mayúsculas del renglón
+            hueco = round(fuente_nombre.getmetrics()[1] * 0.8) + 18
+            alto_linea = -fuente_linea.getbbox("H", anchor="ls")[1]
+            ancho_texto = max(ancho_texto, fuente_linea.getbbox(texto, anchor="ls")[2])
+            alto += hueco + alto_linea
+        else:
+            #sin renglón, lo que baja el nombre ocupa el lugar del margen
+            alto += round(fuente_nombre.getmetrics()[1] * 0.5)
+        alto += self.TARJETA_PADDING_ABAJO
+
+        ancho = 2 * self.TARJETA_PADDING_X + ancho_texto + self.HUECO_TEXTO_LOGO + logo.size[0]
+        x = (self.LADO_LIENZO_POSTEO - ancho) // 2
+        y = self.TARJETA_ABAJO - alto
+
+        return {
+            "caja": (x, y, x + ancho, y + alto),
+            "logo": logo,
+            "fuente_nombre": fuente_nombre,
+            "renglones": renglones,
+            "interlinea": interlinea,
+            "base_nombre": y + self.TARJETA_PADDING_ARRIBA + alto_mayuscula,
+            "fuente_linea": fuente_linea,
+            "partes": partes,
+            "base_linea": y + self.TARJETA_PADDING_ARRIBA + alto_mayuscula + interlinea * (len(renglones) - 1) + hueco + alto_linea,
+        }
+
+    def dibujar_tarjeta(self, image, animal):
+        """La tarjeta blanca centrada abajo: el nombre en violeta, la edad y el sexo en gris
+        con un punto violeta en el medio, y el logo negro a la derecha. Como la ficha de
+        cada animal en el sitio."""
+
+        m = self.medidas_de_la_tarjeta(animal)
+        x0, y0, x1, y1 = m["caja"]
+
+        #una sombra suave para que la tarjeta se despegue de fotos claras; se desenfoca
+        #solo el pedazo de alrededor, no el lienzo entero
+        margen = 60
+        zona = (max(0, x0 - margen), max(0, y0 - margen), min(image.size[0], x1 + margen), min(image.size[1], y1 + margen))
+        sombra = Image.new("L", (zona[2] - zona[0], zona[3] - zona[1]), 0)
+        ImageDraw.Draw(sombra).rounded_rectangle(
+            [(x0 - zona[0], y0 - zona[1] + 10), (x1 - zona[0], y1 - zona[1] + 10)], self.TARJETA_RADIO, fill=110)
+        sombra = sombra.filter(ImageFilter.GaussianBlur(22))
+        negro = Image.new("RGBA", sombra.size, (0, 0, 0, 255))
+        negro.putalpha(sombra)
+        image.alpha_composite(negro, (zona[0], zona[1]))
 
         draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle([(x0, y0), (x1, y1)], self.TARJETA_RADIO, fill=self.COLOR_TARJETA,
+                               outline=self.COLOR_BORDE_TARJETA, width=self.TARJETA_BORDE)
 
-        logo_x = canvas_size - logo.size[0] - offset
-        logo_y = canvas_size - logo.size[1] - offset
+        texto_x = x0 + self.TARJETA_PADDING_X
+        base = m["base_nombre"]
+        for renglon in m["renglones"]:
+            draw.text((texto_x, base), renglon, self.COLOR_NOMBRE, font=m["fuente_nombre"], anchor="ls")
+            base += m["interlinea"]
 
-        draw.ellipse([(logo_x - offset2, logo_y - offset2), (logo_x + logo.size[0] + offset2, logo_y + logo.size[1] + offset2)], fill=(255, 255, 255))
+        if m["fuente_linea"]:
+            fuente = m["fuente_linea"]
+            x = texto_x + 2
+            for i, parte in enumerate(m["partes"]):
+                if i:
+                    draw.text((x, m["base_linea"]), self.SEPARADOR_EDAD_SEXO, self.COLOR_SEPARADOR, font=fuente, anchor="ls")
+                    x += fuente.getlength(self.SEPARADOR_EDAD_SEXO)
+                draw.text((x, m["base_linea"]), parte, self.COLOR_EDAD_SEXO, font=fuente, anchor="ls")
+                x += fuente.getlength(parte)
 
-        image.paste(logo, (logo_x, logo_y), logo)
-
-        self.add_nombre_y_edad(animal, image, canvas_size, nombre_font_size, posicion_nombre, posicion_edad_sexo)
-
-        output = self.save_image(image)
-
-        return output
-
-    def add_nombre_y_edad(self, animal, image, canvas_size, nombre_font_size, posicion_nombre, posicion_edad_sexo):
-
-        draw = ImageDraw.Draw(image)
-        font = self.get_font(self.FUENTE_NOMBRE, nombre_font_size)
-
-        color_back_animal_nombre = (147, 186, 183)
-        color_text_animal_nombre = (255,255,255)
-        color_text_bottom_text = (255,255,255)
-
-        back_margin = -5
-        if nombre_font_size == 125:
-            back_margin = 0
-        elif nombre_font_size == 100:
-            back_margin = 5
-        elif nombre_font_size == 75:
-            back_margin = 10
-        elif nombre_font_size == 50:
-            back_margin = 15
-
-        animal_name_len, animal_name_height = text_size(font, animal.nombre)
-
-        if posicion_nombre == "Izquierda (abajo)":
-            position_text_name_y_end = 1160
-        else:
-            position_text_name_y_end = 260
-
-        margin_text_name_x = 105
-
-        position_back_name_y_end = position_text_name_y_end + 20
-
-        position_text_name_y_start = position_text_name_y_end - animal_name_height
-
-        if posicion_nombre == "Izquierda (arriba)":
-            position_back_name_y_start = 100
-        else:
-            position_back_name_y_start = position_text_name_y_start - back_margin
-
-        position_text_animal_name = (margin_text_name_x, position_text_name_y_start)
-        position_back_animal_name_start = (0, position_back_name_y_start)
-        position_back_animal_name_end = (130 + animal_name_len, position_back_name_y_end)
-
-        draw.rectangle([position_back_animal_name_start, position_back_animal_name_end], fill=color_back_animal_nombre)
-        draw.text(position_text_animal_name, animal.nombre, color_text_animal_nombre, font=font, align='center')
-
-        #if es_plural and sexo.lower() in ["macho", "hembra"]:
-        #    sexo = "{}S".format(sexo)
-
-        bottom_text = self.texto_de_edad_y_sexo(animal)
-
-        font2 = self.get_font(self.FUENTE_EDAD_SEXO, self.tamano_de_letra_para_edad_y_sexo(bottom_text))
-
-        margin_text_bottom_x = self.MARGEN_TEXTO_EDAD_SEXO_X
-        if posicion_edad_sexo == "Izquierda (abajo)":
-            margin_text_bottom_y = 1205
-        else:
-            margin_text_bottom_y = 305
-
-        draw.text((margin_text_bottom_x, margin_text_bottom_y), bottom_text, color_text_bottom_text, font=font2)
+        logo = m["logo"]
+        image.alpha_composite(logo, (x1 - self.TARJETA_PADDING_X - logo.size[0], y0 + (y1 - y0 - logo.size[1]) // 2))
 
     def resize(self, image_field, base_width):
         """Achica el banner o el logo del perfil para que ningún lado pase de base_width.

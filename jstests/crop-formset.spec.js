@@ -311,12 +311,10 @@ test.describe("lo que ve la persona en cada fila", () => {
 
 test.describe("la vista previa de cada fila muestra lo que va a dibujar el server", () => {
 
-    /* El posteo de estas fotos lo arma generar_imagen_para_instagram, con la posición que
-     * la foto tenga guardada (image_posicion_nombre / image_posicion_edad_sexo) o, si no
-     * tiene, con ImageService.POSICION_NOMBRE_AUTOMATICA y POSICION_EDAD_SEXO_AUTOMATICA,
-     * las dos "Izquierda (arriba)". El template pasaba siempre el nombre arriba y nunca
-     * la edad, y el selector deducía la edad del nombre: en una foto que el equipo había
-     * compuesto con la edad abajo, la vista previa la mostraba arriba. */
+    /* El posteo de estas fotos lo arma generar_imagen_para_instagram, con la tarjeta
+     * centrada abajo. Las filas siguen pasando las posiciones que la foto tenga guardadas
+     * (eran del diseño anterior, que dibujaba nombre y edad arriba o abajo): ninguna
+     * combinación tiene que mover la tarjeta de la vista previa, ni romperla. */
 
     async function vistaPreviaDe(page, fila) {
 

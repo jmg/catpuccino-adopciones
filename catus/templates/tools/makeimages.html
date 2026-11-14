@@ -121,40 +121,15 @@
                             <small class="form-text text-muted">Solo se usa cuando no hay recorte elegido a mano.</small>
                         </div>
 
-                        <div class="form-group">
-                            <label class="form-label">
-                                <i class="fa fa-font"></i>
-                                Tamaño Fuente
-                            </label>
-                            <select class="form-control form-control-modern config-select" name="nombre_font_size_{{image.id}}" data-image-id="{{image.id}}" required>
-                                {% for x in fonts %}
-                                <option {% if image.image_font_size == x %}selected="selected"{% endif %} value="{{x}}">{{x}}px</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">
-                                <i class="fa fa-map-marker-alt"></i>
-                                Posición Nombre
-                            </label>
-                            {% comment %}Sin posición guardada el server dibuja arriba (ImageService.POSICION_NOMBRE_AUTOMATICA): si acá se mostrara "abajo", apretar Actualizar sin tocar nada movía la barra.{% endcomment %}
-                            <select class="form-control form-control-modern config-select" name="posicion_nombre_{{image.id}}" data-image-id="{{image.id}}">
-                                <option {% if image.image_posicion_nombre == "Izquierda (abajo)" %}selected="selected"{% endif %} value="Izquierda (abajo)">Izquierda (abajo)</option>
-                                <option {% if image.image_posicion_nombre == "Izquierda (arriba)" or not image.image_posicion_nombre %}selected="selected"{% endif %} value="Izquierda (arriba)">Izquierda (arriba)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">
-                                <i class="fa fa-map-marker-alt"></i>
-                                Posición Edad/Sexo
-                            </label>
-                            <select class="form-control form-control-modern config-select" name="posicion_edad_sexo_{{image.id}}" data-image-id="{{image.id}}">
-                                <option {% if image.image_posicion_edad_sexo == "Izquierda (abajo)" %}selected="selected"{% endif %} value="Izquierda (abajo)">Izquierda (abajo)</option>
-                                <option {% if image.image_posicion_edad_sexo == "Izquierda (arriba)" or not image.image_posicion_edad_sexo %}selected="selected"{% endif %} value="Izquierda (arriba)">Izquierda (arriba)</option>
-                            </select>
-                        </div>
+                        {% comment %}
+                        El tamaño del nombre y las posiciones del nombre y la edad eran del diseño
+                        anterior (marco blanco y barra verde). La tarjeta elige el tamaño sola y va
+                        siempre centrada abajo, así que ya no se ofrecen; viajan ocultos para que
+                        Actualizar no pise lo que la foto tenía guardado.
+                        {% endcomment %}
+                        <input type="hidden" name="nombre_font_size_{{image.id}}" value="{{image.image_font_size|default:150|unlocalize}}">
+                        <input type="hidden" name="posicion_nombre_{{image.id}}" value="{{image.image_posicion_nombre|default:'Izquierda (arriba)'}}">
+                        <input type="hidden" name="posicion_edad_sexo_{{image.id}}" value="{{image.image_posicion_edad_sexo|default:'Izquierda (arriba)'}}">
                     </div>
                 </div>
 

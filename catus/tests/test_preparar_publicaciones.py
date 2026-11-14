@@ -24,10 +24,6 @@ from catus.services.images import ImageService
 from catus.tests.factories import make_animal, make_animal_image, uploaded_photo
 
 
-#el color de la barra del nombre en add_nombre_y_edad
-COLOR_BARRA = (147, 186, 183)
-
-
 #El posteo automático arranca apagado y este comando es sólo de ese pipeline: sin el flag
 #corta de entrada. Los tests de acá abajo son los del pipeline andando, así que lo prenden;
 #el que prueba que apagarlo frena todo lo vuelve a apagar.
@@ -381,67 +377,63 @@ class IdempotenciaTest(PrepararPublicacionesTestCase):
 
 
 class NombreLargoTest(PrepararPublicacionesTestCase):
-    """El tamaño de letra por default (150) no entra en el lienzo con cualquier nombre.
+    """El tamaño de letra por default no entra con cualquier nombre.
 
-    add_nombre_y_edad dibuja la barra del nombre desde x=0 hasta 130 + el ancho del texto,
-    sin mirar el lienzo: con "Bartolomeo Maximiliano de los Santos" el texto mide 2356 px
-    sobre 1400 de lienzo, así que la barra tapaba el ancho entero y el nombre salía
-    cortado. Mientras las imágenes se armaban a mano se veía en la previsualización y se
-    bajaba el tamaño; el cron no mira.
+    Con el diseño anterior la barra del nombre se dibujaba sin mirar el lienzo: con
+    "Bartolomeo Maximiliano de los Santos" el texto medía 2356 px sobre 1400, así que la
+    barra tapaba el ancho entero y el nombre salía cortado. Mientras las imágenes se
+    armaban a mano se veía en la previsualización y se bajaba el tamaño; el cron no mira.
+    La tarjeta de ahora achica el nombre, o lo pasa a dos renglones, hasta que entra.
     """
 
     NOMBRE_LARGO = "Bartolomeo Maximiliano de los Santos"
 
-    def borde_derecho_de_la_barra(self, path):
-        """Hasta qué x llega la barra del nombre en la imagen ya generada."""
+    def bordes_de_la_tarjeta(self, path, desde_y, hasta_y):
+        """Desde y hasta qué x llega la tarjeta (el blanco puro) en la imagen ya generada.
+
+        La foto de prueba es gris, así que el único blanco del posteo es la tarjeta.
+        Alcanza con la franja de la tarjeta, y de a 4 filas: recorrer las 1400 filas es
+        un minuto de test por nada."""
 
         with Image.open(path) as posteo:
             pixeles = posteo.convert("RGB").load()
+            xs = [x for y in range(desde_y, hasta_y, 4) for x in range(posteo.size[0])
+                  if all(canal > 245 for canal in pixeles[x, y])]
 
-            borde = 0
-            #alcanza con la franja donde se dibuja el nombre arriba (la barra va de y=100
-            #a y=280): recorrer las 1400 filas es un minuto de test por nada
-            for y in range(100, 285):
-                for x in range(posteo.size[0]):
-                    if all(abs(a - b) <= 25 for a, b in zip(pixeles[x, y], COLOR_BARRA)):
-                        borde = max(borde, x)
-
-            return borde
+        return (min(xs), max(xs)) if xs else (None, None)
 
     def test_el_tamano_baja_hasta_que_el_nombre_entra(self):
 
         service = ImageService()
+        ancho = service.ancho_para_el_texto_de_la_tarjeta(service.logo_para_la_tarjeta())
 
-        self.assertEqual(service.tamano_de_letra_para_el_nombre("Willy"), 150)
+        self.assertEqual(service.nombre_en_renglones("Willy", ancho)[0], max(service.TAMANOS_NOMBRE))
 
-        elegido = service.tamano_de_letra_para_el_nombre(self.NOMBRE_LARGO)
+        tamano, renglones = service.nombre_en_renglones(self.NOMBRE_LARGO, ancho)
 
-        self.assertLess(elegido, 150)
-        self.assertIn(elegido, service.TAMANOS_NOMBRE)
-        self.assertLessEqual(
-            service.MARGEN_BARRA_NOMBRE + service.ancho_del_nombre(self.NOMBRE_LARGO, elegido),
-            service.LADO_LIENZO_POSTEO,
-        )
+        self.assertLess(tamano, max(service.TAMANOS_NOMBRE))
+        for renglon in renglones:
+            self.assertLessEqual(service.ancho_del_nombre(renglon, tamano), ancho)
 
     def test_un_nombre_largo_no_se_sale_de_la_imagen(self):
 
-        imagen = self.con_foto(self.agendado(nombre=self.NOMBRE_LARGO))
+        animal = self.agendado(nombre=self.NOMBRE_LARGO)
+        imagen = self.con_foto(animal)
 
         self.correr()
 
         imagen.refresh_from_db()
+        x0, y0, x1, y1 = ImageService().medidas_de_la_tarjeta(animal)["caja"]
+        desde, hasta = self.bordes_de_la_tarjeta(imagen.image_for_instagram.path, y0 + 10, y1 - 10)
 
-        borde = self.borde_derecho_de_la_barra(imagen.image_for_instagram.path)
-
-        self.assertGreater(borde, 0, "no se encontró la barra del nombre: el test no mide nada")
-        self.assertLess(
-            borde, ImageService.LADO_LIENZO_POSTEO - ImageService.MARGEN_BORDE_POSTEO,
-            "la barra del nombre llega hasta el borde del posteo",
-        )
+        self.assertIsNotNone(desde, "no se encontró la tarjeta: el test no mide nada")
+        izquierda, derecha = ImageService.FRANJA_SEGURA
+        self.assertGreaterEqual(desde, izquierda - ImageService.TARJETA_BORDE, "la tarjeta sale de lo que muestra la grilla")
+        self.assertLessEqual(hasta, derecha + ImageService.TARJETA_BORDE, "la tarjeta sale de lo que muestra la grilla")
 
     def test_respeta_un_tamano_elegido_a_mano(self):
-        """El tamaño guardado es un techo: bajarlo cuando no entra no le pisa la decisión
-        a nadie, pero subirlo sí."""
+        """El tamaño que eligió alguien en /tools/makeimages/ con el diseño anterior no se
+        pisa: la tarjeta elige el suyo sola, pero lo guardado sigue siendo de esa persona."""
 
         imagen = self.con_foto(self.agendado(nombre="Mishi"), image_font_size=50)
 

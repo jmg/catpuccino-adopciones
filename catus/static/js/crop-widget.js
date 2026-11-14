@@ -2,9 +2,9 @@
  * Selector de recorte cuadrado para Instagram.
  *
  * Abre la foto con un cuadro 1:1 que se arrastra y se agranda, y al lado (abajo, en el
- * celular) muestra una vista previa aproximada de como va a quedar el posteo (marco
- * blanco, logo, la barra con el nombre y el renglon de edad y sexo), para poder elegir
- * sin que el animal quede cortado ni tapado.
+ * celular) muestra una vista previa aproximada de como va a quedar el posteo (la foto en
+ * todo el cuadrado y, abajo y centrada, la tarjeta con el nombre, la edad y el sexo, y el
+ * logo), para poder elegir sin que el animal quede cortado ni tapado.
  *
  * El recorte se guarda en fracciones (0 a 1) de la foto original, asi que no depende
  * del tamano en el que se la muestre.
@@ -14,7 +14,7 @@
  *       crop: {x: 0, y: 0.1, w: 1, h: 0.42},   // o null si todavia no tiene
  *       nombre: "Willy",
  *       subtitulo: "2 anios - Macho",
- *       // las dos con el valor que va a recibir ImageService.add_nombre_y_edad
+ *       // del diseno anterior: se aceptan, pero la tarjeta va siempre en el mismo lugar
  *       posicionNombre: "Izquierda (abajo)",
  *       posicionEdadSexo: "Izquierda (arriba)",
  *       onSave: function (crop) { ... }        // crop es null si eligio automatico
@@ -23,21 +23,35 @@
 (function (window, document) {
     "use strict";
 
-    // el posteo final es un lienzo de 1400 con la foto de 1200 pegada en (100, 100)
+    // El posteo final es un lienzo de 1400 con la foto en todo el lienzo y, abajo y
+    // centrada, una tarjeta blanca con el nombre, la edad y el sexo, y el logo. Las
+    // medidas son las de ImageService (catus/services/images.py, medidas_de_la_tarjeta):
+    // si cambian alla, cambian aca.
     var CANVAS = 1400;
-    var PHOTO = 1200;
-    var INSET = 100;
-    var LOGO_CIRCLE = 330;
-    var LOGO = 250;
-
-    // tamanos con los que se dibujan el nombre y el subtitulo sobre el lienzo de 1400
-    var NOMBRE_FONT = 150;
-    var SUBTITULO_FONT = 60;
-
-    // los valores que mira ImageService.add_nombre_y_edad. Los compara enteros, asi que
-    // cualquier otro texto (o ninguno) cae en el else del server, que es arriba
-    var ABAJO = "Izquierda (abajo)";
-    var ARRIBA = "Izquierda (arriba)";
+    var TARJETA_ABAJO = 1310;
+    // lo que muestra la grilla del perfil, que corta 175 de cada costado
+    var FRANJA_SEGURA = [190, 1210];
+    var PADDING_X = 54;
+    var PADDING_ARRIBA = 60;
+    var PADDING_ABAJO = 48;
+    var RADIO = 34;
+    var BORDE = 4;
+    var HUECO_TEXTO_LOGO = 44;
+    var LOGO_ALTO = 104;
+    // el png del logo tiene aire alrededor: lo dibujado va de (156, 42) a (824, 936)
+    // sobre 980x980, y la tarjeta usa solo eso
+    var LOGO_PNG = 980;
+    var LOGO_DIBUJO = {x: 156, y: 42, w: 668, h: 894};
+    var TAMANOS_NOMBRE = [140, 126, 112, 100, 88, 76];
+    var MINIMO_NOMBRE_EN_UN_RENGLON = 88;
+    var TAMANOS_EDAD_SEXO = [54, 50, 46, 42, 38, 34];
+    var TAMANO_MINIMO = 20;
+    // de Open Sans, medidas con Pillow: alto de las mayusculas y lo que bajan g, j, p, q, y
+    var MAYUSCULA = 0.714;
+    var DESCENSO = 0.3;
+    var FUENTE = "'Open Sans', Arial, sans-serif";
+    var SEPARADOR = "  \u00b7  ";
+    var VIOLETA = "rgb(138,43,226)";
 
     var STYLE_ID = "catus-crop-styles";
 
@@ -66,14 +80,15 @@
             ".catus-crop-post{position:relative;width:100%;padding-top:100%;background:#fff;",
             "border:1px solid #e2e2e2;border-radius:4px;overflow:hidden;}",
             ".catus-crop-photo{position:absolute;overflow:hidden;background:#f2f2f2;}",
-            ".catus-crop-namebar{position:absolute;left:0;background:rgb(147,186,183);color:#fff;",
-            "display:flex;align-items:center;font-family:Impact,'Arial Narrow',sans-serif;",
-            "white-space:nowrap;overflow:hidden;}",
-            ".catus-crop-subtitle{position:absolute;color:#fff;white-space:nowrap;",
-            "font-family:Montserrat,Arial,sans-serif;text-shadow:0 1px 2px rgba(0,0,0,.45);}",
-            ".catus-crop-logo{position:absolute;border-radius:50%;background:#fff;",
-            "display:flex;align-items:center;justify-content:center;}",
-            ".catus-crop-logo img{width:76%;height:76%;object-fit:contain;}",
+            ".catus-crop-card{position:absolute;box-sizing:border-box;background:#fff;",
+            "border-style:solid;border-color:rgb(226,211,250);box-shadow:0 3px 8px rgba(0,0,0,.25);}",
+            ".catus-crop-card-name,.catus-crop-card-line{position:absolute;white-space:pre;",
+            "line-height:1;font-family:" + FUENTE + ";}",
+            ".catus-crop-card-name{font-weight:800;color:" + VIOLETA + ";}",
+            ".catus-crop-card-line{font-weight:600;color:rgb(45,55,72);}",
+            ".catus-crop-card-line .catus-crop-sep{color:" + VIOLETA + ";}",
+            ".catus-crop-card-logo{position:absolute;overflow:hidden;}",
+            ".catus-crop-card-logo img{position:absolute;max-width:none;}",
             ".catus-crop-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;",
             "margin-top:16px;padding-top:14px;border-top:1px solid #eee;}",
             ".catus-crop-actions .btn{min-width:120px;}",
@@ -101,46 +116,218 @@
         return node;
     }
 
-    function ajustarFuentes(post) {
-        /* Pone en pixeles el tamano de letra de la vista previa.
+    var medidor = null;
+
+    function anchoDe(texto, peso, tamano) {
+        /* Cuanto mide un texto con la letra del posteo, en unidades del lienzo. */
+
+        medidor = medidor || document.createElement("canvas").getContext("2d");
+        medidor.font = peso + " " + tamano + "px " + FUENTE;
+        return medidor.measureText(texto).width;
+    }
+
+    function baseDesdeArriba(peso, tamano) {
+        /* Con line-height:1, a que distancia del borde de arriba de la caja cae la linea
+         * base. Sale de la letra que el navegador uso de verdad, asi que vale tambien si
+         * Open Sans no cargo y quedo Arial. */
+
+        medidor = medidor || document.createElement("canvas").getContext("2d");
+        medidor.font = peso + " " + tamano + "px " + FUENTE;
+        var m = medidor.measureText("H");
+        var arriba = m.fontBoundingBoxAscent || tamano * 1.07;
+        var abajo = m.fontBoundingBoxDescent || tamano * 0.3;
+        return (tamano - arriba - abajo) / 2 + arriba;
+    }
+
+    function tamanoQueEntra(texto, peso, ancho, tamanos) {
+
+        var candidatos = tamanos.slice();
+        for (var t = tamanos[tamanos.length - 1] - 2; t >= TAMANO_MINIMO; t -= 2) {
+            candidatos.push(t);
+        }
+        for (var i = 0; i < candidatos.length; i++) {
+            if (anchoDe(texto, 600, candidatos[i]) <= ancho) {
+                return candidatos[i];
+            }
+        }
+        return TAMANO_MINIMO;
+    }
+
+    function partirEnDos(texto, tamano, ancho) {
+
+        if (anchoDe(texto, 800, tamano) <= ancho || texto.trim().indexOf(" ") === -1) {
+            return [texto];
+        }
+        var palabras = texto.split(/\s+/).filter(Boolean);
+        var mejor = null;
+        for (var i = 1; i < palabras.length; i++) {
+            var renglones = [palabras.slice(0, i).join(" "), palabras.slice(i).join(" ")];
+            var largo = Math.max(anchoDe(renglones[0], 800, tamano), anchoDe(renglones[1], 800, tamano));
+            if (mejor === null || largo < mejor.largo) {
+                mejor = {largo: largo, renglones: renglones};
+            }
+        }
+        return mejor.renglones;
+    }
+
+    function nombreEnRenglones(nombre, ancho) {
+        /* Como ImageService.nombre_en_renglones: un renglon con la letra mas grande que
+         * entre, sin bajar de MINIMO_NOMBRE_EN_UN_RENGLON; si no, dos renglones. */
+
+        nombre = (nombre || "").trim() || "Sin nombre";
+        var i, t, renglones;
+
+        for (i = 0; i < TAMANOS_NOMBRE.length && TAMANOS_NOMBRE[i] >= MINIMO_NOMBRE_EN_UN_RENGLON; i++) {
+            if (anchoDe(nombre, 800, TAMANOS_NOMBRE[i]) <= ancho) {
+                return {tamano: TAMANOS_NOMBRE[i], renglones: [nombre]};
+            }
+        }
+
+        var candidatos = TAMANOS_NOMBRE.slice();
+        for (t = TAMANOS_NOMBRE[TAMANOS_NOMBRE.length - 1] - 4; t >= TAMANO_MINIMO; t -= 4) {
+            candidatos.push(t);
+        }
+        for (i = 0; i < candidatos.length; i++) {
+            renglones = partirEnDos(nombre, candidatos[i], ancho);
+            var entran = renglones.every(function (r) { return anchoDe(r, 800, candidatos[i]) <= ancho; });
+            if (entran) {
+                return {tamano: candidatos[i], renglones: renglones};
+            }
+        }
+        return {tamano: TAMANO_MINIMO, renglones: partirEnDos(nombre, TAMANO_MINIMO, ancho)};
+    }
+
+    function partesDeEdadYSexo(subtitulo) {
+        /* Las pantallas arman el subtitulo "2 años - Macho" (o solo el sexo); la tarjeta
+         * lo escribe con un punto en el medio, y "Desconocido" no lo escribe. */
+
+        return (subtitulo || "").split(" - ").map(function (parte) {
+            return parte.trim();
+        }).filter(function (parte) {
+            return parte && parte !== "Desconocido";
+        });
+    }
+
+    function medidasDeLaTarjeta(options) {
+        /* La caja de la tarjeta y donde va cada cosa, en unidades del lienzo de 1400, con
+         * las mismas cuentas que ImageService.medidas_de_la_tarjeta. */
+
+        var logoAncho = Math.round(LOGO_DIBUJO.w * LOGO_ALTO / LOGO_DIBUJO.h);
+        var anchoTexto = FRANJA_SEGURA[1] - FRANJA_SEGURA[0] - 2 * PADDING_X - logoAncho - HUECO_TEXTO_LOGO;
+
+        var nombre = nombreEnRenglones(options.nombre, anchoTexto);
+        var partes = partesDeEdadYSexo(options.subtitulo);
+        var texto = partes.join(SEPARADOR);
+        var tamanoLinea = texto ? tamanoQueEntra(texto, 600, anchoTexto, TAMANOS_EDAD_SEXO) : 0;
+
+        var mayuscula = Math.round(MAYUSCULA * nombre.tamano);
+        var interlinea = Math.round(nombre.tamano * 1.08);
+        var descenso = DESCENSO * nombre.tamano;
+
+        var usado = 0;
+        nombre.renglones.forEach(function (r) {
+            usado = Math.max(usado, anchoDe(r, 800, nombre.tamano));
+        });
+
+        var alto = PADDING_ARRIBA + mayuscula + interlinea * (nombre.renglones.length - 1);
+        var baseNombre = PADDING_ARRIBA + mayuscula;
+        var baseLinea = null;
+        if (texto) {
+            var hueco = Math.round(descenso * 0.8) + 18;
+            alto += hueco + Math.round(MAYUSCULA * tamanoLinea);
+            baseLinea = alto;
+            usado = Math.max(usado, anchoDe(texto, 600, tamanoLinea));
+        } else {
+            alto += Math.round(descenso * 0.5);
+        }
+        alto += PADDING_ABAJO;
+
+        var ancho = 2 * PADDING_X + usado + HUECO_TEXTO_LOGO + logoAncho;
+
+        return {
+            x: Math.floor((CANVAS - ancho) / 2), y: TARJETA_ABAJO - alto, ancho: ancho, alto: alto,
+            nombre: nombre, interlinea: interlinea, baseNombre: baseNombre,
+            partes: partes, tamanoLinea: tamanoLinea, baseLinea: baseLinea, logoAncho: logoAncho
+        };
+    }
+
+    function dibujarTarjeta(post, options) {
+        /* Ubica la tarjeta en pixeles, contra el ancho real de la preview.
          *
-         * Todo lo demas se ubica con porcentajes del lienzo de 1400, pero un font-size
-         * en porcentaje se resuelve contra el font-size del PADRE, no contra el ancho:
-         * con un padre de 14px el nombre salia de 1.7px y la barra verde quedaba del
-         * ancho de una astilla. Se calcula a mano contra el ancho real de la preview.
+         * Todo se calcula en unidades del lienzo y se pasa a pixeles aca: un font-size
+         * en porcentaje se resuelve contra el font-size del PADRE, no contra el ancho, y
+         * con un padre de 14px el nombre salia de 1.7px.
          */
 
-        var ancho = post.clientWidth;
+        var tarjeta = post.querySelector(".catus-crop-card");
+        var escala = post.clientWidth / CANVAS;
 
-        if (!ancho) {
+        if (!tarjeta || !escala) {
             return;
         }
 
-        var bar = post.querySelector(".catus-crop-namebar");
-        var subtitle = post.querySelector(".catus-crop-subtitle");
-
-        if (bar) {
-            bar.style.fontSize = (NOMBRE_FONT * ancho / CANVAS) + "px";
+        function px(valor) {
+            return (valor * escala) + "px";
         }
 
-        if (subtitle) {
-            subtitle.style.fontSize = (SUBTITULO_FONT * ancho / CANVAS) + "px";
+        var m = medidasDeLaTarjeta(options);
+
+        tarjeta.style.left = px(m.x);
+        tarjeta.style.top = px(m.y);
+        tarjeta.style.width = px(m.ancho);
+        tarjeta.style.height = px(m.alto);
+        tarjeta.style.borderRadius = px(RADIO);
+        tarjeta.style.borderWidth = px(BORDE);
+
+        // las posiciones de adentro van contra el borde de afuera de la tarjeta, como
+        // en el server: se les descuenta el borde, que el absolute cuenta desde adentro
+        var adentro = BORDE;
+
+        var nombre = tarjeta.querySelector(".catus-crop-card-name");
+        nombre.textContent = "";
+        nombre.style.fontSize = px(m.nombre.tamano);
+        nombre.style.left = px(PADDING_X - adentro);
+        nombre.style.top = px(m.baseNombre - baseDesdeArriba(800, m.nombre.tamano) - adentro);
+        nombre.style.lineHeight = px(m.interlinea);
+        m.nombre.renglones.forEach(function (renglon, i) {
+            if (i) {
+                nombre.appendChild(document.createElement("br"));
+            }
+            nombre.appendChild(document.createTextNode(renglon));
+        });
+        // con line-height igual a la interlinea, el primer renglon baja la mitad de lo que
+        // sobra; se corrige para que su base caiga donde la pone el server
+        nombre.style.marginTop = px(-(m.interlinea - m.nombre.tamano) / 2);
+
+        var linea = tarjeta.querySelector(".catus-crop-card-line");
+        linea.textContent = "";
+        if (m.baseLinea === null) {
+            linea.style.display = "none";
+        } else {
+            linea.style.display = "";
+            linea.style.fontSize = px(m.tamanoLinea);
+            linea.style.left = px(PADDING_X + 2 - adentro);
+            linea.style.top = px(m.baseLinea - baseDesdeArriba(600, m.tamanoLinea) - adentro);
+            m.partes.forEach(function (parte, i) {
+                if (i) {
+                    var sep = make("span", "catus-crop-sep", linea);
+                    sep.textContent = SEPARADOR;
+                }
+                linea.appendChild(document.createTextNode(parte));
+            });
         }
-    }
 
-    function barraDelNombre(posicion) {
-        /* Donde dibuja add_nombre_y_edad la barra verde, en el lienzo de 1400.
-         *
-         * La barra termina 20 por debajo de donde termina el texto del nombre (1160 con
-         * "abajo", 260 con cualquier otra cosa) y arranca a la altura del texto: los ~160
-         * que mide Impact 150 menos los 5 de back_margin. "Izquierda (arriba)" es la
-         * excepcion, la estira hasta el borde de arriba de la foto.
-         */
-
-        var finTexto = posicion === ABAJO ? 1160 : 260;
-        var top = posicion === ARRIBA ? INSET : finTexto - 155;
-
-        return {top: top, height: finTexto + 20 - top};
+        var logo = tarjeta.querySelector(".catus-crop-card-logo");
+        var img = logo.querySelector("img");
+        var escalaLogo = LOGO_ALTO / LOGO_DIBUJO.h;
+        logo.style.width = px(m.logoAncho);
+        logo.style.height = px(LOGO_ALTO);
+        logo.style.right = px(PADDING_X - adentro);
+        logo.style.top = px((m.alto - LOGO_ALTO) / 2 - adentro);
+        img.style.width = px(LOGO_PNG * escalaLogo);
+        img.style.height = px(LOGO_PNG * escalaLogo);
+        img.style.left = px(-LOGO_DIBUJO.x * escalaLogo);
+        img.style.top = px(-LOGO_DIBUJO.y * escalaLogo);
     }
 
     function buildPreview(container, options) {
@@ -148,39 +335,17 @@
 
         var post = make("div", "catus-crop-post", container);
 
+        // la foto ocupa todo el posteo
         var photo = make("div", "catus-crop-photo", post);
-        photo.style.left = percent(INSET);
-        photo.style.top = percent(INSET);
-        photo.style.width = percent(PHOTO);
-        photo.style.height = percent(PHOTO);
+        photo.style.left = "0";
+        photo.style.top = "0";
+        photo.style.width = "100%";
+        photo.style.height = "100%";
 
-        if (options.nombre) {
-            var barra = barraDelNombre(options.posicionNombre);
-            var bar = make("div", "catus-crop-namebar", post);
-            bar.textContent = options.nombre;
-            bar.style.top = percent(barra.top);
-            bar.style.height = percent(barra.height);
-            bar.style.paddingLeft = percent(105);
-            bar.style.paddingRight = percent(25);
-        }
-
-        // la edad y el sexo tienen su propia posicion en el server (posicion_edad_sexo),
-        // no siguen al nombre. Cuando la vista previa los ubicaba segun el nombre, con
-        // los dos en lugares distintos mostraba el renglon en la otra punta de la foto, y
-        // el posteo salia con el texto encima de lo que la persona habia dejado libre
-        if (options.subtitulo) {
-            var subtitle = make("div", "catus-crop-subtitle", post);
-            subtitle.textContent = options.subtitulo;
-            subtitle.style.top = percent(options.posicionEdadSexo === ABAJO ? 1205 : 305);
-            subtitle.style.left = percent(140);
-        }
-
-        var logo = make("div", "catus-crop-logo", post);
-        logo.style.width = percent(LOGO_CIRCLE);
-        logo.style.height = percent(LOGO_CIRCLE);
-        logo.style.right = "0";
-        logo.style.bottom = "0";
-
+        var tarjeta = make("div", "catus-crop-card", post);
+        make("div", "catus-crop-card-name", tarjeta);
+        make("div", "catus-crop-card-line", tarjeta);
+        var logo = make("div", "catus-crop-card-logo", tarjeta);
         var logoImg = make("img", null, logo);
         logoImg.src = options.logoUrl || "/static/logo_2.png";
         logoImg.alt = "";
@@ -188,7 +353,16 @@
             logo.style.display = "none";
         };
 
-        ajustarFuentes(post);
+        dibujarTarjeta(post, options);
+
+        // si Open Sans termina de cargar despues, los anchos cambian: se vuelve a medir
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+                if (post.isConnected) {
+                    dibujarTarjeta(post, options);
+                }
+            });
+        }
 
         return photo;
     }
