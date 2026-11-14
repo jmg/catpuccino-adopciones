@@ -56,6 +56,13 @@ class TextoPlanoTest(TestCase):
         self.assertIn("Gracias & saludos", texto)
         self.assertNotIn("@media", texto, "el <style> del marco no va al texto")
 
+    def test_las_filas_de_una_tabla_quedan_como_etiqueta_y_valor(self):
+
+        texto = texto_plano("<table><tr><td>Persona</td><td>Ana Gómez</td></tr>"
+                            "<tr><td><img src='x.png'></td><td>Catpuccino Adopciones</td></tr></table>")
+
+        self.assertEqual(texto.splitlines(), ["Persona: Ana Gómez", "Catpuccino Adopciones"])
+
     def test_lo_escapado_sigue_siendo_texto(self):
 
         texto = texto_plano("<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>")

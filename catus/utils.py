@@ -45,9 +45,12 @@ def texto_plano(contenido):
     texto = re.sub(r'(?is)<div class="preheader".*?</div>', "", texto)
     texto = re.sub(r'(?is)<a\b[^>]*?href=["\']([^"\']*)["\'][^>]*>(.*?)</a\s*>', _link_en_texto, texto)
     texto = re.sub(r"(?i)<br\s*/?>", "\n", texto)
+    #las celdas de una fila quedan como "Etiqueta: valor" (las fichas de datos de los mails)
+    texto = re.sub(r"(?i)</t[dh]\s*>", "\t", texto)
     texto = re.sub(r"(?i)</(p|div|tr|li|h[1-6]|table)\s*>", "\n", texto)
     texto = html.unescape(strip_tags(texto))
-    lineas = [" ".join(linea.split()) for linea in texto.splitlines()]
+    lineas = [": ".join(" ".join(celda.split()) for celda in linea.split("\t") if celda.strip())
+              for linea in texto.splitlines()]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()
 
 
