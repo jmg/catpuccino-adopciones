@@ -39,7 +39,7 @@ class IndexView(BaseView):
             context["forms_counts"] = EstadoFormulario.objects.filter(
                 gato__cargado_por=self.request.user,
                 gato__estado="D",
-            ).count()
+            ).exclude(estado="B").count()
 
         return BaseView.render_to_response(self, context)
 
@@ -72,6 +72,14 @@ class PrivacyView(TemplateView):
     template_name = "home/policy.html"
     url = r"^privacidad/$"
     extra_context = {"legal_page": "privacidad"}
+
+    def get_context_data(self, **kwargs):
+        from catus.services.buenadoptante import BuenAdoptanteService
+
+        context = super().get_context_data(**kwargs)
+        #la política dice lo que pasa: BuenAdoptante aparece cuando los formularios se le mandan
+        context["buenadoptante_activo"] = BuenAdoptanteService().activo()
+        return context
 
 
 class TermsView(TemplateView):

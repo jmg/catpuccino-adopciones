@@ -5,6 +5,190 @@
 {% block css %}
 {{ block.super }}
 <style>
+    /* "¿Quién los adoptó?": la pregunta tiene que verse al entrar, antes que todo lo demás,
+       pero sin tapar el panel: se ve compacta, con pocas filas, y se puede cerrar */
+    .pregunta-adopcion {
+        position: relative;
+        background: #fbf6ff;
+        border: 2px solid var(--primary-color);
+        border-radius: 12px;
+        padding: 10px 14px 4px;
+        margin-bottom: 16px;
+        font-size: 0.9rem;
+    }
+
+    .pregunta-adopcion-cabecera {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 4px;
+        padding-right: 32px;
+    }
+
+    .pregunta-adopcion-icono {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--primary-color);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+    }
+
+    .pregunta-adopcion-titulo {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--primary-dark);
+        margin: 0;
+    }
+
+    .pregunta-adopcion-texto {
+        margin: 0;
+        color: #4a4a5a;
+        font-size: 0.85rem;
+    }
+
+    /* cierra la tarjeta entera por dos semanas (ocultarPreguntas) */
+    .pregunta-adopcion-cerrar {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--primary-dark);
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .pregunta-adopcion-cerrar:hover,
+    .pregunta-adopcion-cerrar:focus {
+        background: rgba(138, 43, 226, 0.1);
+    }
+
+    .pregunta-adopcion-fila {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px 12px;
+        padding: 6px 0;
+        border-top: 1px solid rgba(138, 43, 226, 0.15);
+    }
+
+    /* tres a la vista y el resto detrás de "Ver más". Es por posición: al responder una
+       fila se borra y la siguiente sube sola. El 3 también está en PREGUNTAS_A_LA_VISTA. */
+    .pregunta-adopcion:not(.expandida) .pregunta-adopcion-fila:nth-child(n+4) {
+        display: none;
+    }
+
+    .pregunta-adopcion-nombre {
+        font-weight: 700;
+        margin-right: 4px;
+    }
+
+    .pregunta-adopcion-estado {
+        color: #4a4a5a;
+    }
+
+    .pregunta-adopcion-acciones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    /* sin las mayúsculas espaciadas de los botones del sitio: en el celular partían la fila en dos */
+    .pregunta-adopcion-acciones .btn {
+        padding: 2px 10px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: normal;
+        box-shadow: none;
+    }
+
+    /* la acción secundaria, en el violeta del sitio y no en el azul de Bootstrap */
+    .pregunta-adopcion-acciones .btn-link,
+    .pregunta-adopcion-ver-mas {
+        color: var(--primary-dark);
+    }
+
+    .pregunta-adopcion-ver-mas {
+        display: block;
+        width: 100%;
+        padding: 6px 0;
+        border: 0;
+        border-top: 1px solid rgba(138, 43, 226, 0.15);
+        background: transparent;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .pregunta-adopcion-ver-mas[hidden] {
+        display: none;
+    }
+
+    .elegir-adoptante {
+        text-align: left;
+    }
+
+    .elegir-adoptante-lista {
+        max-height: 45vh;
+        overflow-y: auto;
+        margin: 10px 0 4px;
+    }
+
+    .elegir-adoptante-item {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 10px 8px;
+        border-radius: 8px;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .elegir-adoptante-item:hover {
+        background: #f4ecfc;
+    }
+
+    .elegir-adoptante-item input {
+        margin-top: 4px;
+    }
+
+    .elegir-adoptante-item small {
+        display: block;
+        color: #6a6a7a;
+    }
+
+    .elegir-adoptante-otra {
+        border-top: 1px solid #eee;
+    }
+
+    .elegir-adoptante-vacio {
+        color: #6a6a7a;
+        padding: 8px;
+        margin: 0;
+    }
+
+    @media (max-width: 576px) {
+        .pregunta-adopcion {
+            padding: 8px 12px 2px;
+        }
+
+        .pregunta-adopcion-texto {
+            display: none;
+        }
+    }
+
     .dashboard-container {
         background-color: var(--white);
         border-radius: 15px;
@@ -623,6 +807,54 @@
 {% block content %}
 
 <div class="container dashboard-container">
+{% if adoptados_sin_adoptante or animales_por_confirmar %}
+{% comment %}
+Casi nadie marca la adopción en el sitio ni dice quién adoptó: se pregunta al entrar, arriba
+de todo (ProfileView.adoptados_sin_adoptante y animales_por_confirmar). Elegir a la persona
+deja el animal vinculado a su formulario y registra la adopción en BuenAdoptante.
+{% endcomment %}
+<div id="pregunta-adopcion" class="pregunta-adopcion">
+    <button type="button" class="pregunta-adopcion-cerrar" onclick="ocultarPreguntas()" title="Ocultar por dos semanas" aria-label="Ocultar por dos semanas">&times;</button>
+    <div class="pregunta-adopcion-cabecera">
+        <span class="pregunta-adopcion-icono"><i class="fa fa-heart"></i></span>
+        <div>
+            <h2 class="pregunta-adopcion-titulo">¿Quién los adoptó?</h2>
+            <p class="pregunta-adopcion-texto">Elegí a la persona y la adopción queda registrada.</p>
+        </div>
+    </div>
+
+    {% comment %}Solo filas acá adentro: el CSS muestra las tres primeras por posición.{% endcomment %}
+    <div class="pregunta-adopcion-filas">
+    {% for animal in adoptados_sin_adoptante %}
+    <div class="pregunta-adopcion-fila" id="pregunta-adopcion-{{animal.id}}">
+        <div class="pregunta-adopcion-animal">
+            <span class="pregunta-adopcion-nombre">{{animal.nombre}}</span>
+            <span class="pregunta-adopcion-estado">fue adoptad{% if animal.sexo == "H" %}a{% else %}o{% endif %}. ¿Quién {% if animal.sexo == "H" %}la{% else %}lo{% endif %} adoptó?</span>
+        </div>
+        <div class="pregunta-adopcion-acciones">
+            <button type="button" class="btn btn-primary btn-sm" onclick="marcarAdoptado('{{animal.id}}', '{{animal.nombre|escapejs}}')">Elegir a la persona</button>
+            <button type="button" class="btn btn-link btn-sm" onclick="posponerPregunta('{{animal.id}}', true)">No mandó formulario</button>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% for animal in animales_por_confirmar %}
+    <div class="pregunta-adopcion-fila" id="pregunta-adopcion-{{animal.id}}">
+        <div class="pregunta-adopcion-animal">
+            <span class="pregunta-adopcion-nombre">{{animal.nombre}}</span>
+            <span class="pregunta-adopcion-estado">sigue {{animal.get_estado_display|lower}}. ¿Ya se adoptó?</span>
+        </div>
+        <div class="pregunta-adopcion-acciones">
+            <button type="button" class="btn btn-primary btn-sm" onclick="marcarAdoptado('{{animal.id}}', '{{animal.nombre|escapejs}}')">Sí, ¿quién lo adoptó?</button>
+            <button type="button" class="btn btn-link btn-sm" onclick="posponerPregunta('{{animal.id}}', false)">Todavía no</button>
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+    <button type="button" class="pregunta-adopcion-ver-mas" id="pregunta-adopcion-ver-mas" onclick="verMasPreguntas()" hidden>Ver más</button>
+</div>
+{% endif %}
+
 
     <ul class="nav nav-tabs dashboard-tabs compact-tabs" id="profile-tabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -729,7 +961,7 @@
                             {% endif %}
 
                             {% if animal.estado != "A" %}
-                                    <a id="update-estado-animal-adoptado-{{animal.id}}" onclick="marcarAdoptado('{{animal.id}}')" class="action-btn" data-tippy-content="Marcar como adoptado">
+                                    <a id="update-estado-animal-adoptado-{{animal.id}}" onclick="marcarAdoptado('{{animal.id}}', '{{animal.nombre|escapejs}}')" class="action-btn" data-tippy-content="Marcar como adoptado">
                                 <i class="fa fa-paw"></i>
                                     </a>
                             {% endif %}
@@ -902,6 +1134,7 @@
 {% block js %}
 {{ block.super }}
 <script src="/static/js/tinymce/tinymce.min.js"></script>
+{{ candidatos_json|json_script:"candidatos-por-animal" }}
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
 <!-- Agregar la librería Tippy.js -->
 <script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
@@ -1117,8 +1350,73 @@ function logout() {
     })
 }
 
+// Quienes mandaron formulario por cada animal en adopción o reservado, para elegir quién
+// lo adoptó. Los nombres los escribe cualquiera desde el formulario público.
+var candidatosPorAnimal = {};
+try {
+    candidatosPorAnimal = JSON.parse(document.getElementById("candidatos-por-animal").textContent) || {};
+} catch (e) {}
+
+function escaparHtml(texto) {
+    return String(texto)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+//las filas de "¿Quién los adoptó?" que se ven sin tocar "Ver más" (el CSS usa el mismo número)
+var PREGUNTAS_A_LA_VISTA = 3;
+
+function actualizarVerMas() {
+    var resto = $(".pregunta-adopcion-fila").length - PREGUNTAS_A_LA_VISTA;
+    var boton = $("#pregunta-adopcion-ver-mas");
+    if (resto > 0 && !$("#pregunta-adopcion").hasClass("expandida")) {
+        boton.text("Ver " + resto + " más").prop("hidden", false);
+    } else {
+        boton.prop("hidden", true);
+    }
+}
+
+function verMasPreguntas() {
+    $("#pregunta-adopcion").addClass("expandida");
+    actualizarVerMas();
+}
+
+function sacarPregunta(animalId) {
+    $("#pregunta-adopcion-" + animalId).remove();
+    if (!$(".pregunta-adopcion-fila").length) {
+        $("#pregunta-adopcion").remove();
+    }
+    actualizarVerMas();
+}
+
+//la × de la tarjeta: "Todavía no" para todos los que pregunta, así vuelve en dos semanas
+//(o antes, si aparece otro animal para preguntar). Se cierra en el acto: si el pedido
+//falla, la tarjeta vuelve la próxima vez que entre, que es lo mismo que no cerrarla.
+function ocultarPreguntas() {
+    var ids = $(".pregunta-adopcion-fila").map(function () {
+        return this.id.replace("pregunta-adopcion-", "");
+    }).get();
+    $("#pregunta-adopcion").remove();
+    if (!ids.length) {
+        return;
+    }
+    $.post("/animal/posponerpreguntaadopcion/", $.param({
+        animal_ids: ids,
+        para_siempre: "0",
+        csrfmiddlewaretoken: "{{csrf_token}}"
+    }, true));
+    $.info("Listo, te lo volvemos a preguntar en dos semanas.");
+}
+
+$(actualizarVerMas);
+
 function updateAnimal(animalId, options) {
-    $.post(options.url, {animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, function(response) {
+    var datos = $.extend({animal_id: animalId, csrfmiddlewaretoken: "{{csrf_token}}"}, options.datos || {});
+    $.post(options.url, datos, function(response) {
+        sacarPregunta(animalId);
         $.info("¡" + response.nombre + options.successMessage)
         $("#" + options.removeUpdateAnimalId + animalId).remove();
         $("#publicado-expired-text-" + animalId).hide()
@@ -1131,14 +1429,96 @@ function updateAnimal(animalId, options) {
     }, 'json')
 }
 
-function marcarAdoptado(animalId) {
+function enviarAdoptado(animalId, formularioId) {
     updateAnimal(animalId, {
         url: "/animal/marcaradoptado/",
+        datos: formularioId ? {estado_formulario_id: formularioId} : {},
         badge: "info",
         successMessage: " marcado como adoptado! Ya no aparecerá en la web.",
         text: "Adoptado",
         removeUpdateAnimalId: "update-estado-animal-adoptado-",
     })
+}
+
+// "¿Quién lo adoptó?": los que mandaron formulario por este animal y un buscador por
+// nombre entre todos los formularios de pre-adopción del rescatista (alguien que pidió
+// un gato puede terminar adoptando otro). Elegir a la persona deja el animal vinculado a
+// su formulario y registra la adopción en BuenAdoptante.
+function itemCandidato(candidato) {
+    var detalle = [];
+    if (candidato.animal) { detalle.push("pidió a " + candidato.animal); }
+    if (candidato.fecha) { detalle.push("formulario del " + candidato.fecha); }
+    return '<label class="elegir-adoptante-item">' +
+        '<input type="radio" name="adoptante" value="' + escaparHtml(candidato.id) + '">' +
+        '<span><b>' + escaparHtml(candidato.persona) + '</b>' +
+        (detalle.length ? '<small>' + escaparHtml(detalle.join(" · ")) + '</small>' : '') +
+        '</span></label>';
+}
+
+function marcarAdoptado(animalId, nombre) {
+    var candidatos = candidatosPorAnimal[String(animalId)] || [];
+    if (!window.Swal) {
+        enviarAdoptado(animalId, "");
+        return;
+    }
+
+    var lista = candidatos.map(itemCandidato).join("") ||
+        '<p class="elegir-adoptante-vacio">Este animal no recibió formularios. Buscá a la persona por su nombre.</p>';
+
+    Swal.fire({
+        title: nombre ? "¿Quién adoptó a " + escaparHtml(nombre) + "?" : "¿Quién lo adoptó?",
+        html:
+            '<div class="elegir-adoptante">' +
+            '<input type="search" id="buscar-adoptante" class="form-control" placeholder="Buscar por nombre entre tus formularios" autocomplete="off">' +
+            '<div id="lista-adoptantes" class="elegir-adoptante-lista">' + lista + '</div>' +
+            '<label class="elegir-adoptante-item elegir-adoptante-otra"><input type="radio" name="adoptante" value="otra"><span>Otra persona (no mandó formulario)</span></label>' +
+            '</div>',
+        showCancelButton: true,
+        confirmButtonText: "Marcar adoptado",
+        cancelButtonText: "Cancelar",
+        focusConfirm: false,
+        didOpen: function() {
+            var espera = null;
+            $("#buscar-adoptante").on("input", function() {
+                var texto = $.trim($(this).val());
+                clearTimeout(espera);
+                if (texto.length < 2) {
+                    $("#lista-adoptantes").html(lista);
+                    return;
+                }
+                espera = setTimeout(function() {
+                    $.getJSON("/animal/buscarformularios/", {animal_id: animalId, q: texto}, function(respuesta) {
+                        var resultados = (respuesta && respuesta.resultados) || [];
+                        $("#lista-adoptantes").html(resultados.length ? resultados.map(itemCandidato).join("")
+                            : '<p class="elegir-adoptante-vacio">No hay formularios con ese nombre.</p>');
+                    });
+                }, 300);
+            });
+        },
+        preConfirm: function() {
+            var elegido = $("input[name=adoptante]:checked").val();
+            if (!elegido) {
+                Swal.showValidationMessage("Elegí a la persona, o \"Otra persona\"");
+                return false;
+            }
+            return elegido;
+        }
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        enviarAdoptado(animalId, result.value === "otra" ? "" : result.value);
+    });
+}
+
+function posponerPregunta(animalId, paraSiempre) {
+    $.post("/animal/posponerpreguntaadopcion/", {
+        animal_id: animalId,
+        para_siempre: paraSiempre ? "1" : "0",
+        csrfmiddlewaretoken: "{{csrf_token}}"
+    }, function() {
+        sacarPregunta(animalId);
+    }, 'json');
 }
 
 function marcarEnAdopcion(animalId) {

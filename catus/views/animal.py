@@ -15,7 +15,8 @@ from catus.views.base import BaseView, SoloPostMixin, SuperuserRequiredMixin, pu
 from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
 
-from catus.models import Animal, AnimalImage, CatusUser, ChatGTPResponse
+from catus.models import Animal, AnimalImage, CatusUser, ChatGTPResponse, EstadoFormulario
+from catus.services.buenadoptante import TIPOS_PREADOPCION, BuenAdoptanteService
 from catus.forms import AnimalImageForm, CatusUserForm, RequiredImageInlineFormset
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -717,6 +718,10 @@ class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
 
         pass
 
+    def after_save(self, animal, post_data=None):
+
+        pass
+
     def post(self, *a, **k):
 
         animal_id = self.request.POST.get("animal_id")
@@ -737,6 +742,7 @@ class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
         for animal in animals:
             self.update(animal, post_data=self.request.POST)
             animal.save()
+            self.after_save(animal, post_data=self.request.POST)
 
         if not animal_id:
             return self.response("Animales marcados como {}!".format(self.response_status))
@@ -749,13 +755,101 @@ class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
 
 
 class MarcarAdoptado(UpdateAnimal):
+    """Marca el animal como adoptado y, si el rescatista dice quién lo adoptó entre los
+    formularios de pre-adopción que recibió, lo deja vinculado a ese formulario y manda la
+    adopción a BuenAdoptante (la manda el cron)."""
 
     response_status = "adoptados"
 
+    def formulario_elegido(self, animal, post_data):
+
+        elegido = (post_data or {}).get("estado_formulario_id")
+        if not elegido or not str(elegido).isdigit():
+            return None
+
+        #un formulario de pre-adopción del mismo rescatista: quien pidió un gato a veces
+        #termina adoptando otro. UpdateAnimal ya dejó afuera los animales de otra persona, y
+        #así no se puede vincular el formulario de un rescatista ajeno.
+        return (EstadoFormulario.objects
+                .filter(id=elegido, gato__cargado_por_id=animal.cargado_por_id, tipo__in=TIPOS_PREADOPCION)
+                .exclude(estado__in=["B", "U"]).first())
+
     def update(self, animal, post_data=None):
 
+        #a un animal ya adoptado se le puede decir después quién lo adoptó: no se le pisa
+        #la fecha de adopción
+        if animal.estado != "A" or animal.fecha_adopcion is None:
+            animal.fecha_adopcion = timezone.now()
         animal.estado = "A"
-        animal.fecha_adopcion = timezone.now()
+
+        elegido = self.formulario_elegido(animal, post_data)
+        animal._formulario_adoptante = elegido
+        if elegido is not None:
+            animal.estado_formulario = elegido
+            animal.adoptante = (elegido.get_persona() or "")[:255] or None
+
+    def after_save(self, animal, post_data=None):
+
+        elegido = getattr(animal, "_formulario_adoptante", None)
+        if elegido is None:
+            return
+
+        if elegido.estado != "A":
+            elegido.estado = "A"
+            elegido.save(update_fields=["estado"])
+
+        BuenAdoptanteService().registrar_adopcion(elegido, animal)
+
+
+class PosponerPreguntaAdopcion(UpdateAnimal):
+    """"Todavía no" a la pregunta "¿se adoptó?" del panel: no se vuelve a preguntar por
+    este animal por dos semanas. Con para_siempre ("no lo adoptó nadie de la lista", sobre
+    un animal ya adoptado) no se pregunta más."""
+
+    response_status = "pospuestos"
+    DIAS = 14
+
+    def update(self, animal, post_data=None):
+
+        dias = 3650 if (post_data or {}).get("para_siempre") == "1" else self.DIAS
+        animal.pregunta_adopcion_hasta = timezone.now() + timedelta(days=dias)
+
+
+class BuscarFormularios(LoginRequiredMixin, BaseView):
+    """Busca por nombre entre los formularios de pre-adopción del rescatista de un animal,
+    para elegir quién lo adoptó (panel, "Marcar adoptado")."""
+
+    MAXIMO = 20
+
+    def get(self, *a, **k):
+
+        animal_id = self.request.GET.get("animal_id") or ""
+        texto = " ".join((self.request.GET.get("q") or "").split())[:60]
+
+        animal = Animal.objects.filter(id=animal_id).first() if animal_id.isdigit() else None
+        if animal is None or not puede_editar_animal(self.request.user, animal):
+            return self.json_response({"resultados": []})
+
+        if len(texto) < 2:
+            return self.json_response({"resultados": []})
+
+        formularios = (EstadoFormulario.objects
+                       .filter(gato__cargado_por_id=animal.cargado_por_id, tipo__in=TIPOS_PREADOPCION,
+                               persona_nombre__icontains=texto)
+                       .exclude(estado__in=["B", "U"])
+                       .select_related("gato")
+                       .order_by("-id")[:self.MAXIMO])
+
+        resultados = []
+        for formulario in formularios:
+            fecha = formulario.fecha_ingreso or formulario.created_at
+            resultados.append({
+                "id": formulario.id,
+                "persona": (formulario.persona_nombre or "Sin nombre")[:80],
+                "fecha": timezone.localtime(fecha).strftime("%d/%m/%Y") if fecha else "",
+                "animal": (formulario.gato.nombre if formulario.gato else "")[:60],
+            })
+        return self.json_response({"resultados": resultados})
 
 
 class MarcarEnAdopcion(UpdateAnimal):

@@ -283,6 +283,33 @@ try:
 except (TypeError, ValueError):
     GPT_IG_MAX_TOTAL_POR_DIA = 30
 
+#BuenAdoptante (buenadoptante.org), el registro de adoptantes que comparten los rescates:
+#cada formulario de pre-adopcion se registra ahi y su respuesta dice si la persona tiene
+#mala calificacion; las adopciones concretadas tambien se mandan. APAGADO salvo
+#"BUENADOPTANTE_ACTIVO": "1" y una clave (ba_live_... en produccion, ba_test_... en
+#staging, con "BUENADOPTANTE_API_URL": "https://staging.buenadoptante.org"). Ver
+#catus/services/buenadoptante.py.
+BUENADOPTANTE_ACTIVO = _config_bool("BUENADOPTANTE_ACTIVO", False)
+BUENADOPTANTE_API_URL = (app_config.get("BUENADOPTANTE_API_URL") or "https://buenadoptante.org").rstrip("/")
+BUENADOPTANTE_API_KEY = app_config.get("BUENADOPTANTE_API_KEY") or ""
+#se frena el formulario de quien tenga de 1 estrella hasta este numero (1 peligroso,
+#2 malo). 0 no frena a nadie: solo se registra y se muestra.
+try:
+    BUENADOPTANTE_BLOQUEAR_HASTA = int(app_config.get("BUENADOPTANTE_BLOQUEAR_HASTA") or 2)
+except (TypeError, ValueError):
+    BUENADOPTANTE_BLOQUEAR_HASTA = 2
+#solo para probar en staging: BuenAdoptante contesta pero no guarda nada
+BUENADOPTANTE_DRY_RUN = _config_bool("BUENADOPTANTE_DRY_RUN", False)
+#a quién avisarle cada vez que BuenAdoptante ya conocía a la persona de un formulario
+#(lista, o direcciones separadas por coma). Sin la clave, al mail del equipo.
+_avisar_coincidencias = app_config.get("BUENADOPTANTE_AVISAR_COINCIDENCIAS_A")
+if _avisar_coincidencias is None:
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [SEND_MAIL] if SEND_MAIL else []
+elif isinstance(_avisar_coincidencias, str):
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [d.strip() for d in _avisar_coincidencias.split(",") if d.strip()]
+else:
+    BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [str(d).strip() for d in _avisar_coincidencias if str(d).strip()]
+
 #Posteo automatico en Instagram: al aprobar un animal, el posteo queda agendado y sale
 #solo cuando pasa la demora. Arranca APAGADO a proposito. Publicar en la cuenta de la
 #organizacion es irreversible y se ve de afuera, asi que prenderlo tiene que ser una

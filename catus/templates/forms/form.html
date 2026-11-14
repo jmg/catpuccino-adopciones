@@ -30,6 +30,27 @@
         </div>
 
         <div class="form-content-wrapper">
+            {% if buenadoptante %}
+            <div class="buenadoptante-section {% if buenadoptante.mala %}buenadoptante-mala{% endif %}">
+                <div class="section-header">
+                    <h3><i class="fa fa-user-check mr-2"></i> BuenAdoptante</h3>
+                    <span class="badge {% if buenadoptante.mala %}badge-danger{% elif buenadoptante.nivel >= 4 %}badge-success{% else %}badge-secondary{% endif %}">{{buenadoptante.calificacion}}{% if buenadoptante.nivel %} · {{buenadoptante.nivel}}★{% endif %}</span>
+                </div>
+                {% if buenadoptante.mala %}
+                <p class="mb-2"><b>BuenAdoptante no recomienda entregarle animales a esta persona.</b></p>
+                {% endif %}
+                {% for alerta in buenadoptante.alertas %}
+                <p class="mb-1"><i class="fa fa-exclamation-triangle mr-1"></i> {{alerta}}</p>
+                {% endfor %}
+                {% for marca in buenadoptante.marcas %}
+                <p class="mb-1 text-muted"><i class="fa fa-info-circle mr-1"></i> {{marca}}</p>
+                {% endfor %}
+                {% if buenadoptante.perfil_url %}
+                <a href="{{buenadoptante.perfil_url}}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary mt-2">Ver su perfil en BuenAdoptante</a>
+                {% endif %}
+            </div>
+            {% endif %}
+
             {% if extra_forms %}
             <div class="related-forms-section">
                 <div class="section-header">
@@ -202,11 +223,16 @@
         margin: 0;
     }
 
-    .related-forms-section, .form-data-section {
+    .related-forms-section, .form-data-section, .buenadoptante-section {
         background-color: rgba(250, 250, 252, 0.7);
         border-radius: 10px;
         padding: 20px;
         border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .buenadoptante-section.buenadoptante-mala {
+        background-color: #fdf1f1;
+        border-color: #f1c4c4;
     }
 
     .related-forms-list {
@@ -359,7 +385,7 @@
             gap: 15px;
         }
 
-        .related-forms-section, .form-data-section {
+        .related-forms-section, .form-data-section, .buenadoptante-section {
             padding: 10px;
         }
 

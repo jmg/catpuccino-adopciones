@@ -1,4 +1,5 @@
 import hashlib
+import html
 import json
 import logging
 import random
@@ -10,6 +11,7 @@ from forms_builder.forms.models import Form, Field, FieldEntry
 from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
+from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
 from catus.services.images import shrink_uploads
 from catus.services import throttle
 from catus.views.contrato import mail_del_adoptante
@@ -28,6 +30,19 @@ FORM_MAX_PER_HOUR = 10          # per address: someone can apply for several ani
 RECEIPTS_MAX_PER_DAY = 5        # per mailbox: the receipt goes to whatever was typed
 HONEYPOT_FIELD = "sitio_web"    # hidden from people, see preadoption.html
 logger = logging.getLogger(__name__)
+
+#BuenAdoptante rechaza la consulta entera si el nombre es una sola palabra, un mail o un
+#teléfono (full_name_required): ese formulario no se revisaba ni se registraba. Pasaba en 1
+#de cada 25. preadoption.html hace el mismo control antes de enviar (esNombreYApellido).
+MENSAJE_NOMBRE = "Poné tu nombre y apellido, por ejemplo: Ana Pérez."
+
+
+def es_nombre_y_apellido(texto):
+    """Al menos dos palabras con letras, y que no sea un mail."""
+
+    texto = texto or ""
+    palabras = [p for p in texto.split() if re.search(r"[^\W\d_]", p)]
+    return len(palabras) >= 2 and "@" not in texto
 
 
 class ListView(BaseView):
@@ -87,6 +102,11 @@ class PreAdoptionView(BaseView):
         context["form_type"] = self.form_type
         context["animal_type"] = self.animal_type
         context["is_user"] = True if user_id else False
+        #la persona tiene que saber, antes de mandarlo, que el formulario se comparte
+        context["comparte_con_buenadoptante"] = self.form_type == "preadoption" and BuenAdoptanteService().activo()
+        #prepareSubmit controla el nombre antes de enviar, para no perder las fotos adjuntas
+        context["campo_nombre"] = self._campo_nombre(context["form_for_form"])
+        context["mensaje_nombre"] = MENSAJE_NOMBRE
 
         if self.form_type == "preadoption":
 
@@ -148,6 +168,18 @@ class PreAdoptionView(BaseView):
         forms = Form.objects.all()[self.form_index:self.form_index + 1]
         return forms[0] if forms else None
 
+    def _campo_nombre(self, form_for_form):
+        """La clave de "Nombre y Apellido" en el formulario de pre-adopción, o None. Se busca
+        por etiqueta, como la busca BuenAdoptanteService: si la cambian en el admin, no se
+        controla (y tampoco se manda)."""
+
+        if self.form_type != "preadoption" or form_for_form is None:
+            return None
+        for clave, campo in form_for_form.fields.items():
+            if "nombre y apellido" in (campo.label or "").lower():
+                return clave
+        return None
+
     def _rejected(self):
         """Why this post is not even read, or None. The size comes first, so that a
         file that is too big does not use up the visitor's attempts."""
@@ -193,6 +225,13 @@ class PreAdoptionView(BaseView):
             response_context["success"] = False
             return self._post_response(response_context)
 
+        #lo mismo que controla el navegador; esto es para quien llega sin ese JS
+        campo_nombre = self._campo_nombre(form_for_form)
+        if campo_nombre and not es_nombre_y_apellido(form_for_form.cleaned_data.get(campo_nombre)):
+            response_context["errors"] = MENSAJE_NOMBRE
+            response_context["success"] = False
+            return self._post_response(response_context)
+
         form_entry = form_for_form.save()
 
         if self.form_type == "preadoption":
@@ -228,9 +267,42 @@ class PreAdoptionView(BaseView):
         )
         estado.save()
 
+        #BuenAdoptante, antes de que el formulario le llegue a nadie: con 1★ o 2★ se frena.
+        #Si no contesta, el formulario pasa como siempre y el cron lo manda después.
+        if self.form_type == "preadoption":
+            actividad = BuenAdoptanteService().registrar_solicitud(estado)
+            if actividad is not None and actividad.bloqueo:
+                estado.estado = "B"
+                estado.save(update_fields=["estado"])
+                self.avisar_bloqueo(estado, actividad, animal_name)
+                response_context["success"] = False
+                response_context["bloqueado"] = True
+                return self._post_response(response_context)
+            #si BuenAdoptante ya la conocía, aviso aparte para seguir cómo matchea
+            BuenAdoptanteService().avisar_coincidencia(actividad)
+
         self.send_email(form_entry, form_for_form, animal_name, estado)
         response_context["success"] = True
         return self._post_response(response_context)
+
+    def avisar_bloqueo(self, estado, actividad, animal_name):
+        """Al equipo, no al rescatista: el formulario frenado lo revisa el equipo. Lleva el
+        mismo detalle que el aviso de coincidencia, y va también a quien recibe esos avisos
+        (BUENADOPTANTE_AVISAR_COINCIDENCIAS_A): para un formulario frenado es el único."""
+
+        #get_animal devuelve el Animal o, si no lo encuentra, el nombre que se escribió
+        animal_name = str(animal_name) if animal_name else "sin animal"
+        servicio = BuenAdoptanteService()
+        calificacion = CALIFICACIONES.get(actividad.nivel, "sin dato")
+        subject = "Formulario frenado por BuenAdoptante ({}): {}".format(calificacion, animal_name)
+        content = servicio.contenido_aviso(
+            actividad, estado.persona_nombre or "Sin nombre", animal_name, calificacion,
+            "Se frenó: el rescatista no lo recibió. Si te parece un error, en el formulario pasalo a "
+            "\"No asignado\" (así aparece en el panel del rescatista) y mandale el link.")
+        try:
+            send_html_email(subject, content, settings.SEND_MAIL, servicio.destinatarios_coincidencias(ademas=[settings.SEND_MAIL]))
+        except Exception as e:
+            logger.warning("No se pudo avisar del formulario frenado %s: %s", estado.id, type(e).__name__)
 
     def find_form_same_person(self, form_entry, persona_nombre, tipo):
 

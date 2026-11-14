@@ -265,7 +265,7 @@
                         {{ form.button_text|safe }} <i class="fa fa-paper-plane ml-2"></i>
                     </button>
                     <small class="d-block text-muted mt-3">
-                        Al enviar el formulario aceptás los <a href="/terminos/" target="_blank">Términos y condiciones</a> y la <a href="/privacidad/" target="_blank">Política de privacidad</a>. Tus datos los recibe quien publicó al animal y el equipo de Catpuccino Adopciones.
+                        Al enviar el formulario aceptás los <a href="/terminos/" target="_blank">Términos y condiciones</a> y la <a href="/privacidad/" target="_blank">Política de privacidad</a>. Tus datos los recibe quien publicó al animal y el equipo de Catpuccino Adopciones.{% if comparte_con_buenadoptante %} También se comparten con <a href="https://buenadoptante.org" target="_blank" rel="noopener">BuenAdoptante</a>, el registro de adoptantes que usan los rescates, para consultar antecedentes de adopción.{% endif %}
                     </small>
                 </div>
 
@@ -284,6 +284,21 @@
             <div id="response-text" class="alert alert-success" role="alert">
                 {{form.response}}
                 <br><br>
+
+                <div class="text-center">
+                    <img src="/static/logo_2.png" style="width: 250px;">
+                    <br><br>
+                    Atte. Equipo de Catpuccino Adopciones
+                </div>
+            </div>
+            {% elif bloqueado %}
+
+            {% comment %}
+            BuenAdoptante califica a la persona con 1★ o 2★. El mensaje no dice por qué ni
+            nombra a BuenAdoptante: el formulario lo revisa el equipo (ver avisar_bloqueo).
+            {% endcomment %}
+            <div id="response-text-bloqueado" class="alert alert-secondary" role="alert">
+                No pudimos recibir tu formulario. Si creés que se trata de un error, escribinos a <a href="mailto:catpuccino.ok@gmail.com">catpuccino.ok@gmail.com</a>.
 
                 <div class="text-center">
                     <img src="/static/logo_2.png" style="width: 250px;">
@@ -351,7 +366,7 @@
 
         }, true);
 
-        {% if is_post and success %}
+        {% if is_post and success or is_post and bloqueado %}
             try {
                 clearForm();
             } catch(e) {}
@@ -886,11 +901,31 @@
         setCookie("{{hidden_terms_cookie}}", "0");
     }
 
+    {# El por qué está en views/adoption.py (MENSAJE_NOMBRE). Este script sale también en la página de formulario frenado, que no tiene que nombrar a nadie. #}
+    // Lo mismo que es_nombre_y_apellido (views/adoption.py): al menos dos palabras con
+    // letras y que no sea un mail.
+    function esNombreYApellido(texto) {
+        var palabras = $.trim(texto || "").split(/\s+/).filter(function (p) {
+            return /[A-Za-zÀ-ɏ]/.test(p);
+        });
+        return palabras.length >= 2 && (texto || "").indexOf("@") === -1;
+    }
+
     function prepareSubmit(form) {
 
         // Only a bot leaves this filled in: a browser's autofill must not lose a real
         // adopter's form, and the visitor never sees that it was dropped.
         form.elements["{{honeypot_field}}"].value = "";
+
+        // Antes de enviar: si lo frena el servidor, hay que volver y adjuntar las fotos de nuevo.
+        {% if campo_nombre %}
+        var nombre = form.elements["{{ campo_nombre|escapejs }}"];
+        if (nombre && !esNombreYApellido(nombre.value)) {
+            alert("{{ mensaje_nombre|escapejs }}");
+            nombre.focus();
+            return false;
+        }
+        {% endif %}
 
         var total = 0;
         $(form).find("input[type=file]").each(function() {

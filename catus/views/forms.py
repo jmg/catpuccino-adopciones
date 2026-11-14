@@ -1,4 +1,5 @@
-from catus.models import EstadoFormulario
+from catus.models import ActividadBuenAdoptante, EstadoFormulario
+from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService, descripcion_alerta, descripcion_marca
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
 from catus.services.adoption import AdoptionService
@@ -30,6 +31,10 @@ class FormView(LoginRequiredMixin, BaseView):
         #animal (o del equipo), con el mismo criterio que el contrato
         if not puede_editar_animal(self.request.user, estado_form.gato):
             raise PermissionDenied("Este formulario es de otra persona.")
+
+        #frenado por BuenAdoptante: lo revisa el equipo, que si lo libera lo pasa de estado
+        if estado_form.estado == "B" and not self.request.user.is_superuser:
+            raise PermissionDenied("Este formulario lo está revisando el equipo.")
 
         return estado_form
 
@@ -68,8 +73,34 @@ class FormView(LoginRequiredMixin, BaseView):
             "data_attrs": data_attrs,
             "form_attrs": form_attrs,
             "form_hash": form_hash,
+            "buenadoptante": self.buenadoptante(estado_form),
             #"extra_forms": extra_forms,
         })
+
+    def buenadoptante(self, estado_form):
+        """Lo que dijo BuenAdoptante de esta persona, para el recuadro del formulario, o None.
+
+        Solo cuando hay algo que mirar: una calificación, o una alerta aunque nadie la haya
+        calificado. "Sin calificar", "todavía no contestó" o "no se pudo consultar" no le dicen
+        nada al rescatista, así que no se muestra el recuadro (pedido del equipo).
+        """
+
+        actividad = ActividadBuenAdoptante.objects.filter(estado_formulario=estado_form, tipo="adoption_request").first()
+        if actividad is None or actividad.estado != "OK":
+            return None
+
+        alertas = [descripcion_alerta(a) for a in actividad.get_alertas()]
+        if not actividad.nivel and not alertas:
+            return None
+
+        return {
+            "nivel": actividad.nivel,
+            "calificacion": CALIFICACIONES.get(actividad.nivel, "Sin dato"),
+            "mala": BuenAdoptanteService().bloquea(actividad.nivel),
+            "alertas": alertas,
+            "marcas": [descripcion_marca(m) for m in actividad.get_marcas()],
+            "perfil_url": actividad.perfil_url,
+        }
 
     def post(self, *args, **kwargs):
 
@@ -132,6 +163,15 @@ class FormView(LoginRequiredMixin, BaseView):
 
             gato.set_estado(nuevo_estado)
             gato.save()
+
+        #el rescatista dice que esta persona adoptó: el animal queda vinculado a su
+        #formulario y la adopción va a BuenAdoptante (la manda el cron)
+        if estado_form.estado == "A" and gato and gato.get_estado() == "A" and puede_editar_animal(self.request.user, gato):
+            if not gato.estado_formulario_id:
+                gato.estado_formulario = estado_form
+                gato.adoptante = (estado_form.get_persona() or "")[:255] or None
+                gato.save(update_fields=["estado_formulario", "adoptante"])
+            BuenAdoptanteService().registrar_adopcion(estado_form, gato)
 
         return self.json_response({"status": "ok", "estado": estado_form.estado})
 
