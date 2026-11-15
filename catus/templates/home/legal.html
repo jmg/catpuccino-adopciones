@@ -101,7 +101,8 @@
 
       {% block legal %}{% endblock %}
 
-      <p class="legal-updated">Última actualización: 12 de octubre de 2026.</p>
+      {# cada página pone su fecha: los términos y la política no cambian juntos #}
+      <p class="legal-updated">Última actualización: {% block legal_actualizado %}12 de octubre de 2026{% endblock %}.</p>
 
     </div>
   </div>
