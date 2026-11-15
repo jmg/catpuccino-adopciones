@@ -327,14 +327,21 @@
         margin-left: 8px;
     }
 
-    .link-to-animals {
-        background-color: rgba(0, 201, 167, 0.1);
-        color: var(--secondary-color);
+    /* el botón que acompaña a "Cargar animal": con borde, para que no compitan */
+    .btn-secondary.link-to-animals,
+    .btn-secondary.link-to-animals:hover,
+    .btn-secondary.link-to-animals:focus {
+        background: #fff;
+        color: var(--primary-dark) !important;
+        border: 1px solid #cdbde8;
+        box-shadow: none;
+        transform: none;
     }
 
-    .link-to-animals:hover {
-        background-color: rgba(0, 201, 167, 0.2);
-        color: var(--secondary-dark);
+    .btn-secondary.link-to-animals:hover,
+    .btn-secondary.link-to-animals:focus {
+        background: var(--lavanda);
+        border-color: var(--primary-color);
     }
 
     .profile-table {
@@ -556,25 +563,50 @@
             display: none !important;
         }
 
-        /* Ajustes para mostrar solo iconos en los tabs en móvil */
-        .dashboard-tabs .nav-link {
-            font-size: 0; /* Hide text */
-            padding: 0 !important;
-            width: 46px;
-            height: 46px !important;
-            display: flex;
-            align-items: center;
+        /* Las pestañas en el celular: cuatro iguales, con el ícono arriba y el nombre
+           abajo. Eran círculos con el ícono solo y no se sabía qué era cada una. */
+        .dashboard-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-tabs::before {
+            display: none;
+        }
+
+        .dashboard-tabs .nav-item,
+        .dashboard-tabs .nav-item:not(:last-child) {
+            margin: 0;
+            display: block;
+        }
+
+        .dashboard-tabs.compact-tabs a.nav-link,
+        .dashboard-tabs.compact-tabs a.nav-link:hover,
+        .dashboard-tabs.compact-tabs a.nav-link:focus,
+        .dashboard-tabs.compact-tabs a.nav-link:active,
+        .dashboard-tabs.compact-tabs a.nav-link.active {
+            flex-direction: column;
             justify-content: center;
-            border-radius: 50%;
+            gap: 4px;
+            width: auto;
+            height: auto !important;
+            padding: 10px 2px !important;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.2 !important;
+            border-radius: 12px;
+            transform: none;
         }
 
         .dashboard-tabs .nav-link i {
             margin-right: 0 !important;
-            font-size: 1.3rem;
+            font-size: 1.15rem;
         }
 
-        .dashboard-tabs .nav-item {
-            margin-bottom: 6px;
+        .logout-link {
+            margin-left: 0;
         }
 
         /* Ajustes adicionales para móviles */
@@ -601,53 +633,95 @@
             padding: 8px 16px;
         }
 
-        /* Mejoras en la tabla para móvil */
-        .profile-table {
+        /* Las tablas en el celular: cada fila es una ficha, con el nombre arriba y los
+           botones abajo con su texto. La tabla se corría de costado y los botones
+           (editar, marcar adoptado) quedaban escondidos a la derecha. */
+        .profile-table,
+        .profile-table tbody,
+        .profile-table tr,
+        .profile-table td {
             display: block;
-            overflow-x: auto;
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
-            margin: 0 -12px;
-            width: calc(100% + 24px);
+            width: 100%;
         }
 
-        .profile-table thead th {
-            padding: 12px 15px;
-            font-size: 0.9rem;
-            min-width: 100px;
+        .profile-table {
+            box-shadow: none;
+            border-radius: 0;
+            overflow: visible;
+        }
+
+        .profile-table thead {
+            display: none;
+        }
+
+        .profile-table tr {
+            position: relative;
+            border: 1px solid var(--lavanda-borde);
+            border-radius: 14px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            background: #fff;
         }
 
         .profile-table td {
-            padding: 12px 15px;
-            min-width: 100px;
+            padding: 0 !important;
+            border: 0;
+            min-width: 0;
         }
 
-        /* Ajuste específico para la tabla de formularios en móvil */
-        #forms-table {
-            width: 100%;
+        .profile-table td + td {
+            margin-top: 8px;
+        }
+
+        /* animales: el nombre a la izquierda, el estado a la derecha, los botones abajo */
+        #animales-tab .profile-table tr {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            align-items: center;
+            gap: 10px 6px;
+        }
+
+        #animales-tab .profile-table td {
+            width: auto;
             margin: 0;
         }
 
-        #forms-table thead th,
-        #forms-table td {
-            min-width: 120px;
+        #animales-tab .profile-table td:last-child {
+            grid-column: 1 / -1;
         }
 
-        #forms-table td:last-child {
-            min-width: 100px;
+        .profile-table .limited-td {
+            max-width: none;
+            white-space: normal;
+            overflow: visible;
+            overflow-wrap: anywhere;
         }
 
-        .action-buttons {
-            gap: 6px;
+        .profile-table td:first-child .table-action-link {
+            font-size: 17px;
+            font-weight: 700;
+            margin-right: 0;
         }
 
-        .action-btn {
-            width: 32px;
-            height: 32px;
+        .profile-table .action-buttons {
+            gap: 8px;
+            margin-top: 4px;
         }
 
-        .action-btn i {
-            font-size: 0.9rem;
+        .profile-table .action-btn {
+            width: auto;
+            height: 38px;
+            padding: 0 14px;
+            border-radius: 999px;
+            gap: 7px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: none;
+        }
+
+        /* el texto del botón es el de su tooltip */
+        .profile-table .action-btn::after {
+            content: attr(data-tippy-content);
         }
 
         .badge {
@@ -676,14 +750,16 @@
     }
 
     /* Sobrescritura de estilos Bootstrap */
-    .dashboard-tabs.compact-tabs a.nav-link,
-    .dashboard-tabs.compact-tabs a.nav-link:hover,
-    .dashboard-tabs.compact-tabs a.nav-link:focus,
-    .dashboard-tabs.compact-tabs a.nav-link:active,
-    .dashboard-tabs.compact-tabs a.nav-link.active {
-        padding: 10px 20px !important;
-        height: 42px !important;
-        line-height: 1.5 !important;
+    @media only screen and (min-width: 993px) {
+        .dashboard-tabs.compact-tabs a.nav-link,
+        .dashboard-tabs.compact-tabs a.nav-link:hover,
+        .dashboard-tabs.compact-tabs a.nav-link:focus,
+        .dashboard-tabs.compact-tabs a.nav-link:active,
+        .dashboard-tabs.compact-tabs a.nav-link.active {
+            padding: 10px 20px !important;
+            height: 42px !important;
+            line-height: 1.5 !important;
+        }
     }
 
     /* Estilos para los botones de acción */
@@ -929,10 +1005,10 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
 
                 <div class="mb-4 text-md-left text-center">
                 <a href="/animales/" class="btn btn-primary btn-rounded mb-2 mb-md-0">
-                        <i class="fa fa-plus-circle mr-2"></i> Cargar Animal
+                        <i class="fa fa-plus-circle mr-2"></i> Cargar animal
                 </a>
-                    <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded link-to-animals">
-                        <i class="fas fa-external-link-alt mr-2"></i> Link a mis Animales
+                    <a target="_blank" href="{{request.user.get_handle_url}}" class="btn btn-secondary btn-rounded link-to-animals mb-2 mb-md-0">
+                        <i class="fas fa-external-link-alt mr-2"></i> Link a mis animales
                 </a>
             </div>
 

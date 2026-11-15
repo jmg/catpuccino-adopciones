@@ -274,6 +274,24 @@ stopped by the save-button guard in `animal/edit.html`. It runs on attacker-cont
 on every create, so `normalizar()` must stay linear (the tag regex), must not raise (huge
 `&#…;` references) and must not grow the text (NFC, not NFKC).
 
+## Front end
+
+Bootstrap 4.3.1 + jQuery, server-rendered. Three layers of CSS, in load order:
+`static/css/base.css` (the Clean Blog template the site started from — mostly legacy, and the
+reason many rules need to be overridden), `static/css/modern.css` (the site's own look: the
+tokens in `:root`, buttons, the top bar, the homepage hero and search, the animal card, the
+footer) and a `<style>` block in each template for what only that page uses. Bump the `?v=`
+on the `<link>`/`<script>` in `base.html` when changing `modern.css` or `index.js`.
+
+The look is the Instagram post's: violet `#8a2be2`, lavender borders and fills, grey-blue text,
+Open Sans. Most visitors arrive from Instagram's in-app browser on a phone, so pages are
+designed for ~390px first: the homepage keeps the hero short so the first animal shows without
+scrolling, and the rescuer's panel turns its tables into one card per row. Bootstrap 4.3 has
+no `.container-md`, so `<main class="container-md">` has no padding of its own — wrappers
+like `.lista-animales` bring theirs. `adoption/card.html` is the animal card used by the
+homepage and by each rescuer's public page; `index.js` and `modern-effects.js` find things in
+it by class (`.post-preview` and its `data-*`, `.animalCarrousel`, `.show-more-text`).
+
 ## Permissions
 
 Registration at `/accounts/register/` is open and self-service, so **"is logged in" is not a

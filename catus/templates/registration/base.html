@@ -4,26 +4,24 @@
 {{block.super}}
 <style>
     .login-form-container {
-        padding: 40px 0;
-        margin-top: 30px;
+        padding: 8px 0 40px;
     }
 
     #login-box {
         background-color: var(--white);
-        border-radius: 15px;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
         box-shadow: var(--card-shadow);
-        padding: 30px;
-        transition: var(--transition);
-    }
-
-    #login-box:hover {
-        box-shadow: var(--hover-shadow);
+        padding: 32px;
+        max-width: 520px;
     }
 
     #login-form h3 {
-        color: var(--primary-color);
-        font-weight: 600;
-        margin-bottom: 20px;
+        color: var(--text-color);
+        font-weight: 800;
+        font-size: 1.6rem;
+        letter-spacing: -0.01em;
+        margin-bottom: 6px;
     }
 
     /* Estilos mejorados para los inputs */
@@ -58,18 +56,8 @@
     }
 
     #login-form .btn-primary {
-        background: var(--gradient-primary);
-        border: none;
-        padding: 10px 25px;
-        border-radius: 8px;
-        font-weight: 500;
-        transition: var(--transition);
-        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
-    }
-
-    #login-form .btn-primary:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+        padding: 13px 25px;
+        font-size: 16px;
     }
 
     #login-form a {
@@ -84,10 +72,10 @@
     }
 
     .alert-info {
-        background-color: rgba(138, 43, 226, 0.1);
-        border: 1px solid rgba(138, 43, 226, 0.2);
-        color: var(--primary-dark);
-        border-radius: 8px;
+        background-color: var(--lavanda);
+        border: 1px solid var(--lavanda-borde);
+        color: var(--text-color);
+        border-radius: 12px;
     }
 
     @media only screen and (max-width: 992px) {

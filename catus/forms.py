@@ -288,6 +288,9 @@ class UserLoginForm(AuthenticationForm):
         for fieldname in ['username']:
             self.fields[fieldname].label = 'Email'
 
+        #sin esto sale "Password": las traducciones de Django no están activas en el sitio
+        self.fields['password'].label = 'Contraseña'
+
 
 def _unicode_ci_compare(s1, s2):
     """Compare two emails ignoring case only, as Django 2.2.9/3.0.1 do (Unicode

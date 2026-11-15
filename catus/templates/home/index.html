@@ -2,64 +2,40 @@
 {% load static %}
 
 {% block header %}
-<div class="site-heading animated-heading">
-  <h1><i class="fa fa-paw"></i> Catpuccino Adopciones </h1>
-  <span class="subheading"><b>¡Adoptá de forma responsable!</b></span>
-  <div id="main-button" class="button-container">
-    <a id="main-button-action" class="btn btn-primary btn-main">
-      <i class="fa fa-cat"></i> Ver gatos{% if perros_en_adopcion %} y Perros{% endif %} en Adopción
-    </a>
-    <a href="/como-funciona/" class="btn btn-secondary btn-main">
-      <i class="fa fa-question-circle"></i> ¿Cómo funciona?
-    </a>
-  </div>
+{% comment %}El nombre del sitio ya está en la barra de arriba: acá va lo que se viene a hacer.{% endcomment %}
+<div class="site-heading">
+  <h1>¡Adoptá de forma responsable!</h1>
+  <span class="subheading"><i class="fa fa-paw" aria-hidden="true"></i> Gatos{% if perros_en_adopcion %} y perros{% endif %} en adopción</span>
+  <a class="como-funciona" href="/como-funciona/">¿Cómo funciona?</a>
 </div>
 {% endblock %}
 
 {% block subheader %}
 {% if animals %}
-  <div id="gatitos-en-adopcion" class="p-4 p-md-5 search-container container-fluid">
-    <h3 class="mb-4 text-center d-md-none">Filtrar búsqueda</h3>
-    <form class="form">
-      <div class="form-row">
-        <div class="col-12 col-md-4 mb-3 mb-md-0">
-          <span class="filter-label">Buscar</span>
-          <div class="input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="fa fa-search"></i></span>
-            </div>
-            <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="text" name="zone" placeholder="Por zona o nombre">
-          </div>
-        </div>
-
-        <div class="col-6 col-md-4 mb-3 mb-md-0">
-          <span class="filter-label">Tipo de mascota</span>
-          <div class="input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="fa fa-paw"></i></span>
-            </div>
-            <select id="filter-type" class="form-control" name="type">
-              <option value="all">Todos</option>
-              <option value="G">Gatos</option>
-              <option value="P">Perros</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="col-6 col-md-4 mb-3 mb-md-0">
-          <span class="filter-label">Ordenar por</span>
-          <div class="input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="fa fa-sort"></i></span>
-            </div>
-            <select id="filter-sort" class="form-control" name="type">
-              <option value="">Elige una opción</option>
-              <option value="desc">Más Recientes</option>
-              <option value="asc">Más Antiguos</option>
-            </select>
-          </div>
-        </div>
+  {% comment %}
+  El buscador va pegado al encabezado para que los animales se vean sin bajar: la mayoría
+  entra desde Instagram, en el celular, buscando a uno que ya vio.
+  Los ids (#filter-zone, #filter-type y, más abajo, #filter-sort) los usa index.js. El tipo
+  se elige con tres botones; el <select> sigue estando, oculto, porque es el que lee
+  filterAnimals().
+  {% endcomment %}
+  <div id="gatitos-en-adopcion" class="search-container">
+    <form class="filtros" onsubmit="return false;">
+      <div class="filtro-buscar">
+        <i class="fa fa-search" aria-hidden="true"></i>
+        <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="search" name="zone" placeholder="Buscar por nombre o zona" aria-label="Buscar por nombre o zona" autocomplete="off">
       </div>
+
+      <div class="filtro-tipo" role="group" aria-label="Tipo de mascota">
+        <button type="button" class="activo" data-tipo="all" aria-pressed="true">Todos</button>
+        <button type="button" data-tipo="G" aria-pressed="false"><i class="fa fa-cat" aria-hidden="true"></i>Gatos</button>
+        <button type="button" data-tipo="P" aria-pressed="false"><i class="fa fa-dog" aria-hidden="true"></i>Perros</button>
+      </div>
+      <select id="filter-type" class="sr-only" name="type" aria-hidden="true" tabindex="-1">
+        <option value="all">Todos</option>
+        <option value="G">Gatos</option>
+        <option value="P">Perros</option>
+      </select>
 
     </form>
   </div>
@@ -67,15 +43,33 @@
 {% endblock %}
 
 {% block content %}
-<div class="row mx-1 mx-md-4 text-center">
+<div class="lista-animales">
     {% if animals %}
 
-      <div id="animal-list" data-cols="{{cols}}" class="row w-100 mx-auto mt-2 paginada-inicial">
+      {% if main %}
+      {# cuántos hay y en qué orden: el orden va acá y no en el buscador, que en el celular no tiene lugar #}
+      <div class="resultados-barra">
+        <p id="resultados-cuenta" class="resultados-cuenta" aria-live="polite">{{animals|length}} en adopción</p>
+        <select id="filter-sort" class="filtro-orden" name="sort" aria-label="Ordenar">
+          <option value="">Ordenar</option>
+          <option value="desc">Más recientes</option>
+          <option value="asc">Más antiguos</option>
+        </select>
+      </div>
+      {% endif %}
+
+      <div id="animal-list" data-cols="{{cols}}" class="row mt-3 paginada-inicial">
       {% for animal in animals %}
       <div data-id="{{animal.id}}" class="animal-card col-md-{{cols}}">
         {% include "adoption/card.html" %}
       </div>
       {% endfor %}
+      </div>
+
+      <div id="sin-resultados" class="sin-resultados" style="display: none">
+        <b>No encontramos animales con esa búsqueda</b>
+        Probá con otro nombre u otra zona.
+        <div class="mt-3"><button id="ver-todos" type="button" class="btn btn-primary">Ver todos</button></div>
       </div>
 
       <div id="cargar-mas-container" class="w-100 text-center mt-2 mb-5" style="display: none">
@@ -86,8 +80,8 @@
       </div>
 
     {% else %}
-    <div class="mx-auto alert alert-info w-100 no-animals-message" id="gatitos-en-adopcion">
-      <div class="mx-auto text-md-justify">
+    <div class="mx-auto text-center no-animals-message" id="gatitos-en-adopcion">
+      <div class="mx-auto">
         <i class="fa fa-paw"></i>
         {% if main %}
         En este momento no tenemos ningún animal en adopción
@@ -97,285 +91,22 @@
         {% endif %}
       </div>
       <div class="mx-auto">
-        <img class="cat-image" src="/static/500.png">
+        <img class="cat-image" src="/static/500.png" alt="">
       </div>
     </div>
     {% endif %}
 </div>
 {% endblock %}
 
+{% block js %}
+<script src='{% static "js/jquery.autocomplete.min.js" %}'></script>
+{% endblock %}
+
 {% block css %}
 <style>
-  /* Background del banner completamente opaco */
-  .masthead.header-main-page {
-    position: relative;
-    background-color: rgb(70, 20, 120, 0.2) !important;
-  }
-
-  .masthead.header-main-page:before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgb(70, 20, 120) !important;
-    opacity: 0.75 !important;
-    z-index: 1;
-  }
-
-  /* Contenedor de botones */
-  .button-container {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    margin-top: 25px;
-  }
-
-  /* Botones principales en el banner */
-  .btn-main {
-    font-weight: 600;
-    padding: 14px 28px;
-    border-radius: 50px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-    min-width: 230px;
-    text-align: center;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .btn-main i {
-    margin-right: 8px;
-    font-size: 1.1rem;
-  }
-
-  .btn-main:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  }
-
-  .btn-secondary.btn-main {
-    background: rgba(255, 255, 255, 0.15);
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    color: white;
-  }
-
-  .btn-secondary.btn-main:hover {
-    background: rgba(255, 255, 255, 0.25);
-  }
-
-  /* Mejorar visibilidad del texto con sombras pronunciadas */
-  .site-heading {
-    position: relative;
-    z-index: 5;
-    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.6) !important;
-  }
-
-  /* Responsive para botones */
-  @media (max-width: 576px) {
-    .button-container {
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .btn-main {
-      width: 100%;
-      min-width: unset;
-    }
-  }
-
-  .animated-heading h1,
-  .animated-heading .subheading,
-  .animated-heading #main-button {
-    animation: fadeInUp 1s ease forwards;
-    opacity: 0;
-  }
-
-  .animated-heading .subheading {
-    animation-delay: 0.3s;
-  }
-
-  .animated-heading #main-button {
-    animation-delay: 0.6s;
-  }
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .section-title {
-    color: var(--primary-color);
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-  }
-
-  .section-description {
-    color: var(--text-light);
-    margin-bottom: 2rem;
-  }
-
-  .no-animals-message {
-    background: var(--white);
-    border-radius: 15px;
-    box-shadow: var(--card-shadow);
-    border: none;
-    padding: 2rem;
-  }
-
-  .cat-image {
-    max-width: 200px;
-    margin-top: 1rem;
-  }
-
+  /* la lista arranca pegada al buscador: en el resto del sitio el <main> deja aire arriba */
   main {
     margin-top: 0;
   }
-
-  .autocomplete-suggestions {
-    border: 1px solid rgba(0,0,0,0.05);
-    background: var(--white);
-    overflow: auto;
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-  }
-
-  .autocomplete-suggestion {
-    padding: 12px 18px;
-    white-space: nowrap;
-    overflow: hidden;
-    transition: background-color 0.2s;
-    cursor: pointer;
-  }
-
-  .autocomplete-selected {
-    background: var(--light-bg);
-  }
-
-  .autocomplete-suggestions strong {
-    font-weight: 600;
-    color: var(--primary-color);
-  }
-
-  .autocomplete-group {
-    padding: 12px 18px;
-    font-weight: 600;
-  }
-
-  .autocomplete-group strong {
-    display: block;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
-    padding-bottom: 8px;
-  }
-
-  {% if main %}
-  #gatitos-en-adopcion {
-    margin-bottom: 15px;
-  }
-  {% endif %}
-
-  /* Mejoras para las tarjetas de animales */
-  .post-preview {
-    border: none !important;
-    border-radius: 20px !important;
-    box-shadow: 0 12px 28px rgba(138, 43, 226, 0.15), 0 0 0 1px rgba(138, 43, 226, 0.12) !important;
-    overflow: hidden !important;
-    transition: all 0.4s ease !important;
-  }
-
-  .post-preview:hover {
-    transform: translateY(-8px) !important;
-    box-shadow: 0 20px 40px rgba(138, 43, 226, 0.25), 0 0 0 1px rgba(138, 43, 226, 0.15) !important;
-  }
-
-  .post-preview::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(to right, var(--primary-color), var(--primary-light));
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.4s ease;
-  }
-
-  .post-preview:hover::after {
-    transform: scaleX(1);
-  }
-
-  /* La portada muestra de a 5 filas (paginar() en index.js). Hasta que corre el JS,
-     esto evita que se pinte la lista entera y después se recorte. */
-  #animal-list.paginada-inicial > .animal-card:nth-child(n+6) {
-    display: none;
-  }
-
-  @media (min-width: 768px) {
-    #animal-list.paginada-inicial > .animal-card:nth-child(n+6) {
-      display: block;
-    }
-
-    #animal-list.paginada-inicial > .animal-card:nth-child(n+16) {
-      display: none;
-    }
-  }
-
-  .btn-cargar-mas {
-    background: var(--gradient-primary);
-    border: none;
-    border-radius: 50px;
-    padding: 12px 36px;
-    font-weight: 600;
-    box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
-  }
-
-  .btn-cargar-mas:hover,
-  .btn-cargar-mas:focus {
-    background: var(--gradient-primary);
-    box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
-  }
-
-  .btn-cargar-mas i {
-    margin-right: 8px;
-  }
-
-  .cargar-mas-cuenta {
-    color: var(--text-light);
-    font-size: 0.9rem;
-    margin-top: 0.75rem;
-  }
 </style>
-{% endblock %}
-
-{% block js %}
-<script src='{% static "js/jquery.autocomplete.min.js" %}'></script>
-<script>
-  $(document).ready(function() {
-    // Reset filters
-    $('#reset-filters').click(function(e) {
-      e.preventDefault();
-      $('#filter-zone').val('');
-      $('#filter-type').val('all');
-      $('#filter-sort').val('');
-
-      // Trigger filter update
-      $('#filter-zone').trigger('change');
-
-      // Visual feedback
-      $(this).html('<i class="fa fa-check"></i> Filtros restablecidos');
-      setTimeout(function() {
-        $('#reset-filters').html('<i class="fa fa-undo"></i> Limpiar filtros');
-      }, 2000);
-    });
-  });
-</script>
 {% endblock %}

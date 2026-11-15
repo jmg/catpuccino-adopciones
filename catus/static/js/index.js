@@ -280,6 +280,27 @@ function paginar() {
   var mostrados = Math.min(coinciden, limite);
   $("#cargar-mas-container").toggle(coinciden > limite);
   $("#cargar-mas-cuenta").text("Mostrando " + mostrados + " de " + coinciden);
+
+  //arriba de la lista, cuántos hay; y si la búsqueda no encontró nada, que se diga:
+  //antes quedaba la página en blanco
+  var total = lista.children(".animal-card").length;
+  $("#resultados-cuenta").text(coinciden == total ? total + " en adopción" : coinciden + " de " + total);
+  $("#sin-resultados").toggle(coinciden === 0);
+}
+
+// Todos / Gatos / Perros: los botones de la portada manejan el <select> #filter-type,
+// que es el que lee filterAnimals()
+function elegirTipo(tipo) {
+  $(".filtro-tipo button").each(function() {
+    var activo = $(this).data("tipo") == tipo;
+    $(this).toggleClass("activo", activo).attr("aria-pressed", activo ? "true" : "false");
+  });
+  $("#filter-type").val(tipo).trigger("change");
+}
+
+function verTodos() {
+  $("#filter-zone").val("");
+  elegirTipo("all");
 }
 
 function cargarMas() {
@@ -332,9 +353,15 @@ $(document).ready(function() {
       anchoDeEscritorio.addListener(paginar)
     }
 
-    $("#filter-zone").on("keyup", function() {
+    //input y search además de keyup: pegar un texto, o la × que le pone el navegador a la
+    //caja de búsqueda, no sueltan ninguna tecla
+    $("#filter-zone").on("keyup input search", function() {
       filterAnimals()
     })
+    $(".filtro-tipo button").on("click", function() {
+      elegirTipo($(this).data("tipo"))
+    })
+    $("#ver-todos").on("click", verTodos)
     $("#filter-type").on("change", function() {
       filterAnimals()
     })

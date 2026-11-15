@@ -6,112 +6,215 @@
 {{ block.super }}
 <style>
     .preadoption-container {
-        background-color: var(--white);
-        border-radius: 15px;
+        background-color: #fff;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
         box-shadow: var(--card-shadow);
-        padding: 30px;
-        transition: var(--transition);
-        margin-top: 20px;
-        margin-bottom: 30px;
+        padding: 32px;
+        margin-top: 8px;
+        margin-bottom: 32px;
+        /* para que los renglones de los requisitos no sean larguísimos en la compu */
+        max-width: 760px;
     }
 
-    .preadoption-container:hover {
-        box-shadow: var(--hover-shadow);
+    /* A qué animal va el formulario: la mayoría llega desde su ficha o desde Instagram */
+    .adopcion-animal {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 22px;
     }
 
-    .preadoption-title {
+    .adopcion-animal img {
+        width: 88px;
+        height: 88px;
+        border-radius: 14px;
+        object-fit: cover;
+        flex: none;
+        background: var(--lavanda);
+    }
+
+    .adopcion-animal h1 {
+        font-size: 1.5rem;
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--text-color);
+        margin: 0 0 4px;
+    }
+
+    .adopcion-animal h1 b {
+        font-weight: 800;
         color: var(--primary-color);
-        font-weight: 600;
-        text-align: center;
-        margin-bottom: 1.5rem;
-        font-size: 1.8rem;
+        overflow-wrap: anywhere;
+    }
+
+    .adopcion-animal p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 15px;
+        line-height: 1.45;
+    }
+
+    /* Los títulos de los formularios están escritos en mayúsculas en el admin */
+    .preadoption-title,
+    #terms-and-conditions h4 {
+        color: var(--text-color);
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1.25;
+        text-align: left !important;
+        text-transform: lowercase;
+        margin-bottom: 1rem;
+    }
+
+    .preadoption-title::first-letter,
+    #terms-and-conditions h4::first-letter {
+        text-transform: uppercase;
     }
 
     .form-control {
-        border: 2px solid rgba(138, 43, 226, 0.15);
+        border: 1px solid #cdbde8;
         border-radius: 10px;
-        padding: 12px 15px;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        padding: 11px 14px;
+        height: auto;
+        font-size: 16px;
+        color: var(--text-color);
         background-color: #fff;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    select.form-control {
+        height: 48px;
     }
 
     .form-control:focus {
         border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.18);
         outline: none;
     }
 
-    .form-control::placeholder {
-        color: rgba(74, 85, 104, 0.6);
-    }
-
     .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 22px;
     }
 
-    label {
-        font-weight: 500;
+    #adoption-form label {
+        font-weight: 600;
         margin-bottom: 8px;
         color: var(--text-color);
-        font-size: 0.95rem;
+        font-size: 16px;
+        line-height: 1.4;
+    }
+
+    #adoption-form .form-text {
+        color: var(--text-muted) !important;
+        font-size: 14px;
+        line-height: 1.45;
+        margin-top: 6px;
+    }
+
+    #adoption-form input[type=file] {
+        display: block;
+        width: 100%;
+    }
+
+    /* Los requisitos y la nota del final: texto corrido, para leer */
+    #terms-and-conditions {
+        background-color: var(--lavanda);
+        border: 1px solid var(--lavanda-borde);
+        border-radius: 14px;
+        color: var(--text-color);
+        padding: 22px;
+        text-align: left;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+
+    /* los requisitos van sobre la página, sin recuadro: son lo único que hay para leer */
+    #terms-and-conditions.requisitos {
+        background: none;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+    }
+
+    #terms-and-conditions hr {
+        border-top-color: var(--lavanda-borde);
+        margin: 0 0 1rem;
+    }
+
+    #terms-and-conditions ul {
+        padding-left: 0;
+        margin-bottom: 1rem;
+    }
+
+    #terms-and-conditions li {
+        margin-bottom: 14px;
+        position: relative;
+        padding-left: 30px;
+        color: var(--text-light);
+    }
+
+    #terms-and-conditions li:before {
+        color: var(--primary-color);
+        font-size: 14px;
+        top: 3px;
+    }
+
+    #terms-and-conditions li b {
+        color: var(--text-color);
+        font-weight: 700;
+    }
+
+    #terms-and-conditions .btn {
+        margin-top: 12px !important;
+        margin-bottom: 0 !important;
+    }
+
+    .aviso-importante {
+        display: flex;
+        gap: 12px;
+        background: #fff8e5;
+        border: 1px solid #f1dca4;
+        border-radius: 12px;
+        color: var(--text-color);
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        font-size: 15px;
+        line-height: 1.5;
+    }
+
+    .aviso-importante i {
+        color: #a86a00;
+        margin-top: 4px;
+        flex: none;
     }
 
     .alert-info {
-        background-color: rgba(138, 43, 226, 0.1);
-        border: 1px solid rgba(138, 43, 226, 0.2);
-        color: var(--primary-dark);
-        border-radius: 10px;
+        background-color: var(--lavanda);
+        border: 1px solid var(--lavanda-borde);
+        color: var(--text-color);
+        border-radius: 12px;
         padding: 20px;
     }
 
     .alert-danger {
-        background-color: rgba(220, 53, 69, 0.1);
-        border: 1px solid rgba(220, 53, 69, 0.2);
-        color: #721c24;
-        border-radius: 10px;
+        background-color: #fdecee;
+        border: 1px solid #f5c2c7;
+        color: #7a1c26;
+        border-radius: 12px;
         padding: 20px;
     }
 
     .alert-success {
-        background-color: rgba(40, 167, 69, 0.1);
-        border: 1px solid rgba(40, 167, 69, 0.2);
+        background-color: #e9f7ee;
+        border: 1px solid #bfe3cb;
         color: #155724;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 20px;
-    }
-
-    #terms-and-conditions ul {
-        padding-left: 20px;
-    }
-
-    #terms-and-conditions li {
-        margin-bottom: 10px;
-        position: relative;
-        padding-left: 30px;
-    }
-
-    .btn-primary {
-        background: var(--gradient-primary);
-        border: none;
-        padding: 12px 30px;
-        border-radius: 50px;
-        font-weight: 500;
-        transition: var(--transition);
-        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
     }
 
     #wait-message {
-        background-color: rgba(138, 43, 226, 0.15);
-        border: 1px solid rgba(138, 43, 226, 0.3);
-        color: var(--primary-dark);
-        border-radius: 10px;
-        padding: 20px;
         margin-top: 20px;
     }
 
@@ -126,67 +229,56 @@
 
     .section-divider {
         height: 1px;
-        background: linear-gradient(90deg, rgba(138, 43, 226, 0.1), rgba(138, 43, 226, 0.5), rgba(138, 43, 226, 0.1));
-        margin: 30px 0;
+        background: var(--lavanda-borde);
+        margin: 28px 0;
     }
 
     .btn-secondary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-        color: white;
-        border-radius: 10px;
-        padding: 12px 25px;
-        transition: all 0.3s ease;
+        background-color: #fff;
+        border: 1px solid #cdbde8;
+        color: var(--text-color) !important;
     }
 
-    .btn-secondary:hover {
-        background-color: #5a6268;
-        border-color: #545b62;
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    .btn-secondary:hover,
+    .btn-secondary:focus {
+        background-color: var(--lavanda);
+        border-color: var(--primary-color);
+        color: var(--primary-dark) !important;
     }
 
-    /* Ajustes responsivos para dispositivos móviles */
     @media (max-width: 768px) {
         .preadoption-container {
-            padding: 15px;
-            margin-top: 10px;
-            margin-bottom: 15px;
+            padding: 18px 16px;
+            margin-top: 0;
+            margin-bottom: 16px;
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
         }
 
-        #terms-and-conditions ul {
-            padding-left: 0px;
+        .adopcion-animal img {
+            width: 72px;
+            height: 72px;
         }
 
-        .form-group {
-            margin-bottom: 12px;
+        .adopcion-animal h1 {
+            font-size: 1.3rem;
         }
 
-        .form-control {
-            padding: 8px 12px;
+        #terms-and-conditions {
+            padding: 16px;
         }
 
-        .btn-primary, .btn-secondary {
-            padding: 10px 20px;
+        #terms-and-conditions li {
+            padding-left: 26px;
         }
 
         .section-divider {
-            margin: 20px 0;
+            margin: 22px 0;
         }
 
-        .alert {
-            padding: 12px;
-            margin-bottom: 15px;
-        }
-
-        .preadoption-title {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        #wait-message {
-            padding: 15px;
-            margin-top: 15px;
+        .btn-lg {
+            width: 100%;
         }
     }
 </style>
@@ -200,22 +292,38 @@
         {% if not is_post %}
 
             {% if not is_user %}
-            <div class="alert alert-danger" role="alert">
-                <i class="fa fa-paw mr-2"></i> <b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>NO PERTENECEN A CATPUCCINO ADOPCIONES</b>. Son de personas independientes que buscan una adopción responsable para ellos. <i class="fa fa-paw ml-2"></i>
+            <div class="aviso-importante" role="note">
+                <i class="fa fa-info-circle" aria-hidden="true"></i>
+                <div><b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>no pertenecen a Catpuccino Adopciones</b>. Son de personas independientes que buscan una adopción responsable para ellos.</div>
             </div>
             {% endif %}
 
             {% if form.intro %}
-            <div id="terms-and-conditions" class="alert alert-info" role="alert">
+            {% comment %}
+            Todo lo que hay que leer antes del formulario va adentro de #terms-and-conditions:
+            hideTerms() lo esconde entero al aceptar, y el formulario ya muestra al animal
+            elegido con sus fotos.
+            {% endcomment %}
+            <div id="terms-and-conditions" class="requisitos" role="region" aria-label="Requisitos">
+                {% if animal and form_type == "preadoption" %}
+                <div class="adopcion-animal">
+                    {% with fotos=animal.get_images %}{% if fotos %}<img src="{{fotos.0.image.url}}" alt="">{% endif %}{% endwith %}
+                    <div>
+                        <h1>Formulario para adoptar a <b>{{animal.nombre}}</b></h1>
+                        <p>Leé los requisitos y aceptalos para completar el formulario.</p>
+                    </div>
+                </div>
+                {% endif %}
+
                 {{ form.intro|safe }}
 
                 <div class="text-center">
-                <button style="margin-top: 30px; margin-bottom: 15px;" class="btn btn-primary" onclick="hideTerms(); showForm();">Aceptar y Completar el Formulario <i class="fa fa-file-alt ml-2"></i></button>
+                <button class="btn btn-primary btn-lg" onclick="hideTerms(); showForm();">Aceptar y completar el formulario <i class="fa fa-file-alt ml-2"></i></button>
                 </div>
             </div>
 
             <div id="show-terms-button" class="text-center" style="display: none">
-                <button style="margin-top: 10px;" class="btn btn-primary" onclick="showTerms()">Mostrar Requisitos de {% if form_type == "preadoption" %}Adopción{% else %}Tránsito{% endif %} <i class="fa fa-cat ml-2"></i></button>
+                <button class="btn btn-secondary" onclick="showTerms()"><i class="fa fa-list-ul mr-2"></i> Mostrar requisitos de {% if form_type == "preadoption" %}adopción{% else %}tránsito{% endif %}</button>
             </div>
             {% endif %}
         {% endif %}
@@ -236,7 +344,7 @@
 
                 {% if form_type == "preadoption" %}
                 <div class="section-divider"></div>
-                <div id="terms-and-conditions" class="alert alert-info" role="alert">
+                <div id="terms-and-conditions" role="note">
                     <div>
                         <ul>
                         <li>
