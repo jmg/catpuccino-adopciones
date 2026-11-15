@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 
+{% block title %}¿Cómo funciona? | Catpuccino Adopciones{% endblock %}
+
 {% block content %}
 <div class="col-lg-10 col-md-10 mx-auto small-padding-mobile py-4">
-    <h2 class="text-center mb-4 como-funciona-title">¿Cómo funciona Catpuccino Adopciones?</h2>
+    <h1 class="text-center mb-4 como-funciona-title">¿Cómo funciona Catpuccino Adopciones?</h1>
 
     <div class="como-funciona-gratis text-center col-md-11 mx-auto mb-2">
         <i class="fa fa-heart mr-2" aria-hidden="true"></i><b>¡La plataforma es 100% gratuita!</b>
@@ -14,13 +16,13 @@
             <div class="como-funciona-card h-100 shadow-sm">
                 <div class="como-funciona-card-header">
                     <i class="fa fa-home"></i>
-                    <h3>Quiero Adoptar</h3>
+                    <h2>Quiero adoptar</h2>
                 </div>
                 <div class="como-funciona-card-body">
                     <div class="como-funciona-step">
                         <div class="step-number">1</div>
                         <div class="step-content">
-                            <h5>Elegí a tu compañero</h5>
+                            <h3>Elegí a tu compañero</h3>
                             <p>Navegá nuestro listado de animales en adopción y elegí el que más se adapte a tu familia y estilo de vida.</p>
                         </div>
                     </div>
@@ -28,8 +30,8 @@
                     <div class="como-funciona-step">
                         <div class="step-number">2</div>
                         <div class="step-content">
-                            <h5>Completá el formulario</h5>
-                            <p>Cada animal tiene un botón de "Formulario de pre-adopción". Completalo con toda la info que te pedimos:</p>
+                            <h3>Completá el formulario</h3>
+                            <p>Cada animal tiene un botón «Quiero adoptar», que lleva a su formulario de pre-adopción. Completalo con toda la info que te pedimos:</p>
                             <div class="ml-3 mb-3 mt-3 d-flex">
                                 <a href="/pre-adopcion/" class="btn btn-sm btn-outline-primary mr-2" target="_blank">
                                     <i class="fa fa-cat mr-1"></i> Para gatos
@@ -44,7 +46,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">3</div>
                         <div class="step-content">
-                            <h5>Revisión del formulario</h5>
+                            <h3>Revisión del formulario</h3>
                             <p>El/la transitante del animal va a revisar tu solicitud y se va a contactar con vos si cumplís con los requisitos.</p>
                         </div>
                     </div>
@@ -52,7 +54,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">4</div>
                         <div class="step-content">
-                            <h5>Proceso de adopción</h5>
+                            <h3>Proceso de adopción</h3>
                             <p>Si todo está ok, van a coordinar la entrega del animal y la firma del contrato de adopción responsable.</p>
                         </div>
                     </div>
@@ -70,13 +72,13 @@
             <div class="como-funciona-card h-100 shadow-sm">
                 <div class="como-funciona-card-header">
                     <i class="fa fa-bullhorn"></i>
-                    <h3>Quiero Publicar</h3>
+                    <h2>Quiero publicar</h2>
                 </div>
                 <div class="como-funciona-card-body">
                     <div class="como-funciona-step">
                         <div class="step-number">1</div>
                         <div class="step-content">
-                            <h5>Creá tu cuenta</h5>
+                            <h3>Creá tu cuenta</h3>
                             <p>Registrate en nuestra plataforma con un mail válido y una contraseña. Esto te va a permitir gestionar tus publicaciones.</p>
                             <div class="ml-3 mb-3">
                                 <a href="/accounts/profile/" class="btn btn-sm btn-outline-primary" target="_blank">
@@ -89,7 +91,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">2</div>
                         <div class="step-content">
-                            <h5>Cargá los datos del animal</h5>
+                            <h3>Cargá los datos del animal</h3>
                             <p>Completá toda la info del animal: nombre, edad, sexo, características y al menos una foto (¡mientras más, mejor!).</p>
                         </div>
                     </div>
@@ -97,7 +99,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">3</div>
                         <div class="step-content">
-                            <h5>Revisión y publicación</h5>
+                            <h3>Revisión y publicación</h3>
                             <p>Nuestro equipo va a revisar la publicación y, una vez aprobada, va a aparecer en la página principal para que todos la puedan ver.</p>
                         </div>
                     </div>
@@ -105,7 +107,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">4</div>
                         <div class="step-content">
-                            <h5>Recepción de solicitudes</h5>
+                            <h3>Recepción de solicitudes</h3>
                             <p>Cuando alguien complete el formulario de pre-adopción para tu animal, vas a recibir un mail con todos los detalles.</p>
                         </div>
                     </div>
@@ -113,7 +115,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">5</div>
                         <div class="step-content">
-                            <h5>Concretar la adopción</h5>
+                            <h3>Concretar la adopción</h3>
                             <p>Si estás de acuerdo con el perfil del adoptante, te vas a poder contactar para coordinar la entrega del animal.</p>
                         </div>
                     </div>
@@ -121,7 +123,7 @@
                     <div class="como-funciona-step">
                         <div class="step-number">6</div>
                         <div class="step-content">
-                            <h5>Generar contrato de adopción (opcional)</h5>
+                            <h3>Generar contrato de adopción (opcional)</h3>
                             <p>Nuestro sitio te ofrece un generador de contratos de adopción que le podés hacer firmar al adoptante, formalizando así el compromiso de cuidado responsable del animal.</p>
                         </div>
                     </div>
@@ -139,34 +141,19 @@
     }
 
     .como-funciona-title {
-        color: var(--primary-color);
-        font-weight: 700;
-        position: relative;
-        padding-bottom: 15px;
+        color: var(--text-color);
+        font-weight: 800;
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        line-height: 1.2;
+        letter-spacing: -0.01em;
     }
 
-    .como-funciona-title:after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 80px;
-        height: 4px;
-        background: var(--gradient-primary);
-        border-radius: 2px;
-    }
-
+    /* no son links: no se levantan al pasarles el mouse */
     .como-funciona-card {
         background-color: #fff;
-        border-radius: 20px;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
         overflow: hidden;
-        transition: all 0.3s ease;
-    }
-
-    .como-funciona-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(138, 43, 226, 0.1) !important;
     }
 
     .como-funciona-card-header {
@@ -183,9 +170,10 @@
         display: block;
     }
 
-    .como-funciona-card-header h3 {
+    .como-funciona-card-header h2 {
         margin: 0;
-        font-weight: 600;
+        font-size: 1.4rem;
+        font-weight: 800;
     }
 
     .como-funciona-card-body {
@@ -228,11 +216,13 @@
         flex-grow: 1;
     }
 
-    .step-content h5 {
-        color: var(--primary-color);
+    .step-content h3 {
+        color: var(--text-color);
         margin-top: 0;
-        margin-bottom: 8px;
-        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 1.1rem;
+        line-height: 1.3;
+        font-weight: 700;
     }
 
     .step-content p {
@@ -324,7 +314,7 @@
             flex: 1;
         }
 
-        .step-content h5 {
+        .step-content h3 {
             margin-top: 0;
             margin-bottom: 10px;
         }

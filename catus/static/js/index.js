@@ -72,12 +72,37 @@ function initializeImages() {
 
   $('.carousel').each(function(idx, el) {
 
-    var slider = new bootstrap.Carousel(el, {interval: 3000 })
+    //con una sola foto no hay nada que pasar
+    if ($(el).find('.carousel-item').length < 2) {
+      return
+    }
+
+    //interval false: las fotos pasan cuando la persona toca la flecha o desliza. Antes
+    //pasaban solas cada 3 segundos, todas las fichas a la vez: no había cómo frenarlas
+    //y en un minuto el celular bajaba 25 fotos que nadie había pedido.
+    var slider = new bootstrap.Carousel(el, {interval: false })
     sliders.push(slider)
   })
 
   makeImageFullSize();
 }
+
+// "2 / 7" sobre la foto: cuál se está viendo
+$(document).on("slid.bs.carousel", ".animalCarrousel", function(e) {
+  var cuenta = $(this).find(".fotos-cuenta")
+  if (cuenta.length && typeof e.to === "number") {
+    cuenta.text((e.to + 1) + " / " + $(this).find(".carousel-item").length)
+  }
+})
+
+// Las flechas del carrusel y el desplegable del menú son <a role="button">: un botón se
+// activa también con la barra espaciadora, que en un link solo baja la página.
+$(document).on("keydown", "a[role=button]", function(e) {
+  if (e.key === " " || e.key === "Spacebar") {
+    e.preventDefault()
+    this.click()
+  }
+})
 
 function showMore(el) {
   var link = $(el)
@@ -96,6 +121,8 @@ function mobileCheck() {
   return check;
 };
 
+// Qué fotos se pueden ampliar. El clic se escucha una sola vez, en el documento: la
+// portada vuelve a llamar a esta función cada vez que se reordena.
 function makeImageFullSize() {
 
     var classes = "img[data-enlargable]";
@@ -103,32 +130,54 @@ function makeImageFullSize() {
       classes += ",img[data-enlargable-if-not-mobile]";
     }
 
-    $(classes).addClass('img-enlargable').click(function() {
-
-      var src = $(this).attr('src');
-      $('<div>').css({
-          background: 'RGBA(0,0,0,.5) url('+src+') no-repeat center',
-          backgroundSize: 'contain',
-          width:'100%', height:'100%',
-          position:'fixed',
-          zIndex:'10000',
-          top:'0', left:'0',
-          cursor: 'zoom-out'
-      }).click(function() {
-
-          $(this).remove();
-          resetZoom();
-
-      }).appendTo('body');
-    });
+    $(classes).addClass('img-enlargable');
 }
 
+function cerrarFotoAmpliada() {
+
+    var visor = $("#foto-ampliada");
+    if (!visor.length) {
+      return;
+    }
+
+    var volverA = visor.data("volverA");
+    visor.remove();
+    $(document).off("keydown.fotoAmpliada");
+    resetZoom();
+
+    if (volverA && volverA.focus) {
+      volverA.focus();
+    }
+}
+
+$(document).on("click", "img.img-enlargable", function() {
+
+    cerrarFotoAmpliada();
+
+    var visor = $('<div id="foto-ampliada" class="foto-ampliada" role="dialog" aria-modal="true"></div>')
+      .attr("aria-label", this.alt ? "Foto de " + this.alt : "Foto ampliada");
+
+    $("<img>").attr({src: this.src, alt: this.alt || ""}).appendTo(visor);
+    var cerrar = $('<button type="button" class="foto-ampliada-cerrar" aria-label="Cerrar la foto"><i class="fa fa-times" aria-hidden="true"></i></button>').appendTo(visor);
+
+    //se cierra tocando en cualquier lado, con la × o con Escape
+    visor.data("volverA", document.activeElement).on("click", cerrarFotoAmpliada).appendTo("body");
+    $(document).on("keydown.fotoAmpliada", function(e) {
+      if (e.key === "Escape" || e.key === "Esc") {
+        cerrarFotoAmpliada();
+      }
+    });
+
+    cerrar.focus();
+});
+
+// Si la persona agrandó la foto con los dedos, al cerrarla la página vuelve a su tamaño.
 function resetZoom() {
     $('meta[name=viewport]').remove();
     $('head').append('<meta name="viewport" content="width=device-width, maximum-scale=1.0, user-scalable=0">');
 
     $('meta[name=viewport]').remove();
-    $('head').append('<meta name="viewport" content="width=device-width, initial-scale=yes">');
+    $('head').append('<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">');
 }
 
 var setCookie = function(name, value, days) {
@@ -242,7 +291,10 @@ function _filter(zone, type) {
 // La portada muestra de a 5 filas y un "Cargar más": con la lista entera nadie llegaba
 // nunca al pie. Se pagina sobre lo que dejan los filtros, así que buscar sigue
 // encontrando entre todos los animales y no solo entre los que ya se ven.
+// En el celular va una ficha por fila, y de a 5 había que tocar "Cargar más" a cada
+// rato: ahí van de a 10.
 var FILAS_POR_PAGINA = 5;
+var TARJETAS_POR_PAGINA_EN_CELULAR = 10;
 var paginasMostradas = 1;
 
 function tarjetasPorFila() {
@@ -251,7 +303,17 @@ function tarjetasPorFila() {
   if (!window.matchMedia("(min-width: 768px)").matches) {
     return 1;
   }
-  return Math.max(1, Math.floor(12 / cols));
+  var porFila = Math.max(1, Math.floor(12 / cols));
+  //de a tres pasan a ser de a cuatro en las pantallas anchas (col-xl-3 en index.html)
+  if (porFila === 3 && window.matchMedia("(min-width: 1200px)").matches) {
+    return 4;
+  }
+  return porFila;
+}
+
+function tarjetasPorPagina() {
+  var porFila = tarjetasPorFila();
+  return porFila === 1 ? TARJETAS_POR_PAGINA_EN_CELULAR : FILAS_POR_PAGINA * porFila;
 }
 
 function paginar() {
@@ -261,7 +323,7 @@ function paginar() {
     return;
   }
 
-  var limite = paginasMostradas * FILAS_POR_PAGINA * tarjetasPorFila();
+  var limite = paginasMostradas * tarjetasPorPagina();
   var coinciden = 0;
 
   lista.children(".animal-card").each(function() {
@@ -284,7 +346,7 @@ function paginar() {
   //arriba de la lista, cuántos hay; y si la búsqueda no encontró nada, que se diga:
   //antes quedaba la página en blanco
   var total = lista.children(".animal-card").length;
-  $("#resultados-cuenta").text(coinciden == total ? total + " en adopción" : coinciden + " de " + total);
+  $("#resultados-cuenta").text((coinciden == total ? total : coinciden + " de " + total) + " en adopción");
   $("#sin-resultados").toggle(coinciden === 0);
 }
 
@@ -315,10 +377,12 @@ function filterAnimals() {
 
   _filter(zone, type)
 
-  var sort = $("#filter-sort").val();
-  if (!!sort) {
+  //solo cuando cambia el orden: reordenar vuelve a armar todos los carruseles
+  var sort = $("#filter-sort").val() || "";
+  if (sort !== ordenAplicado) {
     sortAnimals(sort);
     initializeImages();
+    ordenAplicado = sort;
   }
 
   //otra búsqueda arranca de nuevo por las primeras filas
@@ -326,9 +390,16 @@ function filterAnimals() {
   paginar();
 }
 
+// "" es el orden en que llegó la página (los publicados o republicados más recientes
+// primero): elegirlo de nuevo tiene que volver ahí, y antes no hacía nada.
+var ordenAplicado = "";
+
 function sortAnimals(option) {
   var cards = Array.from(document.querySelectorAll('.animal-card'));
   var sortedCards = cards.sort(function(a,b) {
+    if (!option) {
+      return parseInt(a.getAttribute("data-orden"), 10) > parseInt(b.getAttribute("data-orden"), 10) ? 1 : -1;
+    }
     var aId = $(a).data('id');
     var bId = $(b).data('id');
     if (option == "asc") {
@@ -340,18 +411,44 @@ function sortAnimals(option) {
   $("#animal-list").html(sortedCards)
 }
 
+// Las zonas las escribe cada rescatista: "Belgrano", "BELGRANO" y "belgrano " son la
+// misma, y "....." no es ninguna. Queda una por zona, la primera forma que aparece.
+function zonasParaSugerir(zonesData) {
+  var vistas = {};
+  var zonas = [];
+  zonesData.split("||").forEach(function(zona) {
+    var limpia = $.trim(zona).replace(/\s+/g, " ");
+    var clave = limpia.toLowerCase();
+    if (!/[a-z0-9áéíóúüñ]/i.test(limpia) || vistas[clave]) {
+      return;
+    }
+    vistas[clave] = true;
+    zonas.push({ value: limpia });
+  });
+  return zonas;
+}
+
 $(document).ready(function() {
+
+    //el orden en que llegó la página, para poder volver a él (sortAnimals). En un
+    //atributo: .html() le borra los datos de jQuery a las tarjetas que reordena.
+    $("#animal-list > .animal-card").each(function(i) {
+      this.setAttribute("data-orden", i)
+    })
 
     initializeImages()
 
     paginar()
-    $("#cargar-mas").on("click", cargarMas)
-    //cuántas tarjetas entran por fila cambia solo al cruzar los 768px (rotar una
-    //tablet); un resize común se dispara con cada scroll en el celular
-    var anchoDeEscritorio = window.matchMedia("(min-width: 768px)");
-    if (anchoDeEscritorio.addListener) {
-      anchoDeEscritorio.addListener(paginar)
-    }
+    $("#cargar-mas").on("click", cargarMas);
+    //cuántas tarjetas entran por fila cambia solo al cruzar los 768px o los 1200px
+    //(rotar una tablet); un resize común se dispara con cada scroll en el celular
+    var cortes = ["(min-width: 768px)", "(min-width: 1200px)"];
+    cortes.forEach(function(consulta) {
+      var ancho = window.matchMedia(consulta);
+      if (ancho.addListener) {
+        ancho.addListener(paginar)
+      }
+    })
 
     //input y search además de keyup: pegar un texto, o la × que le pone el navegador a la
     //caja de búsqueda, no sueltan ninguna tecla
@@ -375,13 +472,12 @@ $(document).ready(function() {
 
     var zonesData = textoDelAtributo($("#filter-zone")[0], "data-zones")
     if (!!zonesData) {
-      var zones = zonesData.split("||").map(function(zone) {
-        return { value: zone }
-      })
-
+      //minChars 1 y hasta 6: con la caja vacía se abría la lista entera de zonas, que en
+      //el celular tapaba los filtros y los animales
       $("#filter-zone").autocomplete({
-        lookup: zones,
-        minChars: 0,
+        lookup: zonasParaSugerir(zonesData),
+        minChars: 1,
+        lookupLimit: 6,
         formatResult: sugerenciaEscapada,
         onSelect: function (suggestion) {
           filterAnimals()

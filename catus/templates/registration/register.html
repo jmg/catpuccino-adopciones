@@ -1,39 +1,37 @@
 {% extends "registration/base.html" %}
 {% load static %}
 {% load crispy_forms_tags %}
-{% load i18n %}
+
+{% block title %}Crear una cuenta | Catpuccino Adopciones{% endblock %}
 
 {% block login_content %}
 
 <form id="login-form" class="form" action="" method="post">
 {% csrf_token %}
 
-    <h3 class="text-center">{% trans "Creá tu cuenta" %}</h3>
-    <p class="text-center text-muted mb-4">Para cargar un animal en adopción</p>
+    <h1 class="acceso-titulo">Creá tu cuenta</h1>
+    <p class="acceso-bajada">Para publicar animales en adopción. Para adoptar no hace falta tener cuenta.</p>
 
-    <div class="alert alert-info mb-4">
-        <i class="fas fa-info-circle mr-2"></i> Al email que ingreses acá te van a llegar los <b>formularios de pre-adopción</b> que completen los candidatos.
-    </div>
+    {% if form.non_field_errors %}
+    <div class="acceso-error" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
 
     {{ form.email|as_crispy_field }}
     {{ form.instagram|as_crispy_field }}
     {{ form.password1|as_crispy_field }}
     {{ form.password2|as_crispy_field }}
 
-    <div class="form-group mt-4 mb-3">
+    <div class="form-group mt-4 mb-0">
         <button type="submit" name="submit" class="btn btn-primary btn-block">
-            <i class="fas fa-user-plus mr-2"></i> {% trans 'Crear Cuenta' %}
+            <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> Crear cuenta
         </button>
-        <small class="d-block text-center text-muted mt-2">
+        <small class="d-block text-center text-muted mt-3">
             Al crear tu cuenta aceptás los <a href="/terminos/" target="_blank">Términos y condiciones</a> y la <a href="/privacidad/" target="_blank">Política de privacidad</a>.
         </small>
     </div>
 
-    <div class="form-group">
-        <hr>
-        <div class="d-flex justify-content-center mt-3">
-            {% trans "¿Ya tenés cuenta?" %} <a href="{% url 'login' %}" class="ml-2"> {% trans "Ingresá aquí" %}</a>
-        </div>
+    <div class="acceso-otros">
+        <div>¿Ya tenés cuenta? <a href="{% url 'login' %}">Ingresá</a></div>
     </div>
 </form>
 

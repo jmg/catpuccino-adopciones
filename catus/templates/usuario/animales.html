@@ -2,6 +2,8 @@
 {% load catus_html %}
 {% load static %}
 
+{% block title %}{{user.title|default:"Animales en adopción"}} | Catpuccino Adopciones{% endblock %}
+
 {% block header %}
 {% endblock %}
 
@@ -12,7 +14,7 @@
 
 {% if user.banner_img %}
 <div class="profile-banner-container">
-  <img src="/{{user.banner_img}}" class="profile-banner-img">
+  <img src="/{{user.banner_img}}" class="profile-banner-img" alt="">
   <div class="profile-banner-overlay"></div>
 </div>
 {% endif %}
@@ -22,7 +24,7 @@
     <div class="profile-logo-wrapper">
       {% if user.logo_img %}
       <div class="profile-logo-container">
-        <img src="/{{user.logo_img}}" class="profile-logo-img">
+        <img src="/{{user.logo_img}}" class="profile-logo-img" alt="Logo de {{user.title}}">
       </div>
       {% endif %}
     </div>
@@ -117,10 +119,12 @@
     margin-bottom: 10px;
   }
 
+  /* 70 caracteres por renglón: a todo el ancho de la compu llegaba a 140 */
   .profile-description {
     color: var(--text-color);
     margin-bottom: 15px;
     line-height: 1.6;
+    max-width: 70ch;
   }
 
   .profile-action {

@@ -15,8 +15,10 @@
  */
 const {test, expect} = require("@playwright/test");
 
-// el intervalo de initializeImages (3000 ms) más los 500 ms que Bootstrap espera después
-// de un toque, con margen
+// Lo que tardaban en dispararse los temporizadores del carrusel viejo: los 3000 ms del
+// intervalo que tenía initializeImages más los 500 ms que Bootstrap espera después de un
+// toque, con margen. Los carruseles ya no pasan solos (interval: false), pero el toque
+// sigue programando su cycle(): la espera es la misma.
 const ESPERA_MS = 4500;
 
 test.beforeEach(async ({page}) => {
@@ -52,6 +54,40 @@ test("los carruseles nuevos siguen andando después de reordenar", async ({page}
 
     await page.locator("#animalCarrousel-2 .carousel-control-next").click();
     await expect(page.locator("#animalCarrousel-2 .carousel-item.active img")).toHaveAttribute("alt", "2b");
+
+    expect(page.errores).toEqual([]);
+});
+
+test("las fotos no pasan solas", async ({page}) => {
+
+    // Pasaban cada 3 segundos, todas las fichas a la vez y sin forma de frenarlas, y en un
+    // minuto el celular bajaba 25 fotos que nadie había pedido.
+    await page.waitForTimeout(ESPERA_MS);
+
+    await expect(page.locator("#animalCarrousel-1 .carousel-item.active img")).toHaveAttribute("alt", "1a");
+    await expect(page.locator("#animalCarrousel-2 .carousel-item.active img")).toHaveAttribute("alt", "2a");
+    expect(page.errores).toEqual([]);
+});
+
+test("el contador dice qué foto se está viendo", async ({page}) => {
+
+    await expect(page.locator("#animalCarrousel-1 .fotos-cuenta")).toHaveText("1 / 2");
+
+    await page.locator("#animalCarrousel-1 .carousel-control-next").click();
+
+    await expect(page.locator("#animalCarrousel-1 .fotos-cuenta")).toHaveText("2 / 2");
+    await expect(page.locator("#animalCarrousel-2 .fotos-cuenta")).toHaveText("1 / 2");
+});
+
+test("elegir de nuevo el primer orden vuelve al orden en que llegó la página", async ({page}) => {
+
+    // antes la primera opción del desplegable no hacía nada: después de reordenar no había
+    // cómo volver
+    await page.selectOption("#filter-sort", "desc");
+    await expect(page.locator("#animal-list .animal-card").first()).toHaveAttribute("data-id", "2");
+
+    await page.selectOption("#filter-sort", "");
+    await expect(page.locator("#animal-list .animal-card").first()).toHaveAttribute("data-id", "1");
 
     expect(page.errores).toEqual([]);
 });

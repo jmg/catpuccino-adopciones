@@ -1,9 +1,9 @@
-<ul id="fotos-animal" class="mt-3 mx-1" data-ride="carousel">
+<ul id="fotos-animal" class="mt-3 mx-1">
 
     {% for image in animal.get_images %}
     <li class="carousel-item text-center" style="display: block;">
         <div class="carousel-image">
-            <img style="cursor: zoom-in" loading="lazy" data-enlargable="1" class="post-image" src='{{image.image.url}}'>
+            <img style="cursor: zoom-in" loading="lazy" data-enlargable="1" class="post-image" src='{{image.image.url}}' alt="Foto de {{animal.nombre}}">
         </div>
     </li>
     {% endfor %}

@@ -68,15 +68,15 @@
         var css = [
             ".catus-crop-overlay{position:fixed;inset:0;top:0;left:0;right:0;bottom:0;z-index:2000;",
             "background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:15px;}",
-            ".catus-crop-dialog{background:#fff;border-radius:10px;max-width:900px;width:100%;",
+            ".catus-crop-dialog{background:#fff;border-radius:16px;max-width:900px;width:100%;",
             "max-height:95vh;overflow:auto;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);}",
-            ".catus-crop-title{font-weight:700;margin:0 0 4px;font-size:18px;color:#333;}",
-            ".catus-crop-help{margin:0 0 14px;font-size:13px;color:#777;}",
+            ".catus-crop-title{font-weight:800;margin:0 0 4px;font-size:19px;color:#2d3748;}",
+            ".catus-crop-help{margin:0 0 14px;font-size:14px;line-height:1.45;color:#5d6474;}",
             ".catus-crop-body{display:flex;gap:18px;flex-wrap:wrap;}",
             ".catus-crop-stage{flex:1 1 320px;min-width:260px;}",
             ".catus-crop-stage img{max-width:100%;display:block;}",
             ".catus-crop-side{flex:0 0 240px;}",
-            ".catus-crop-side-label{font-size:12px;color:#777;margin-bottom:6px;text-align:center;}",
+            ".catus-crop-side-label{font-size:13px;color:#5d6474;margin-bottom:6px;text-align:center;}",
             ".catus-crop-post{position:relative;width:100%;padding-top:100%;background:#fff;",
             "border:1px solid #e2e2e2;border-radius:4px;overflow:hidden;}",
             ".catus-crop-photo{position:absolute;overflow:hidden;background:#f2f2f2;}",
@@ -89,13 +89,37 @@
             ".catus-crop-card-line .catus-crop-sep{color:" + VIOLETA + ";}",
             ".catus-crop-card-logo{position:absolute;overflow:hidden;}",
             ".catus-crop-card-logo img{position:absolute;max-width:none;}",
+            // Los botones quedan pegados abajo del diálogo: en el celular la foto y la vista
+            // previa miden más que la pantalla, y "Guardar recorte" quedaba fuera de vista.
             ".catus-crop-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;",
-            "margin-top:16px;padding-top:14px;border-top:1px solid #eee;}",
+            "position:sticky;bottom:-18px;z-index:2;background:#fff;",
+            "margin:16px -18px -18px;padding:12px 18px 18px;border-top:1px solid #e2d3fa;}",
             ".catus-crop-actions .btn{min-width:120px;}",
             ".catus-crop-actions .btn[disabled]{opacity:.5;cursor:not-allowed;}",
             ".catus-crop-auto{margin-right:auto;}",
-            "@media (max-width:640px){.catus-crop-side{flex:1 1 100%;}",
-            ".catus-crop-actions .btn{flex:1 1 100%;min-width:0;}}"
+            "@media (max-width:640px){",
+            ".catus-crop-overlay{padding:8px;}",
+            ".catus-crop-dialog{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);padding:14px;}",
+            // la foto no pasa de media pantalla, así la vista previa asoma sin bajar
+            ".catus-crop-stage img{max-height:46vh;width:auto;margin:0 auto;}",
+            ".catus-crop-side{flex:0 0 200px;margin:0 auto;}",
+            ".catus-crop-actions{bottom:-14px;margin:14px -14px -14px;padding:10px 14px 14px;}",
+            ".catus-crop-actions .btn{flex:1 1 40%;min-width:0;padding-left:10px;padding-right:10px;white-space:nowrap;}",
+            ".catus-crop-auto{flex-basis:100% !important;order:3;margin-right:0;}}",
+            // Con el dedo, las ocho manijas del cuadro miden 20px: las de fábrica son de
+            // 5px, salvo la de abajo a la derecha.
+            "@media (pointer:coarse){",
+            ".catus-crop-stage .cropper-point{width:20px;height:20px;opacity:1;border-radius:50%;",
+            "background:" + VIOLETA + ";border:2px solid #fff;}",
+            ".catus-crop-stage .cropper-point.point-n{top:-10px;margin-left:-10px;}",
+            ".catus-crop-stage .cropper-point.point-s{bottom:-10px;margin-left:-10px;}",
+            ".catus-crop-stage .cropper-point.point-e{right:-10px;margin-top:-10px;}",
+            ".catus-crop-stage .cropper-point.point-w{left:-10px;margin-top:-10px;}",
+            ".catus-crop-stage .cropper-point.point-ne{right:-10px;top:-10px;}",
+            ".catus-crop-stage .cropper-point.point-nw{left:-10px;top:-10px;}",
+            ".catus-crop-stage .cropper-point.point-se{right:-10px;bottom:-10px;}",
+            ".catus-crop-stage .cropper-point.point-sw{left:-10px;bottom:-10px;}",
+            ".catus-crop-stage .cropper-point.point-se:before{display:none;}}"
         ].join("");
 
         var style = document.createElement("style");

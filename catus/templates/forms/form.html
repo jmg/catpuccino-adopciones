@@ -2,30 +2,51 @@
 {% load forms_builder_tags %}
 {% load bootstrap4 %}
 
+{% block title %}Formulario de {{persona_nombre|default:"un candidato"}} | Catpuccino Adopciones{% endblock %}
+
 {% block content %}
 
 <div class="container px-2">
     <div class="form-view-container">
         <div class="form-header">
-            <h2>
-                <i class="fa fa-file-alt mr-2"></i>
-                Formulario de <span class="highlight-text">{{estado_form.get_tipo_display}}</span>
-            </h2>
+            <h1>Formulario de {{estado_form.get_tipo_display|lower}}</h1>
             <div class="form-meta">
                 <div class="meta-item">
-                    <i class="fa fa-user mr-2"></i>
-                    <span><b>Postulante:</b> {{persona_nombre}}</span>
+                    <i class="fa fa-user mr-2" aria-hidden="true"></i>
+                    <span><b>Candidato:</b> {{persona_nombre}}</span>
                 </div>
                 {% if gato_nombre %}
                 <div class="meta-item">
-                    <i class="fa fa-paw mr-2"></i>
+                    <i class="fa fa-paw mr-2" aria-hidden="true"></i>
                     <span><b>Animal:</b> {{gato_nombre}}</span>
                 </div>
                 {% endif %}
                 <div class="meta-item">
-                    <i class="fa fa-calendar-alt mr-2"></i>
+                    <i class="fa fa-calendar-alt mr-2" aria-hidden="true"></i>
                     <span><b>Enviado:</b> {{estado_form.form_entry.entry_time|date:"d/m/Y H:i"}}</span>
                 </div>
+            </div>
+
+            {% comment %}
+            Contactar al candidato y armar el contrato, arriba: el celular y el mail estaban
+            entre las cuarenta respuestas, sin link, y "Generar contrato" recién al final.
+            Los links los arma services/contacto.py: solo dígitos y un mail válido.
+            {% endcomment %}
+            <div class="form-contacto">
+                {% if contacto.whatsapp %}
+                <a class="btn btn-primary" href="{{contacto.whatsapp}}" target="_blank" rel="noopener"><i class="fab fa-whatsapp mr-2" aria-hidden="true"></i> WhatsApp</a>
+                {% endif %}
+                {% if contacto.llamada %}
+                <a class="btn btn-secondary" href="{{contacto.llamada}}"><i class="fa fa-phone mr-2" aria-hidden="true"></i> Llamar</a>
+                {% endif %}
+                {% if contacto.mail %}
+                <a class="btn btn-secondary" href="{{contacto.mail}}"><i class="fa fa-envelope mr-2" aria-hidden="true"></i> Mail</a>
+                {% endif %}
+                {% if estado_form.gato %}
+                <a href="/formulario/{{estado_form.id}}/contrato/" class="btn btn-secondary">
+                    <i class="fa fa-id-badge mr-2" aria-hidden="true"></i> Generar contrato
+                </a>
+                {% endif %}
             </div>
         </div>
 
@@ -33,7 +54,7 @@
             {% if buenadoptante %}
             <div class="buenadoptante-section {% if buenadoptante.mala %}buenadoptante-mala{% endif %}">
                 <div class="section-header">
-                    <h3><i class="fa fa-user-check mr-2"></i> BuenAdoptante</h3>
+                    <h2><i class="fa fa-user-check mr-2" aria-hidden="true"></i> BuenAdoptante</h2>
                     <span class="badge {% if buenadoptante.mala %}badge-danger{% elif buenadoptante.nivel >= 4 %}badge-success{% else %}badge-secondary{% endif %}">{{buenadoptante.calificacion}}{% if buenadoptante.nivel %} · {{buenadoptante.nivel}}★{% endif %}</span>
                 </div>
                 {% if buenadoptante.mala %}
@@ -58,7 +79,7 @@
             {% if adopciones_anteriores %}
             <div class="historial-section">
                 <div class="section-header">
-                    <h3><i class="fa fa-heart mr-2"></i> Ya adoptó por Catpuccino</h3>
+                    <h2><i class="fa fa-heart mr-2" aria-hidden="true"></i> Ya adoptó por Catpuccino</h2>
                     <span class="badge badge-info">{{ adopciones_anteriores|length }}</span>
                 </div>
                 {% for adopcion in adopciones_anteriores %}
@@ -71,7 +92,7 @@
             {% if extra_forms %}
             <div class="related-forms-section">
                 <div class="section-header">
-                    <h3><i class="fa fa-link mr-2"></i> Formularios relacionados</h3>
+                    <h2><i class="fa fa-link mr-2" aria-hidden="true"></i> Formularios relacionados</h2>
                     <span class="badge badge-info">{{extra_forms|length}}</span>
                 </div>
                 <div class="related-forms-list">
@@ -82,9 +103,9 @@
 
             <div class="form-data-section">
                 <div class="section-header">
-                    <h3><i class="fa fa-list-alt mr-2"></i> Datos del formulario</h3>
-                    <button class="btn-toggle" onclick="showDatosFormulario(this)">
-                        <i class="fa fa-chevron-up"></i>
+                    <h2>Respuestas</h2>
+                    <button type="button" class="btn-toggle" onclick="showDatosFormulario(this)" aria-expanded="true" aria-controls="datos-formulario" aria-label="Mostrar u ocultar las respuestas">
+                        <i class="fa fa-chevron-up" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div id="datos-formulario" class="form-data-content">
@@ -106,12 +127,12 @@
             </div>
 
             <div class="form-actions">
-                <a onclick="window.close()" class="btn btn-secondary">
-                    <i class="fa fa-arrow-left mr-2"></i> Volver
+                <a href="/accounts/profile/#forms" class="btn btn-secondary">
+                    <i class="fa fa-arrow-left mr-2" aria-hidden="true"></i> Volver a mis formularios
                 </a>
                 {% if estado_form.gato %}
                 <a href="/formulario/{{estado_form.id}}/contrato/" class="btn btn-primary">
-                    <i class="fa fa-id-badge mr-2"></i> Generar Contrato
+                    <i class="fa fa-id-badge mr-2" aria-hidden="true"></i> Generar contrato
                 </a>
                 {% endif %}
             </div>
@@ -128,6 +149,7 @@
     function showDatosFormulario(btn) {
         $("#datos-formulario").slideToggle();
         $(btn).find("i").toggleClass("fa-chevron-up fa-chevron-down");
+        $(btn).attr("aria-expanded", $(btn).attr("aria-expanded") === "true" ? "false" : "true");
     }
 
     // Función para verificar si una URL es un video
@@ -158,7 +180,7 @@
                     </video>
                     <div class="video-download">
                         <a href="${src}" download class="btn btn-sm btn-secondary mt-2">
-                            <i class="fa fa-download mr-1"></i> Descargar video
+                            <i class="fa fa-download mr-1" aria-hidden="true"></i> Descargar video
                         </a>
                     </div>
                 `;
@@ -174,83 +196,115 @@
 
 {% block css %}
 <style type="text/css">
+    /* Los títulos, los campos y los botones son los del resto del sitio (modern.css). */
     .form-view-container {
         background-color: var(--white);
-        border-radius: 15px;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
         box-shadow: var(--card-shadow);
-        padding: 25px;
-        margin: 20px 0;
-        transition: var(--transition);
-    }
-
-    .form-view-container:hover {
-        box-shadow: var(--hover-shadow);
+        padding: 28px;
+        margin: 8px auto 32px;
+        /* una columna angosta: las respuestas se leen de arriba abajo, como se contestaron */
+        max-width: 760px;
     }
 
     .form-header {
-        margin-bottom: 25px;
-        border-bottom: 1px solid rgba(0,0,0,0.05);
+        margin-bottom: 22px;
+        border-bottom: 1px solid var(--lavanda-borde);
         padding-bottom: 20px;
     }
 
-    .form-header h2 {
-        color: var(--primary-color);
-        font-weight: 600;
+    .form-header h1 {
+        color: var(--text-color);
+        font-weight: 800;
         font-size: 1.6rem;
-        margin-bottom: 15px;
-    }
-
-    .highlight-text {
-        color: var(--primary-dark);
-        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        margin: 0 0 14px;
     }
 
     .form-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 15px;
+        gap: 8px;
     }
 
     .meta-item {
-        background-color: rgba(138, 43, 226, 0.05);
-        padding: 8px 15px;
-        border-radius: 8px;
-        font-size: 0.95rem;
+        background-color: var(--lavanda);
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 15px;
         display: flex;
         align-items: center;
+        overflow-wrap: anywhere;
+    }
+
+    .meta-item i {
+        color: var(--primary-color);
+        flex: none;
+    }
+
+    .form-contacto {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .form-contacto:empty {
+        display: none;
     }
 
     .form-content-wrapper {
         display: flex;
         flex-direction: column;
-        gap: 25px;
+        gap: 22px;
     }
 
     .section-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 15px;
+        gap: 12px;
+        margin-bottom: 10px;
     }
 
-    .section-header h3 {
+    .section-header h2 {
         font-size: 1.2rem;
+        line-height: 1.25;
         color: var(--text-color);
-        font-weight: 600;
+        font-weight: 800;
         margin: 0;
     }
 
-    .related-forms-section, .form-data-section, .buenadoptante-section, .historial-section {
-        background-color: rgba(250, 250, 252, 0.7);
-        border-radius: 10px;
-        padding: 20px;
-        border: 1px solid rgba(0,0,0,0.05);
+    .section-header h2 i {
+        color: var(--primary-color);
+    }
+
+    /* lo que hay que mirar antes de leer las respuestas */
+    .related-forms-section, .buenadoptante-section, .historial-section {
+        background-color: var(--lavanda);
+        border-radius: 12px;
+        padding: 16px 18px;
+        border: 1px solid var(--lavanda-borde);
     }
 
     .buenadoptante-section.buenadoptante-mala {
-        background-color: #fdf1f1;
-        border-color: #f1c4c4;
+        background-color: #fdecee;
+        border-color: #f5c2c7;
     }
+
+    .badge {
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .badge-secondary { background-color: #eef0f3; color: #4a5361; }
+    .badge-success { background-color: #e3f4e8; color: #1b6e2d; }
+    .badge-info { background-color: #fff; color: var(--primary-dark); }
+    .badge-danger { background-color: #fff; color: #a3231b; }
 
     .related-forms-list {
         margin-top: 10px;
@@ -262,157 +316,97 @@
         color: var(--text-color);
         cursor: pointer;
         border-radius: 50%;
-        width: 32px;
-        height: 32px;
+        width: 44px;
+        height: 44px;
+        flex: none;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: var(--transition);
     }
 
     .btn-toggle:hover {
-        background-color: rgba(138, 43, 226, 0.1);
+        background-color: var(--lavanda);
         color: var(--primary-color);
     }
 
-    .form-data-content {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 15px;
-    }
-
+    /* las respuestas: una lista, no una tarjeta por respuesta */
     .form-data-item {
-        padding: 12px;
-        background-color: white;
-        border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.05);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        transition: var(--transition);
-    }
-
-    .form-data-item:hover {
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        transform: translateY(-2px);
+        padding: 14px 0;
+        border-top: 1px solid var(--lavanda-borde);
     }
 
     .data-label {
-        font-weight: 600;
-        color: var(--primary-color);
-        margin-bottom: 8px;
-        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        font-size: 14px;
+        line-height: 1.4;
     }
 
     .data-value {
         color: var(--text-color);
-        word-break: break-word;
+        font-size: 16px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        white-space: pre-line;
     }
 
     .data-value img {
         max-width: 100%;
-        border-radius: 6px;
-        margin-top: 10px;
+        border-radius: 10px;
+        margin-top: 8px;
     }
 
     .data-value video {
         max-width: 100%;
-        border-radius: 6px;
-        margin-top: 10px;
+        border-radius: 10px;
+        margin-top: 8px;
         background: #000;
         display: block;
     }
 
     .form-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 10px;
-        justify-content: flex-end;
-        margin-top: 10px;
-    }
-
-    .btn {
-        padding: 8px 20px;
-        border-radius: 8px;
-        font-weight: 500;
-        display: inline-flex;
-        align-items: center;
-        transition: var(--transition);
-    }
-
-    .btn-primary {
-        background: var(--gradient-primary);
-        border: none;
-        color: white;
-        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
-    }
-
-    .btn-secondary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-        color: white;
-    }
-
-    .btn-secondary:hover {
-        background-color: #5a6268;
-        border-color: #545b62;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        justify-content: space-between;
+        padding-top: 18px;
+        border-top: 1px solid var(--lavanda-borde);
     }
 
     .video-download {
-        text-align: center;
-        margin-top: 5px;
-    }
-
-    .video-download .btn {
-        font-size: 12px;
-        padding: 5px 10px;
-        border-radius: 4px;
+        margin-top: 6px;
     }
 
     @media only screen and (max-width: 768px) {
         .form-view-container {
-            padding: 12px;
-            margin: 10px 0;
-        }
-
-        .form-meta {
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .form-data-content {
-            grid-template-columns: 1fr;
-        }
-
-        .form-header {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-        }
-
-        .form-header h2 {
-            font-size: 1.4rem;
-            margin-bottom: 12px;
-        }
-
-        .form-content-wrapper {
-            gap: 15px;
-        }
-
-        .related-forms-section, .form-data-section, .buenadoptante-section, .historial-section {
-            padding: 10px;
+            padding: 18px 16px;
+            margin: 0 0 16px;
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
         }
 
         .container {
-            padding-left: 8px !important;
-            padding-right: 8px !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
 
-        .form-data-item {
-            padding: 10px;
+        .form-header h1 {
+            font-size: 1.4rem;
+        }
+
+        /* WhatsApp a todo el ancho, los demás de a dos */
+        .form-contacto .btn {
+            flex: 1 1 40%;
+        }
+
+        .form-contacto .btn-primary {
+            flex-basis: 100%;
+        }
+
+        .form-actions .btn {
+            flex: 1 1 100%;
         }
     }
 </style>

@@ -283,6 +283,8 @@ class PreAdoptionView(BaseView):
 
         self.send_email(form_entry, form_for_form, animal_name, estado)
         response_context["success"] = True
+        #para decir en "formulario enviado" a qué animal fue
+        response_context["animal_enviado"] = animal
         return self._post_response(response_context)
 
     def avisar_bloqueo(self, estado, actividad, animal_name):

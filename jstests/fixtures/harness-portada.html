@@ -15,7 +15,7 @@
 <!--
   La portada (catus/templates/home/index.html) con lo mínimo para el orden y los carruseles:
   los filtros con sus ids, y dos tarjetas con el carrusel de catus/templates/adoption/card.html
-  (data-ride="carousel", dos fotos, flechas). jQuery, Bootstrap e index.js NO se copian: se
+  (dos fotos, el contador y las flechas). jQuery, Bootstrap e index.js NO se copian: se
   cargan de catus/static, los mismos archivos que sirve el sitio.
 
   Lo que sí es copia es este HTML: si card.html o los filtros cambian sus ids o clases, hay
@@ -28,22 +28,24 @@
 <div id="animal-list" data-cols="6">
   <div class="animal-card col-md-6" data-id="1">
     <div class="post-preview" data-zone="CABA" data-name="Uno" data-type="G"></div>
-    <div id="animalCarrousel-1" class="animalCarrousel carousel slide" data-ride="carousel">
+    <div id="animalCarrousel-1" class="animalCarrousel carousel slide">
       <div class="carousel-inner">
         <div class="carousel-item active"><div class="carousel-image"><img alt="1a" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23c66'/%3E%3C/svg%3E"></div></div>
         <div class="carousel-item"><div class="carousel-image"><img alt="1b" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%236c6'/%3E%3C/svg%3E"></div></div>
       </div>
+      <span class="fotos-cuenta" aria-hidden="true">1 / 2</span>
       <a class="carousel-control-prev" href="#animalCarrousel-1" role="button" data-slide="prev"><span class="carousel-control-prev-icon"></span></a>
       <a class="carousel-control-next" href="#animalCarrousel-1" role="button" data-slide="next"><span class="carousel-control-next-icon"></span></a>
     </div>
   </div>
   <div class="animal-card col-md-6" data-id="2">
     <div class="post-preview" data-zone="GBA" data-name="Dos" data-type="G"></div>
-    <div id="animalCarrousel-2" class="animalCarrousel carousel slide" data-ride="carousel">
+    <div id="animalCarrousel-2" class="animalCarrousel carousel slide">
       <div class="carousel-inner">
         <div class="carousel-item active"><div class="carousel-image"><img alt="2a" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%2366c'/%3E%3C/svg%3E"></div></div>
         <div class="carousel-item"><div class="carousel-image"><img alt="2b" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23cc6'/%3E%3C/svg%3E"></div></div>
       </div>
+      <span class="fotos-cuenta" aria-hidden="true">1 / 2</span>
       <a class="carousel-control-prev" href="#animalCarrousel-2" role="button" data-slide="prev"><span class="carousel-control-prev-icon"></span></a>
       <a class="carousel-control-next" href="#animalCarrousel-2" role="button" data-slide="next"><span class="carousel-control-next-icon"></span></a>
     </div>

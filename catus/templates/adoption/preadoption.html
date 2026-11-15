@@ -2,9 +2,22 @@
 {% load forms_builder_tags %}
 {% load bootstrap4 %}
 
+{% block title %}{% if is_post %}Formulario enviado{% elif animal and form_type == "preadoption" %}Formulario para adoptar a {{animal.nombre}}{% else %}{{form.title|default:"Formulario"|lower|capfirst}}{% endif %} | Catpuccino Adopciones{% endblock %}
+
 {% block css %}
 {{ block.super }}
 <style>
+    /* Antes de que corra el JS: quien ya aceptó los requisitos ve el formulario de
+       entrada, sin que la página salte (requisitosAlCargar, al principio del contenido). */
+    .requisitos-pendientes #adoption-form-container,
+    .requisitos-ocultos #terms-and-conditions {
+        display: none;
+    }
+
+    .requisitos-ocultos #show-terms-button {
+        display: block !important;
+    }
+
     .preadoption-container {
         background-color: #fff;
         border: 1px solid var(--lavanda-borde);
@@ -74,7 +87,7 @@
     }
 
     .form-control {
-        border: 1px solid #cdbde8;
+        border: 1px solid var(--borde-campo);
         border-radius: 10px;
         padding: 11px 14px;
         height: auto;
@@ -111,6 +124,70 @@
         font-size: 14px;
         line-height: 1.45;
         margin-top: 6px;
+    }
+
+    #adoption-form label .opcional {
+        font-weight: 400;
+        color: var(--text-muted);
+    }
+
+    /* el título del formulario recibe el foco al aceptar los requisitos */
+    #titulo-formulario:focus {
+        outline: none;
+    }
+
+    /* un poco de aire arriba al saltar a una pregunta; la barra de arriba ya la
+       descuenta el scroll-padding-top del sitio */
+    #titulo-formulario,
+    #adoption-form .form-group {
+        scroll-margin-top: 8px;
+    }
+
+    /* lo que falta completar, debajo de cada pregunta */
+    .campo-error {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin: 6px 0 0;
+        color: #b3261e;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.4;
+    }
+
+    /* Al enviar con preguntas sin contestar: cuántas faltan y un botón que lleva de una a
+       la otra. Antes salía un aviso que nombraba solo la primera y se iba a los segundos. */
+    .faltantes {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1020;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px 16px;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+        background: #fff;
+        border-top: 1px solid var(--lavanda-borde);
+        box-shadow: 0 -6px 18px rgba(45, 26, 77, 0.12);
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text-color);
+    }
+
+    .faltantes[hidden] {
+        display: none;
+    }
+
+    .faltantes .btn {
+        flex: none;
+        padding: 10px 18px;
+        margin: 0;
+    }
+
+    body.con-faltantes {
+        padding-bottom: 76px;
     }
 
     #adoption-form input[type=file] {
@@ -224,26 +301,126 @@
     }
 
     .invalid {
-        border-color: #dc3545 !important;
+        border-color: #b3261e !important;
+    }
+
+    .invalid:focus {
+        outline: 3px solid var(--primary-color);
+        outline-offset: 2px;
+        box-shadow: none;
+    }
+
+    /* la nota del final va sobre la página: un recuadro dentro del recuadro no suma */
+    .nota-final {
+        color: var(--text-color);
+        font-size: 16px;
+        line-height: 1.6;
+    }
+
+    .nota-final ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1rem;
+    }
+
+    .nota-final li {
+        margin-bottom: 12px;
+    }
+
+    /* formulario enviado, o no */
+    .envio {
+        text-align: center;
+        padding: 8px 0 4px;
+    }
+
+    .envio-icono {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #e3f4e8;
+        color: #1e7e34;
+        font-size: 22px;
+        margin-bottom: 14px;
+    }
+
+    .envio-error .envio-icono {
+        background: #fdecee;
+        color: #b3261e;
+    }
+
+    .envio-titulo {
+        font-size: 1.5rem;
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        margin: 0 0 10px;
+        color: var(--text-color);
+    }
+
+    .envio-titulo b {
+        font-weight: 800;
+        color: var(--primary-color);
+        overflow-wrap: anywhere;
+    }
+
+    .envio p {
+        max-width: 52ch;
+        margin: 0 auto 10px;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--text-color);
+    }
+
+    .envio .envio-nota {
+        color: var(--text-muted);
+        font-size: 15px;
+    }
+
+    .envio .btn {
+        margin-top: 12px;
+    }
+
+    .envio details {
+        margin-top: 18px;
+        text-align: left;
+        font-size: 14px;
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .envio details summary {
+        cursor: pointer;
+        padding: 8px 0;
+        font-weight: 600;
+    }
+
+    .envio .errorlist {
+        list-style: none;
+        padding-left: 0;
+        margin: 4px 0;
+    }
+
+    .envio .errorlist .errorlist {
+        padding-left: 14px;
+    }
+
+    /* los puntos del carrusel de fotos: 8px eran imposibles de tocar */
+    .lSSlideOuter .lSPager.lSpg > li {
+        padding: 14px 7px;
+    }
+
+    .lSSlideOuter .lSPager.lSpg > li a {
+        width: 10px;
+        height: 10px;
     }
 
     .section-divider {
         height: 1px;
         background: var(--lavanda-borde);
         margin: 28px 0;
-    }
-
-    .btn-secondary {
-        background-color: #fff;
-        border: 1px solid #cdbde8;
-        color: var(--text-color) !important;
-    }
-
-    .btn-secondary:hover,
-    .btn-secondary:focus {
-        background-color: var(--lavanda);
-        border-color: var(--primary-color);
-        color: var(--primary-dark) !important;
     }
 
     @media (max-width: 768px) {
@@ -291,18 +468,31 @@
 
         {% if not is_post %}
 
-            {% if not is_user %}
-            <div class="aviso-importante" role="note">
-                <i class="fa fa-info-circle" aria-hidden="true"></i>
-                <div><b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>no pertenecen a Catpuccino Adopciones</b>. Son de personas independientes que buscan una adopción responsable para ellos.</div>
-            </div>
-            {% endif %}
+            {% comment %}
+            Corre antes de pintar: deja en <html> si los requisitos ya se aceptaron (y si
+            están escondidos), para que el CSS de arriba muestre de entrada lo que
+            corresponde. Sin esto la página se pintaba con los requisitos y saltaba al
+            formulario cuando cargaba el JS. Las clases se sacan cuando el JS toma el control.
+            {% endcomment %}
+            <script>
+            (function requisitosAlCargar() {
+                var cookies = "; " + document.cookie + ";";
+                var aceptados = cookies.indexOf("; {{accepted_terms_cookie}}=1;") !== -1;
+                var ocultos = cookies.indexOf("; {{hidden_terms_cookie}}=1;") !== -1;
+                var html = document.documentElement;
+                html.classList.add(aceptados ? "requisitos-aceptados" : "requisitos-pendientes");
+                if (aceptados && ocultos) {
+                    html.classList.add("requisitos-ocultos");
+                }
+            })();
+            </script>
 
             {% if form.intro %}
             {% comment %}
             Todo lo que hay que leer antes del formulario va adentro de #terms-and-conditions:
             hideTerms() lo esconde entero al aceptar, y el formulario ya muestra al animal
-            elegido con sus fotos.
+            elegido con sus fotos. Primero el animal, después el aviso: lo primero que se
+            veía era un cartel amarillo.
             {% endcomment %}
             <div id="terms-and-conditions" class="requisitos" role="region" aria-label="Requisitos">
                 {% if animal and form_type == "preadoption" %}
@@ -313,17 +503,37 @@
                         <p>Leé los requisitos y aceptalos para completar el formulario.</p>
                     </div>
                 </div>
+                {% else %}
+                {# sin animal elegido (se entró desde el menú) o formulario de tránsito: el título del formulario #}
+                <div class="adopcion-animal">
+                    <div>
+                        <h1>{{ form.title|lower|capfirst }}</h1>
+                        <p>Leé los requisitos y aceptalos para completar el formulario.</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if not is_user %}
+                <div class="aviso-importante" role="note">
+                    <i class="fa fa-info-circle" aria-hidden="true"></i>
+                    <div><b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>no pertenecen a Catpuccino Adopciones</b>. Son de personas independientes que buscan una adopción responsable para ellos.</div>
+                </div>
                 {% endif %}
 
                 {{ form.intro|safe }}
 
                 <div class="text-center">
-                <button class="btn btn-primary btn-lg" onclick="hideTerms(); showForm();">Aceptar y completar el formulario <i class="fa fa-file-alt ml-2"></i></button>
+                <button type="button" class="btn btn-primary btn-lg" onclick="aceptarRequisitos()">Aceptar y completar el formulario <i class="fa fa-file-alt ml-2" aria-hidden="true"></i></button>
                 </div>
             </div>
 
             <div id="show-terms-button" class="text-center" style="display: none">
-                <button class="btn btn-secondary" onclick="showTerms()"><i class="fa fa-list-ul mr-2"></i> Mostrar requisitos de {% if form_type == "preadoption" %}adopción{% else %}tránsito{% endif %}</button>
+                <button type="button" class="btn btn-secondary" onclick="showTerms()"><i class="fa fa-list-ul mr-2" aria-hidden="true"></i> Mostrar requisitos de {% if form_type == "preadoption" %}adopción{% else %}tránsito{% endif %}</button>
+            </div>
+            {% elif not is_user %}
+            <div class="aviso-importante" role="note">
+                <i class="fa fa-info-circle" aria-hidden="true"></i>
+                <div><b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>no pertenecen a Catpuccino Adopciones</b>. Son de personas independientes que buscan una adopción responsable para ellos.</div>
             </div>
             {% endif %}
         {% endif %}
@@ -331,7 +541,7 @@
         {% if not is_post %}
         <div id="adoption-form-container">
             <div class="section-divider"></div>
-            <h3 class="preadoption-title">{{ form.title }}</h3>
+            <h2 class="preadoption-title" id="titulo-formulario" tabindex="-1">{{ form.title }}</h2>
 
             <form id="adoption-form" onsubmit="return prepareSubmit(this);" action="{{post_url}}" method="post" {% if form_for_form.is_multipart %}enctype="multipart/form-data"{% endif %} >
                 {% csrf_token %}
@@ -344,7 +554,7 @@
 
                 {% if form_type == "preadoption" %}
                 <div class="section-divider"></div>
-                <div id="terms-and-conditions" role="note">
+                <div class="nota-final" role="note">
                     <div>
                         <ul>
                         <li>
@@ -352,11 +562,11 @@
                         </li>
 
                         <li>
-                        Hasta aquí llegó el formulario de adopción. Habiendo leído los requisitos y completado el formulario, ¿Sentís que estás dispuesto a adoptar un {{animal_type}} responsablemente y darle el hogar y la vida que merece?
+                        Hasta acá llegó el formulario de adopción. Habiendo leído los requisitos y completado el formulario, ¿sentís que estás en condiciones de adoptar un {{animal_type}} responsablemente y darle el hogar y la vida que merece?
                         </li>
 
                         <li>
-                        Te agradecemos por tomarte el tiempo para completar el formulario. El/La transitante de <b>{{animal.nombre}}</b> lo va a estar revisando y en caso de proceder con la adopción se va a comunicar con vos a la brevedad.
+                        Gracias por tomarte el tiempo de completar el formulario. Quien publicó a <b>{{animal.nombre}}</b> lo va a revisar y, si avanza con la adopción, se va a comunicar con vos.
                         </li>
 
                         </ul>
@@ -370,34 +580,37 @@
 
                 <div class="form-group text-center mt-4">
                     <button id="send-form-button" class="btn btn-primary btn-lg">
-                        {{ form.button_text|safe }} <i class="fa fa-paper-plane ml-2"></i>
+                        {{ form.button_text|safe }} <i class="fa fa-paper-plane ml-2" aria-hidden="true"></i>
                     </button>
                     <small class="d-block text-muted mt-3">
                         Al enviar el formulario aceptás los <a href="/terminos/" target="_blank">Términos y condiciones</a> y la <a href="/privacidad/" target="_blank">Política de privacidad</a>. Tus datos los recibe quien publicó al animal y el equipo de Catpuccino Adopciones.{% if comparte_con_buenadoptante %} También se comparten con <a href="https://buenadoptante.org" target="_blank" rel="noopener">BuenAdoptante</a>, el registro de adoptantes que usan los rescates, para consultar antecedentes de adopción.{% endif %}
                     </small>
                 </div>
 
-                <div style="margin-top: 15px; text-align: center; display: none" id="wait-message" class="alert alert-info" role="alert">
-                Esto puede demorar unos minutos. Por favor espere.
+                <div style="margin-top: 15px; text-align: center; display: none" id="wait-message" class="alert alert-info" role="status">
+                Estamos enviando tus respuestas y tus fotos. Puede tardar unos minutos: no cierres esta página.
 
                 <div id="paws-container" style="margin-top: 10px;">
                     <i id="cat-icon-0" class="fa fa-paw"></i> <i id="cat-icon-1" class="fa fa-paw cat-icon"></i> <i id="cat-icon-2" class="fa fa-paw cat-icon"></i> <i id="cat-icon-3" class="fa fa-paw cat-icon"></i> <i id="cat-icon-4" class="fa fa-paw cat-icon"></i> <i id="cat-icon-5" class="fa fa-paw cat-icon"></i> <i id="cat-icon-6" class="fa fa-paw cat-icon"></i>
                 </div>
                 </div>
             </form>
+
+            {# cuántas preguntas faltan, al enviar con alguna sin contestar (avisarFaltantes) #}
+            <div id="faltantes" class="faltantes" role="status" aria-live="polite" hidden>
+                <span id="faltantes-texto"></span>
+                <button type="button" id="faltantes-ir" class="btn btn-primary"></button>
+            </div>
         </div>
 
         {% else %}
             {% if success %}
-            <div id="response-text" class="alert alert-success" role="alert">
-                {{form.response}}
-                <br><br>
-
-                <div class="text-center">
-                    <img src="/static/logo_2.png" style="width: 250px;">
-                    <br><br>
-                    Atte. Equipo de Catpuccino Adopciones
-                </div>
+            <div id="response-text" class="envio" role="status">
+                <span class="envio-icono"><i class="fa fa-check" aria-hidden="true"></i></span>
+                <h1 class="envio-titulo">Recibimos tu formulario{% if animal_enviado %} para adoptar a <b>{{animal_enviado.nombre}}</b>{% endif %}</h1>
+                <p>{{form.response}}</p>
+                <p class="envio-nota">Si pusiste bien tu mail, te llega una copia de tus respuestas.</p>
+                <a class="btn btn-primary" href="/"><i class="fa fa-paw mr-2" aria-hidden="true"></i> Ver más animales en adopción</a>
             </div>
             {% elif bloqueado %}
 
@@ -405,37 +618,38 @@
             BuenAdoptante califica a la persona con 1★ o 2★. El mensaje no dice por qué ni
             nombra a BuenAdoptante: el formulario lo revisa el equipo (ver avisar_bloqueo).
             {% endcomment %}
-            <div id="response-text-bloqueado" class="alert alert-secondary" role="alert">
-                No pudimos recibir tu formulario. Si creés que se trata de un error, escribinos a <a href="mailto:catpuccino.ok@gmail.com">catpuccino.ok@gmail.com</a>.
-
-                <div class="text-center">
-                    <img src="/static/logo_2.png" style="width: 250px;">
-                    <br><br>
-                    Atte. Equipo de Catpuccino Adopciones
-                </div>
+            <div id="response-text-bloqueado" class="envio" role="alert">
+                <h1 class="envio-titulo">No pudimos recibir tu formulario</h1>
+                <p>Si creés que se trata de un error, escribinos a <a href="mailto:catpuccino.ok@gmail.com">catpuccino.ok@gmail.com</a>.</p>
             </div>
             {% else %}
 
-            <div id="response-text-error" class="alert alert-danger" role="alert">
-                Se ha producido un error. Por favor intentar nuevamente o comunicarse con el desarrollador del sitio: <a href="mailto:catpuccino.ok@gmail.com">Enviar Mail</a>.
-                <br><br>
-                Detalles: <span id="response-text-error-message">{{errors}}</span>
-
-                <div class="text-center">
-                    <img src="/static/logo_2.png" style="width: 250px;">
-                    <br><br>
-                    Atte. Equipo de Catpuccino Adopciones
-                </div>
+            <div id="response-text-error" class="envio envio-error" role="alert">
+                <span class="envio-icono"><i class="fa fa-exclamation" aria-hidden="true"></i></span>
+                <h1 class="envio-titulo">No pudimos recibir tu formulario</h1>
+                <p>Faltó completar algo o hubo un problema al enviarlo. Volvé al formulario, revisá lo que falta y envialo de nuevo: tus respuestas quedaron guardadas, pero las fotos hay que adjuntarlas otra vez.</p>
+                <p class="envio-nota">Si sigue sin andar, escribinos a <a href="mailto:catpuccino.ok@gmail.com">catpuccino.ok@gmail.com</a>.</p>
+                <details>
+                    <summary>Detalle del error</summary>
+                    <span id="response-text-error-message">{{errors}}</span>
+                </details>
             </div>
             {% endif %}
         {% endif %}
 
+        {# formulario enviado: el botón para seguir está en el mensaje #}
+        {% if not is_post or not success %}
         <div class="section-divider"></div>
         <div class="text-center mb-4">
-            <a id="btn-volver" class="btn btn-secondary" onclick="{% if not is_post %}history.back();{% else %}location.href = '/'{% endif %}">
-                <i class="fa fa-arrow-left mr-2"></i> Volver
-            </a>
+            {% if is_post and bloqueado %}
+            <a id="btn-volver" class="btn btn-secondary" href="/"><i class="fa fa-arrow-left mr-2" aria-hidden="true"></i> Volver al inicio</a>
+            {% else %}
+            <button type="button" id="btn-volver" class="btn btn-secondary" onclick="history.back();">
+                <i class="fa fa-arrow-left mr-2" aria-hidden="true"></i> {% if is_post %}Volver al formulario{% else %}Volver{% endif %}
+            </button>
+            {% endif %}
         </div>
+        {% endif %}
 
    </div>
   </div>
@@ -446,33 +660,56 @@
 <script type="text/javascript">
     $(document).ready(function() {
 
-        var delay = 500;
-        var offset = 150;
-        var alertSent = false;
+        // antes de que initForm…() esconda las preguntas condicionales y les saque el
+        // "required": acá todavía dice cuáles son opcionales en el formulario
+        prepararCampos();
+
+        // Al enviar con preguntas sin contestar el navegador dispara "invalid" en cada
+        // una. Se le saca su globito (nombraba solo la primera) y se marca cada pregunta
+        // con lo que le falta; avisarFaltantes() dice cuántas son y lleva a la primera.
+        var avisoPendiente = null;
 
         document.addEventListener('invalid', function(e) {
 
-            var target = $(e.target);
-            target.addClass("invalid");
-            var error = target.parent().find("label").text();
-
-            if (!alertSent) {
-
-                $.alert("Faltan datos a completar. Por favor revisa el campo: " + error);
-                alertSent = true;
-
-                setTimeout(function() {
-                    alertSent = false;
-                }, 1000);
+            if (!$(e.target).closest("#adoption-form").length) {
+                return;
             }
 
+            e.preventDefault();
+            marcarError(e.target);
+
+            clearTimeout(avisoPendiente);
+            avisoPendiente = setTimeout(function() {
+                avisarFaltantes(true);
+            }, 0);
+
         }, true);
 
-        document.addEventListener('change', function(e) {
+        // en cuanto la pregunta queda contestada se le va el error y baja la cuenta
+        $("#adoption-form").on("change input", ":input", function() {
 
-            $(e.target).removeClass("invalid");
+            if (!$(this).hasClass("invalid")) {
+                return;
+            }
 
-        }, true);
+            if (this.validity.valid) {
+                quitarError(this);
+                avisarFaltantes(false);
+            }
+        });
+
+        $("#faltantes-ir").on("click", function() {
+
+            var faltan = camposConError();
+            if (!faltan.length) {
+                $("#send-form-button").click();
+                return;
+            }
+
+            // la siguiente a la que tiene el foco, y de la última vuelve a la primera
+            var actual = faltan.indexOf(document.activeElement);
+            enfocarCampo(faltan[(actual + 1) % faltan.length]);
+        });
 
         {% if is_post and success or is_post and bloqueado %}
             try {
@@ -516,6 +753,9 @@
             hideForm();
         }
 
+        // desde acá el estado lo lleva el JS, ya no las clases de requisitosAlCargar()
+        $("html").removeClass("requisitos-pendientes requisitos-aceptados requisitos-ocultos");
+
         $("input[type=file]").attr("accept", "image/*, video/*");
         $("input").not('.form-input').removeAttr('placeholder');
         $('textarea').removeAttr('placeholder');
@@ -538,6 +778,161 @@
             }
             catCounter += 1;
         }, 1000);
+    }
+
+    // ---- Campos: teclado, autocompletado y cuáles son opcionales ----------------------
+
+    function prepararCampos() {
+
+        $("#adoption-form .form-group").each(function() {
+
+            var grupo = $(this);
+            var etiqueta = grupo.children("label").first();
+            var campo = grupo.find("input, select, textarea").first();
+
+            if (!campo.length || !etiqueta.length) {
+                return;
+            }
+
+            // por el texto de la pregunta: así sirve para los cuatro formularios. Si una
+            // etiqueta cambia en el admin, el campo queda como estaba y nada se rompe.
+            var texto = $.trim(etiqueta.text()).toLowerCase();
+
+            if (/^(e-?mail|mail|correo)/.test(texto)) {
+                campo.attr({inputmode: "email", autocomplete: "email", autocapitalize: "none", spellcheck: "false"});
+            } else if (/^(celular|tel[eé]fono|whatsapp)/.test(texto)) {
+                campo.attr({inputmode: "tel", autocomplete: "tel"});
+            } else if (/^nombre y apellido/.test(texto)) {
+                campo.attr({autocomplete: "name", autocapitalize: "words"});
+            } else if (/^direcci[oó]n/.test(texto)) {
+                campo.attr("autocomplete", "street-address");
+            } else if (/^edad/.test(texto)) {
+                campo.attr({inputmode: "numeric", min: "0"});
+            }
+
+            if (!campo.prop("required")) {
+                etiqueta.append(' <span class="opcional">(opcional)</span>');
+            }
+        });
+    }
+
+    // ---- Lo que falta completar -------------------------------------------------------
+
+    function mensajeDeError(campo) {
+
+        if (campo.validity.valueMissing) {
+            if (campo.type === "file") {
+                return "Falta adjuntar la foto.";
+            }
+            return campo.tagName === "SELECT" ? "Falta elegir una opción." : "Falta completar esta respuesta.";
+        }
+
+        return campo.validationMessage || "Revisá esta respuesta.";
+    }
+
+    function marcarError(campo, mensaje) {
+
+        var id = campo.id + "_error";
+        var aviso = $(document.getElementById(id));
+
+        if (!aviso.length) {
+            aviso = $('<p class="campo-error"></p>').attr("id", id);
+            $(campo).after(aviso);
+        }
+
+        aviso.empty()
+            .append('<i class="fa fa-exclamation-circle" aria-hidden="true"></i>')
+            .append($("<span></span>").text(mensaje || mensajeDeError(campo)));
+
+        $(campo).addClass("invalid").attr("aria-invalid", "true");
+
+        var describe = (campo.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+        if (describe.indexOf(id) === -1) {
+            describe.push(id);
+            campo.setAttribute("aria-describedby", describe.join(" "));
+        }
+    }
+
+    function quitarError(campo) {
+
+        var id = campo.id + "_error";
+        $(document.getElementById(id)).remove();
+        $(campo).removeClass("invalid").removeAttr("aria-invalid");
+
+        var describe = (campo.getAttribute("aria-describedby") || "").split(/\s+/).filter(function(otro) {
+            return otro && otro !== id;
+        });
+
+        if (describe.length) {
+            campo.setAttribute("aria-describedby", describe.join(" "));
+        } else {
+            campo.removeAttribute("aria-describedby");
+        }
+    }
+
+    // las preguntas marcadas que se ven: una condicional que se escondió ya no cuenta
+    function camposConError() {
+
+        return $("#adoption-form .invalid").filter(function() {
+            return $(this).closest(".form-group").is(":visible");
+        }).get();
+    }
+
+    function enfocarCampo(campo) {
+
+        if (!campo) {
+            return;
+        }
+
+        // "instant": con el desplazamiento suave del sitio, de la pregunta 3 a la 30 era
+        // un viaje
+        $(campo).closest(".form-group")[0].scrollIntoView({block: "start", behavior: "instant"});
+        campo.focus({preventScroll: true});
+    }
+
+    function avisarFaltantes(irALaPrimera) {
+
+        var faltan = camposConError();
+        var barra = $("#faltantes");
+
+        if (!barra.length) {
+            return;
+        }
+
+        if (!faltan.length) {
+            // se muestra solo si antes faltaba algo: ya está todo, se puede enviar
+            if (!barra.prop("hidden")) {
+                $("#faltantes-texto").text("Ya está todo completo.");
+                $("#faltantes-ir").text("Enviar el formulario");
+            }
+            return;
+        }
+
+        $("#faltantes-texto").text(faltan.length === 1 ? "Te falta 1 respuesta" : "Te faltan " + faltan.length + " respuestas");
+        $("#faltantes-ir").text(faltan.length === 1 ? "Ir a completarla" : "Ir a la siguiente");
+        barra.prop("hidden", false);
+        $("body").addClass("con-faltantes");
+
+        if (irALaPrimera) {
+            enfocarCampo(faltan[0]);
+        }
+    }
+
+    // ---- Requisitos y formulario ------------------------------------------------------
+
+    // Aceptar los requisitos lleva al principio del formulario. Antes los requisitos se
+    // plegaban con una animación y la pantalla quedaba donde estaba: en la mitad del
+    // formulario, salteándose el nombre, el celular y el mail.
+    function aceptarRequisitos() {
+
+        hideTerms(true);
+        showForm();
+
+        var titulo = document.getElementById("titulo-formulario");
+        if (titulo) {
+            titulo.scrollIntoView({block: "start", behavior: "instant"});
+            titulo.focus({preventScroll: true});
+        }
     }
 
     function showForm() {
@@ -884,9 +1279,10 @@
                 sliderItems = response.photos_count
             }
 
+            // auto: false. Las fotos pasaban solas y no había cómo frenarlas.
             slider = fotos.lightSlider({
                 item: sliderItems,
-                auto: sliderItems > 1,
+                auto: false,
                 loop: true,
             });
 
@@ -1029,8 +1425,16 @@
         {% if campo_nombre %}
         var nombre = form.elements["{{ campo_nombre|escapejs }}"];
         if (nombre && !esNombreYApellido(nombre.value)) {
-            alert("{{ mensaje_nombre|escapejs }}");
-            nombre.focus();
+            marcarError(nombre, "{{ mensaje_nombre|escapejs }}");
+            avisarFaltantes(true);
+            // este error no es del navegador: se va en cuanto el nombre queda bien
+            $(nombre).off("input.nombre").on("input.nombre", function() {
+                if (esNombreYApellido(this.value)) {
+                    quitarError(this);
+                    avisarFaltantes(false);
+                    $(this).off("input.nombre");
+                }
+            });
             return false;
         }
         {% endif %}

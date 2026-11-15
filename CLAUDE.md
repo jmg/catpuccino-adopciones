@@ -292,6 +292,50 @@ like `.lista-animales` bring theirs. `adoption/card.html` is the animal card use
 homepage and by each rescuer's public page; `index.js` and `modern-effects.js` find things in
 it by class (`.post-preview` and its `data-*`, `.animalCarrousel`, `.show-more-text`).
 
+Titles, buttons, fields and dialogs are the site's, not each page's. The panel, the animal
+form, the contract and the form page used to redefine them (violet centred titles with a
+rule under them, gradient buttons, Bootstrap blue, SweetAlert's own blue and red); now
+`modern.css` owns `.btn-primary`, `.btn-secondary` (the outlined companion button, also
+`.btn-outline-primary`), `.btn-link`, the SweetAlert and alertify themes, and each template's
+`<style>` only lays out what is its own. Don't reintroduce a local `.btn-*` or a gradient.
+
+Things an accessibility audit measured and that are easy to undo by accident:
+
+- **Field borders use `--borde-campo`** (3.6:1 on white). The lavender card border
+  (`--lavanda-borde`, 1.4:1) is for cards and dividers, not for anything you type into.
+- **The focus ring is opaque violet** (`:focus-visible` in `modern.css`); Bootstrap removes
+  outlines from `.btn` and the carousel arrows, so those have their own rule.
+- **Every page sets `{% block title %}` and has one `<h1>`.** The panel's is `.solo-lectores`.
+- **Nothing a keyboard has to reach is an `<a>` without `href`.** The panel's tabs are
+  `<a href role="tab">`, its row actions are `<button>` with an `aria-label` (on a computer
+  they are icon-only), and "Salir" is a link next to the tabs, not a tab.
+- **Photos never advance on their own.** The card carousels are created with
+  `interval: false` and the form's slider with `auto: false`; a counter (`.fotos-cuenta`)
+  says which photo is showing. They used to cycle every 3 s, all cards at once, with no way
+  to stop them, and downloaded photos nobody asked for.
+- **Touch targets are 44px** (filters, sort, tabs, row actions, "Mostrar más").
+
+The public form (`adoption/preadoption.html`) has three behaviours of its own. Accepting the
+requirements jumps to the top of the form (`aceptarRequisitos`): they used to fold away with
+an animation and leave the person in the middle of it. Sending with unanswered questions
+marks each one with what is missing and shows a bar fixed at the bottom ("Te faltan N
+respuestas" and a button that walks through them), instead of a toast naming only the first;
+the native bubble is suppressed in the `invalid` handler. And a small inline script
+(`requisitosAlCargar`) sets a class on `<html>` before the first paint so that a returning
+visitor sees the form straight away instead of a jump once the JS loads. `prepararCampos`
+sets the phone/mail keyboards and autocomplete by the question's label, and marks optional
+questions; it must run before the `initForm…` functions hide the conditional ones.
+
+Django's own messages are in Spanish because `USE_I18N` is on (it was off, and validation
+errors, password rules and the admin came out in English). The site's own strings are written
+in Spanish, in voseo ("completá", "revisá"); don't mix in "tú" or "usted". The rich-text
+editors offer only what `html_seguro` keeps (bold, italic, underline, lists, links).
+
+`services/contacto.py` builds the WhatsApp, call and mail links shown on a candidate's form.
+The phone and mail are attacker-controlled text: only digits and a validated address ever
+reach an `href`, and the WhatsApp link is built only when the number reduces, without
+guessing, to an Argentine mobile's ten digits.
+
 ## Permissions
 
 Registration at `/accounts/register/` is open and self-service, so **"is logged in" is not a

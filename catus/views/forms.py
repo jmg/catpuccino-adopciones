@@ -3,6 +3,7 @@ from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService, d
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
 from catus.services.adoption import AdoptionService
+from catus.services.contacto import contacto
 from catus.services.historial import adopciones_anteriores
 
 from django.core.exceptions import PermissionDenied
@@ -74,10 +75,22 @@ class FormView(LoginRequiredMixin, BaseView):
             "data_attrs": data_attrs,
             "form_attrs": form_attrs,
             "form_hash": form_hash,
+            "contacto": self.contacto(data_attrs),
             "buenadoptante": self.buenadoptante(estado_form),
             "adopciones_anteriores": adopciones_anteriores(estado_form),
             #"extra_forms": extra_forms,
         })
+
+    def contacto(self, data_attrs):
+        """Los links de WhatsApp, llamada y mail del candidato, para los botones de arriba
+        del formulario: el celular y el mail estaban perdidos entre cuarenta respuestas y
+        había que copiarlos a mano."""
+
+        respuestas = {}
+        for label, value in data_attrs or []:
+            respuestas.setdefault(str(label).strip().lower(), value)
+
+        return contacto(respuestas.get("celular"), respuestas.get("email"))
 
     def buenadoptante(self, estado_form):
         """Lo que dijo BuenAdoptante de esta persona, para el recuadro del formulario, o None.

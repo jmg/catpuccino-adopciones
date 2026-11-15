@@ -1,37 +1,33 @@
 {% extends "registration/base.html" %}
 {% load crispy_forms_tags %}
-{% load i18n %}
+
+{% block title %}Ingresar | Catpuccino Adopciones{% endblock %}
 
 {% block login_content %}
 
 <form id="login-form" class="form" action="" method="post">
     {% csrf_token %}
 
-    <h3 class="text-center">{% trans "Ingresá a tu cuenta" %}</h3>
-    <p class="text-center text-muted mb-4">Para cargar un animal en adopción</p>
+    <h1 class="acceso-titulo">Ingresá a tu cuenta</h1>
+    <p class="acceso-bajada">Para publicar animales en adopción. Para adoptar no hace falta tener cuenta.</p>
 
-    <div class="alert alert-info mb-4">
-        <i class="fas fa-info-circle mr-2"></i> Si no tenés cuenta <a href="/accounts/register/">creá una acá</a>. Es super fácil!
-    </div>
+    {# el error de mail o contraseña: role="alert" para que el lector de pantalla lo diga #}
+    {% if form.non_field_errors %}
+    <div class="acceso-error" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
 
-    {{ form|crispy }}
+    {{ form.username|as_crispy_field }}
+    {{ form.password|as_crispy_field }}
 
-    <div class="form-group mt-4 mb-3">
+    <div class="form-group mt-4 mb-0">
         <button type="submit" name="submit" class="btn btn-primary btn-block">
-            <i class="fas fa-sign-in-alt mr-2"></i> {% trans 'Ingresar' %}
+            <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> Ingresar
         </button>
     </div>
 
-    <div class="form-group">
-        <hr>
-        <div class="d-flex flex-column mt-3">
-            <div class="mb-2">
-                {% trans "¿No tenés cuenta?" %} <a href="/accounts/register/">{% trans "Creá tu cuenta aquí" %}</a>
-            </div>
-            <div>
-                {% trans "¿Olvidaste tu contraseña?" %} <a href="{% url 'password_reset' %}">{% trans "Reseteá tu contraseña" %}</a>
-            </div>
-        </div>
+    <div class="acceso-otros">
+        <div>¿No tenés cuenta? <a href="/accounts/register/">Creá una</a></div>
+        <div>¿Olvidaste tu contraseña? <a href="{% url 'password_reset' %}">Recuperala</a></div>
     </div>
 </form>
 

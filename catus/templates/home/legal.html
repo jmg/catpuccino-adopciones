@@ -4,27 +4,41 @@
 <style>
   .legal-page {
     background-color: var(--white);
-    border-radius: 15px;
+    border: 1px solid var(--lavanda-borde);
+    border-radius: var(--radio);
     box-shadow: var(--card-shadow);
     padding: 30px;
-    margin-top: 20px;
-    margin-bottom: 30px;
+    margin-top: 8px;
+    margin-bottom: 32px;
     color: var(--text-color);
     line-height: 1.7;
   }
 
-  .legal-page h2 {
-    color: var(--primary-color);
-    font-weight: 600;
-    font-size: 1.8rem;
-    margin-bottom: 0.5rem;
+  .legal-page h1 {
+    color: var(--text-color);
+    font-weight: 800;
+    font-size: 1.7rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.75rem;
   }
 
-  .legal-page h3 {
+  .legal-page h2 {
     font-size: 1.2rem;
-    font-weight: 600;
+    font-weight: 800;
     margin-top: 2rem;
     margin-bottom: 0.75rem;
+  }
+
+  /* subrayados: el color del link es casi el del texto y no se distinguían */
+  .legal-page a {
+    color: var(--primary-dark);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .legal-page p {
+    margin: 0 0 1rem;
   }
 
   .legal-page ul {
@@ -44,8 +58,9 @@
   }
 
   .legal-nav a.active {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-color);
+    text-decoration: none;
     pointer-events: none;
   }
 
@@ -67,8 +82,8 @@
       padding: 20px 16px;
     }
 
-    .legal-page h2 {
-      font-size: 1.5rem;
+    .legal-page h1 {
+      font-size: 1.45rem;
     }
   }
 </style>
@@ -79,9 +94,9 @@
   <div class="row">
     <div class="col-lg-8 col-md-10 mx-auto legal-page">
 
-      <nav class="legal-nav">
-        <a href="/terminos/" {% if legal_page == "terminos" %}class="active"{% endif %}>Términos y condiciones</a>
-        <a href="/privacidad/" {% if legal_page == "privacidad" %}class="active"{% endif %}>Política de privacidad</a>
+      <nav class="legal-nav" aria-label="Páginas legales">
+        <a href="/terminos/" {% if legal_page == "terminos" %}class="active" aria-current="page"{% endif %}>Términos y condiciones</a>
+        <a href="/privacidad/" {% if legal_page == "privacidad" %}class="active" aria-current="page"{% endif %}>Política de privacidad</a>
       </nav>
 
       {% block legal %}{% endblock %}

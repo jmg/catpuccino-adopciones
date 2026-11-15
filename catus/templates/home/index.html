@@ -51,8 +51,7 @@
       <div class="resultados-barra">
         <p id="resultados-cuenta" class="resultados-cuenta" aria-live="polite">{{animals|length}} en adopción</p>
         <select id="filter-sort" class="filtro-orden" name="sort" aria-label="Ordenar">
-          <option value="">Ordenar</option>
-          <option value="desc">Más recientes</option>
+          <option value="">Más recientes</option>
           <option value="asc">Más antiguos</option>
         </select>
       </div>
@@ -60,8 +59,9 @@
 
       <div id="animal-list" data-cols="{{cols}}" class="row mt-3 paginada-inicial">
       {% for animal in animals %}
-      <div data-id="{{animal.id}}" class="animal-card col-md-{{cols}}">
-        {% include "adoption/card.html" %}
+      {# de a tres por fila, y de a cuatro en las pantallas anchas (tarjetasPorFila, en index.js) #}
+      <div data-id="{{animal.id}}" class="animal-card col-md-{{cols}}{% if cols == 4 %} col-xl-3{% endif %}">
+        {% include "adoption/card.html" with primera_ficha=forloop.first %}
       </div>
       {% endfor %}
       </div>

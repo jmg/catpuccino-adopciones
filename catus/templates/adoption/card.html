@@ -13,13 +13,15 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
     {% endif %}
 
     {% if animal.animalimage_set.count > 0 %}
-    <div id="animalCarrousel-{{animal.id}}" class="animalCarrousel carousel slide" data-ride="carousel">
+    {# sin data-ride: las fotos no pasan solas (initializeImages, en index.js) #}
+    <div id="animalCarrousel-{{animal.id}}" class="animalCarrousel carousel slide">
       <div class="carousel-inner">
 
         {% for img in animal.animalimage_set.all %}
             <div class="carousel-item {% if forloop.first %} active {% endif %}">
               <div class="carousel-image">
-                <img loading="lazy" data-enlargable="1" class="post-image" src="{{ img.image.url }}" alt="{{animal.nombre}}" style="cursor: zoom-in">
+                {# la primera foto de la primera ficha es lo más grande de la primera pantalla: no se demora #}
+                <img {% if primera_ficha and forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} data-enlargable="1" class="post-image" src="{{ img.image.url }}" alt="{{animal.nombre}}" style="cursor: zoom-in">
               </div>
             </div>
         {% endfor %}
@@ -27,6 +29,7 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
       </div>
 
       {% if animal.animalimage_set.count > 1 %}
+      <span class="fotos-cuenta" aria-hidden="true">1 / {{animal.animalimage_set.count}}</span>
       <a class="carousel-control-prev" href="#animalCarrousel-{{animal.id}}" role="button" data-slide="prev">
         <span class="carousel-control-prev-icon" aria-hidden="true"></span>
         <span class="sr-only">Foto anterior</span>
@@ -42,7 +45,7 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
 
     <div class="post-data">
       <a class="animal-title" {% if not animal.esta_reservado %}href="{{ animal.get_adoption_url }}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
-        <h3 class="post-subtitle">{{animal.nombre}}</h3>
+        <h2 class="post-subtitle">{{animal.nombre}}</h2>
       </a>
 
       <ul class="animal-datos">
@@ -74,7 +77,7 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
 
     <div class="card-action">
       <a class="btn btn-primary btn-preadopcion" {% if not animal.esta_reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
-        Formulario de pre-adopción <i class="fa fa-paw" aria-hidden="true"></i>
+        Quiero adoptar <i class="fa fa-paw" aria-hidden="true"></i>
       </a>
     </div>
 </div>

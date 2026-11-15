@@ -273,10 +273,10 @@ test.describe("lo que ve la persona en cada fila", () => {
          * sola. Y el estado tiene que ser por fila, no uno global. */
 
         await expect(boton(page, 0)).toHaveText(/Cambiar recorte/);
-        await expect(cartel(page, 0)).toHaveText("Recorte elegido: así se va a ver en Instagram.");
+        await expect(cartel(page, 0)).toHaveText("Ya elegiste qué parte de la foto sale en Instagram.");
 
         await expect(boton(page, 1)).toHaveText(/Elegir recorte para Instagram/);
-        await expect(cartel(page, 1)).toHaveText("Si no elegís, lo recortamos automáticamente.");
+        await expect(cartel(page, 1)).toHaveText("Si no elegís, la recortamos nosotros.");
 
         await expect(boton(page, 2)).toHaveText(/Cambiar recorte/);
 
@@ -284,7 +284,7 @@ test.describe("lo que ve la persona en cada fila", () => {
         await guardar(page, 1);
 
         await expect(boton(page, 1), "la fila 1 ya tiene recorte").toHaveText(/Cambiar recorte/);
-        await expect(cartel(page, 1)).toHaveText("Recorte elegido: así se va a ver en Instagram.");
+        await expect(cartel(page, 1)).toHaveText("Ya elegiste qué parte de la foto sale en Instagram.");
 
         // las otras dos no cambiaron de cartel
         await expect(boton(page, 0)).toHaveText(/Cambiar recorte/);

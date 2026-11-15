@@ -91,6 +91,29 @@ class PaginaDeFormularioEnviadoTest(TestCase):
 
         self.assertEqual(EstadoFormulario.objects.count(), 2)
 
+    def test_la_pagina_de_enviado_dice_para_que_animal_fue(self):
+        """Era una caja verde con el logo: no decía qué se había mandado ni para quién, y
+        el único botón era un "Volver" que no decía a dónde."""
+
+        for url, nombre in (("/pre-adopcion/", "Michi"), ("/pre-adopcion/perros/", "Firulais")):
+            with self.subTest(url=url):
+                pagina = self.enviar(url).content.decode()
+
+                self.assertIn("Recibimos tu formulario", pagina)
+                self.assertIn("para adoptar a <b>{}</b>".format(nombre), pagina)
+                self.assertIn("Ver más animales en adopción", pagina)
+                self.assertNotIn('id="btn-volver"', pagina)
+
+    def test_la_pagina_de_error_lleva_de_vuelta_al_formulario(self):
+        """Las respuestas quedan guardadas en el navegador: lo que sirve es volver al
+        formulario, no a la portada."""
+
+        pagina = self.enviar("/pre-adopcion/", sin_nombre=True).content.decode()
+
+        self.assertIn("No pudimos recibir tu formulario", pagina)
+        self.assertIn("Volver al formulario", pagina)
+        self.assertIn('onclick="history.back();"', pagina)
+
     def test_envio_con_errores_conserva_las_respuestas_para_reintentar(self):
 
         for url in self.forms:

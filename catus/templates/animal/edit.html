@@ -2,210 +2,205 @@
 {% load bootstrap4 %}
 {% load crispy_forms_tags %}
 
+{% block title %}{% if animal %}Editar a {{animal.nombre}}{% else %}Cargar un animal{% endif %} | Catpuccino Adopciones{% endblock %}
+
 {% block css %}
 {{ block.super }}
 <style>
+    /* Los títulos, los campos y los botones son los del resto del sitio (modern.css).
+       Esta página tenía los suyos: títulos violetas centrados con una rayita, botones
+       con degradé y bordes de campo que casi no se veían. */
     .edit-animal-container {
         background-color: var(--white);
-        border-radius: 15px;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
         box-shadow: var(--card-shadow);
-        padding: 30px;
-        margin-top: 20px;
-        margin-bottom: 30px;
-        transition: var(--transition);
-    }
-
-    .edit-animal-container:hover {
-        box-shadow: var(--hover-shadow);
+        padding: 28px;
+        margin-top: 8px;
+        margin-bottom: 32px;
+        max-width: 860px;
     }
 
     .animal-title {
-        color: var(--primary-color);
-        font-weight: 600;
-        margin-bottom: 25px;
-        font-size: 1.8rem;
-        text-align: center;
-        position: relative;
+        color: var(--text-color);
+        font-weight: 800;
+        font-size: 1.6rem;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        margin: 0 0 18px;
+        overflow-wrap: anywhere;
     }
 
-    .animal-title::after {
-        content: '';
-        position: absolute;
-        bottom: -10px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 60px;
-        height: 3px;
-        background: var(--gradient-primary);
-        border-radius: 3px;
+    .seccion-titulo,
+    fieldset legend {
+        color: var(--text-color);
+        font-weight: 800;
+        font-size: 1.2rem;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+        margin: 0 0 14px;
+        padding: 0;
+        width: auto;
+    }
+
+    fieldset {
+        border: 0;
+        padding: 0;
+        margin: 0 0 8px;
     }
 
     .section-divider {
         height: 1px;
-        background: linear-gradient(90deg, rgba(138, 43, 226, 0.1), rgba(138, 43, 226, 0.5), rgba(138, 43, 226, 0.1));
-        margin: 25px 0;
+        background: var(--lavanda-borde);
+        margin: 24px 0;
     }
 
     .form-control {
-        border: 2px solid rgba(138, 43, 226, 0.15);
+        border: 1px solid var(--borde-campo);
         border-radius: 10px;
         padding: 12px 15px;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        height: auto;
+        font-size: 16px;
+        color: var(--text-color);
         background-color: #fff;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    select.form-control {
+        height: 50px;
     }
 
     .form-control:focus {
         border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.18);
         outline: none;
     }
 
+    .form-group {
+        margin-bottom: 18px;
+    }
+
+    /* Un animal que recién se carga está "En adopción": elegirle "Adoptado" o "Expirado"
+       no tiene sentido. El campo sigue en el formulario, con su valor por defecto. */
+    .animal-nuevo #div_id_estado {
+        display: none;
+    }
+
     label {
-        font-weight: 500;
-        margin-bottom: 8px;
+        font-weight: 600;
+        margin-bottom: 6px;
         color: var(--text-color);
-        font-size: 0.95rem;
+        font-size: 15px;
     }
 
-    .btn-primary {
-        background: var(--gradient-primary);
-        border: none;
-        padding: 12px 30px;
-        border-radius: 50px;
-        font-weight: 500;
-        transition: var(--transition);
-        box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+    .form-text {
+        color: var(--text-muted) !important;
+        font-size: 14px;
+        line-height: 1.45;
     }
 
-    .btn-primary:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
-    }
-
+    /* "¿Está publicado en Instagram?": toda la fila es la etiqueta de la casilla */
     .ig-option {
         display: flex;
         align-items: center;
+        gap: 12px;
+        min-height: 52px;
         margin-bottom: 20px;
-        padding: 15px;
-        border-radius: 10px;
-        background-color: rgba(138, 43, 226, 0.05);
-        transition: var(--transition);
-    }
-
-    .ig-option:hover {
-        background-color: rgba(138, 43, 226, 0.08);
-    }
-
-    .ig-option-checkbox {
-        margin-right: 10px;
-        width: 18px;
-        height: 18px;
-    }
-
-    .ig-option-label {
-        color: var(--primary-color);
-        font-weight: 500;
+        padding: 8px 16px;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: 12px;
+        background-color: var(--lavanda);
+        color: var(--text-color);
+        font-size: 16px;
+        font-weight: 600;
         cursor: pointer;
     }
 
+    .ig-option-checkbox {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        margin: 0;
+    }
+
     .ig-form {
-        background-color: rgba(138, 43, 226, 0.05);
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 30px;
-        border: 1px solid rgba(138, 43, 226, 0.1);
+        background-color: var(--lavanda);
+        border: 1px solid var(--lavanda-borde);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 24px;
     }
 
     .ig-alert {
-        background-color: rgba(40, 167, 69, 0.1);
-        border: 1px solid rgba(40, 167, 69, 0.2);
-        color: #155724;
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
+        color: var(--text-color);
+        font-size: 15px;
+        line-height: 1.5;
+        margin-bottom: 12px;
+        overflow-wrap: anywhere;
     }
 
-    .ig-button {
-        background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 50px;
-        font-weight: 500;
-        transition: var(--transition);
-        box-shadow: 0 4px 10px rgba(131, 58, 180, 0.3);
-        margin-top: 10px;
-    }
-
-    .ig-button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(131, 58, 180, 0.4);
+    .ig-alert a {
+        color: var(--primary-dark);
+        text-decoration: underline;
     }
 
     .alert-danger {
-        background-color: rgba(220, 53, 69, 0.1);
-        border: 1px solid rgba(220, 53, 69, 0.2);
-        color: #721c24;
+        background-color: #fdecee;
+        border: 1px solid #f5c2c7;
+        color: #7a1c26;
+        border-radius: 12px;
+        padding: 16px 18px;
+    }
+
+    /* cada foto: el selector de archivo, la foto, su recorte y "Eliminar" */
+    .photo-container,
+    #form-set > .col-md-12 {
+        padding-bottom: 18px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid var(--lavanda-borde);
+    }
+
+    /* La foto guardada (ImagePreviewWidget la pone a todo el ancho, en el style) y la
+       recién elegida: una miniatura, no una pantalla entera por foto. */
+    #form-set .form-group > img {
+        display: block;
+        width: auto !important;
+        max-width: 100% !important;
+        max-height: 220px;
+        margin-top: 10px;
         border-radius: 10px;
-        padding: 20px;
+        background: var(--lavanda);
     }
 
-    fieldset {
-        border: 1px solid rgba(138, 43, 226, 0.15);
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 25px;
-        background-color: rgba(138, 43, 226, 0.02);
-    }
-
-    fieldset legend {
-        font-size: 1.2rem;
-        font-weight: 600;
-        width: auto;
-        padding: 0 15px;
-        color: var(--primary-color);
-        background-color: white;
-        border-radius: 20px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    }
-
-    .photo-container {
-        background-color: var(--white);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 20px;
-        transition: var(--transition);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    .photo-container:hover {
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        transform: translateY(-3px);
-    }
-
-    .add-photo-btn {
-        display: inline-flex;
+    #form-set .form-check {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 15px;
+        gap: 10px;
+        min-height: 44px;
+        padding-left: 0;
     }
 
-    .add-photo-btn i {
-        font-size: 1.2rem;
+    #form-set .form-check-input {
+        position: static;
+        flex: none;
+        width: 20px;
+        height: 20px;
+        margin: 0;
     }
 
+    #form-set .form-check-label {
+        margin: 0;
+        font-weight: 600;
+        color: #a3231b;
+        cursor: pointer;
+    }
+
+    .add-photo-btn,
     .show-photos-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        margin-top: 15px;
-    }
-
-    .show-photos-btn i {
-        font-size: 1.2rem;
     }
 
     #id_datos {
@@ -213,17 +208,17 @@
     }
 
     .error-message-name {
-        color: #dc3545;
-        font-size: 0.9rem;
-        margin-top: 5px;
-        padding: 10px;
-        border-radius: 5px;
-        background-color: rgba(220, 53, 69, 0.1);
+        color: #a3231b;
+        font-size: 14px;
+        margin-top: 6px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background-color: #fdecee;
     }
 
     .error-message {
-        font-weight: 500;
-        margin-bottom: 5px;
+        font-weight: 700;
+        margin-bottom: 4px;
     }
 
     .images-preview {
@@ -231,251 +226,48 @@
     }
 
     .image-preview-item {
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
         margin-bottom: 20px;
-        transition: var(--transition);
-    }
-
-    .image-preview-item:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
     }
 
     .image-preview-item img {
         width: 100%;
         height: auto;
         object-fit: cover;
-        border-radius: 10px 10px 0 0;
+        border-radius: 10px;
     }
 
-    @media only screen and (max-width: 992px) {
-        .edit-animal-container {
-            padding: 20px 15px;
-        }
-
-        fieldset {
-            padding: 15px;
-        }
-    }
-
-    .btn-secondary {
-        background: linear-gradient(135deg, #6c757d, #495057);
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 50px;
-        font-weight: 600;
-        transition: var(--transition);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    }
-
-    .btn-secondary:hover {
-        background: linear-gradient(135deg, #5a6268, #343a40);
-        color: white;
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
-    }
-
-    /* Ajuste específico para el botón de volver */
-    #btn-volver {
-        display: inline-flex;
+    /* guardar y volver, al pie */
+    .acciones-finales {
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        justify-content: center;
-        padding: 12px 30px;
-        border-radius: 50px;
-        font-weight: 500;
-        transition: var(--transition);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        background: linear-gradient(135deg, #6c757d, #495057);
-        color: white;
-        border: none;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 8px;
     }
 
-    #btn-volver:hover {
-        background: linear-gradient(135deg, #5a6268, #343a40);
-        color: white;
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
-    }
-
-    #btn-volver i {
-        margin-right: 8px !important;
-        font-size: 1rem;
-    }
-
-    #btn-volver span {
-        display: inline;
-    }
-
-    /* Ajustes responsivos para dispositivos móviles */
     @media (max-width: 768px) {
         .edit-animal-container {
-            padding: 15px;
-            margin-top: 10px;
-            margin-bottom: 15px;
+            padding: 18px 16px;
+            margin-top: 0;
+            margin-bottom: 16px;
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
         }
 
         .animal-title {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
+            font-size: 1.4rem;
         }
 
-        .form-group {
-            margin-bottom: 12px;
+        /* en el celular guardar va primero y a todo el ancho */
+        .acciones-finales {
+            flex-direction: column-reverse;
+            align-items: stretch;
         }
 
-        .form-control {
-            padding: 8px 12px;
-        }
-
-        .btn-primary, .btn-secondary {
-            padding: 10px 20px;
-            font-size: 0.95rem;
-        }
-
-        .section-divider {
-            margin: 15px 0;
-        }
-
-        .alert {
-            padding: 12px;
-            margin-bottom: 15px;
-        }
-
-        .photo-preview {
-            height: 120px;
-        }
-
-        .tab-pane {
-            padding: 10px;
-        }
-
-        label {
-            font-size: 0.95rem;
-            margin-bottom: 5px;
-        }
-
-        .card-body {
-            padding: 15px;
-        }
-
-        /* Ajustes para mostrar solo iconos en los tabs en móvil */
-        .dashboard-tabs {
-            flex-wrap: wrap;
-            justify-content: space-between;
-        }
-
-        /* Grupo de los 3 primeros botones */
-        .dashboard-tabs::before {
-            content: "";
-            display: flex;
-            width: 0;
-            order: 1;
-        }
-
-        /* Botón de logout a la derecha */
-        .logout-link {
-            margin-left: auto;
-        }
-
-        .dashboard-tabs .nav-link {
-            font-size: 0; /* Hide text */
-            padding: 0 !important;
-            width: 46px;
-            height: 46px !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-        }
-
-        .dashboard-tabs .nav-link i {
-            margin-right: 0 !important;
-            font-size: 1.3rem;
-        }
-
-        .dashboard-tabs .nav-item:not(:last-child) {
-            margin-right: 5px;
-        }
-
-        .dashboard-tabs .nav-item {
-            margin-bottom: 6px;
-        }
-
-        /* Mejoras para botones */
-        .send-form-button, #send-form-button-bottom, #btn-volver {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 16px;
-        }
-
-        .send-form-button span, #send-form-button-bottom span, #btn-volver span {
-            display: none;
-        }
-
-        .send-form-button i, #send-form-button-bottom i, #btn-volver i {
-            margin-right: 0 !important;
-            font-size: 1.2rem;
-        }
-
-        /* Ajuste específico para el botón de guardar inferior */
-        #send-form-button-bottom {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 12px 30px;
-            border-radius: 50px;
-            font-weight: 500;
-            transition: var(--transition);
-            box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
-        }
-
-        #send-form-button-bottom:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
-        }
-
-        #send-form-button-bottom i {
-            margin-right: 8px !important;
-            font-size: 1rem;
-        }
-
-        #send-form-button-bottom span {
-            display: inline;
-        }
-
-        /* Ajuste específico para el botón de volver en móvil */
-        #btn-volver {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 12px 30px;
-            border-radius: 50px;
-            font-weight: 500;
-            transition: var(--transition);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            background: linear-gradient(135deg, #6c757d, #495057);
-            color: white;
-            border: none;
-        }
-
-        #btn-volver:hover {
-            background: linear-gradient(135deg, #5a6268, #343a40);
-            color: white;
-            transform: translateY(-3px);
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
-        }
-
-        #btn-volver i {
-            margin-right: 8px !important;
-            font-size: 1rem;
-        }
-
-        #btn-volver span {
-            display: inline;
+        .acciones-finales .btn {
+            width: 100%;
         }
     }
 </style>
@@ -487,9 +279,9 @@
         <div class="col-lg-10 col-md-12 mx-auto edit-animal-container">
             <div id="adoption-form-container">
                 {% if animal %}
-                <h2 class="animal-title">{{ animal.nombre }}</h2>
+                <h1 class="animal-title">{{ animal.nombre }}</h1>
                 {% else %}
-                <h2 class="animal-title">Nuevo Animal</h2>
+                <h1 class="animal-title">Cargar un animal en adopción</h1>
                 {% endif %}
 
                 {% if is_post and not success %}
@@ -503,60 +295,61 @@
                 </div>
                 {% endif %}
 
-                <form id="adoption-form" class="needs-validation" action="{{post_url}}" method="post" enctype="multipart/form-data">
+                <form id="adoption-form" class="needs-validation{% if not animal %} animal-nuevo{% endif %}" action="{{post_url}}" method="post" enctype="multipart/form-data">
                     {% csrf_token %}
 
-                    <div class="text-center mb-4">
+                    {% comment %}
+                    Al editar, guardar también está arriba: quien cambia una sola cosa no
+                    tiene que bajar hasta el final. Al cargar uno nuevo no: era un botón de
+                    guardar arriba de un formulario vacío.
+                    {% endcomment %}
+                    {% if animal %}
+                    <div class="mb-4">
                         <button id="send-form-button" class="btn btn-primary">
-                            <i class="fa fa-save mr-2"></i> Guardar Cambios
+                            <i class="fa fa-save mr-2" aria-hidden="true"></i> Guardar cambios
                         </button>
                     </div>
+                    {% endif %}
 
-                    <div class="section-divider"></div>
-
-                    <div class="ig-option">
-                        <input type="checkbox" id="ig-publicado-checkbox" class="ig-option-checkbox" onclick="$('#ig-pull-data-contatiner').slideToggle();">
-                        <span class="ig-option-label" onclick="$('#ig-pull-data-contatiner').slideToggle(); $('#ig-publicado-checkbox')[0].checked = !$('#ig-publicado-checkbox')[0].checked;">
-                            ¿Está publicado en Instagram?
-                        </span>
-                    </div>
+                    <label class="ig-option" for="ig-publicado-checkbox">
+                        <input type="checkbox" id="ig-publicado-checkbox" class="ig-option-checkbox" onchange="$('#ig-pull-data-contatiner').slideToggle();">
+                        ¿Ya está publicado en Instagram?
+                    </label>
 
                     <div id="ig-pull-data-contatiner" class="ig-form" style="display: none;">
                         <div class="ig-alert">
-                            Si está publicado en Instagram podés copiar el link del post y automáticamente se completarán los datos y fotos del animal en adopción.
-                            Un link de ejemplo es: <a href="https://www.instagram.com/p/Cq6AYP9rCob/" target="_blank">https://www.instagram.com/p/Cq6AYP9rCob/</a>
+                            Pegá el link del posteo y completamos solos los datos y las fotos.
+                            Por ejemplo: <a href="https://www.instagram.com/p/Cq6AYP9rCob/" target="_blank" rel="noopener">https://www.instagram.com/p/Cq6AYP9rCob/</a>
                         </div>
 
                         <input type="hidden" name="chatgpt_response" id="chatgpt-response-input">
 
                         <div class="form-group">
-                            <input name="ig_url_for_chatgpt" class="form-control" id="ig-url-input" placeholder="Copiar aquí el link del post en Instagram">
+                            <input name="ig_url_for_chatgpt" class="form-control" id="ig-url-input" inputmode="url" autocapitalize="none" placeholder="Link del posteo de Instagram" aria-label="Link del posteo de Instagram">
                         </div>
 
-                        <div class="text-center">
-                            <button type="button" class="ig-button" onclick="getDataFromIG(this, '{{animal.id}}'); return false;">
-                                <i class="fab fa-instagram mr-2"></i> Obtener datos desde Instagram
-                            </button>
-                        </div>
+                        <button type="button" class="btn btn-secondary ig-button" onclick="getDataFromIG(this, '{{animal.id}}'); return false;">
+                            <i class="fab fa-instagram mr-2" aria-hidden="true"></i> Traer los datos de Instagram
+                        </button>
                     </div>
 
                     {% crispy animal_form %}
 
                     <div class="mt-4 mb-4 images-preview" style="display: none;" id="images-container-div">
-                        <h3 class="animal-title">Fotos de Instagram</h3>
+                        <h2 class="seccion-titulo">Fotos de Instagram</h2>
                         <div id="images-container" class="row">
                         </div>
                     </div>
 
                     <div id="show-photos-button" class="text-center" {% if not animal or animal.animalimage_set.count == 0 %}style="display: none"{% endif %}>
-                        <button type="button" class="btn btn-primary show-photos-btn" onclick="$('#form-set-container').slideDown(); $(this).hide()">
-                            <i class="fa fa-camera"></i> Ver Fotos ({{animal.animalimage_set.count}})
+                        <button type="button" class="btn btn-secondary show-photos-btn" onclick="$('#form-set-container').slideDown(); $(this).hide()">
+                            <i class="fa fa-camera" aria-hidden="true"></i> Ver las fotos ({{animal.animalimage_set.count}})
                         </button>
                         <div class="section-divider"></div>
                     </div>
 
                     <div id="form-set-container" {% if animal and animal.animalimage_set.count > 0 %}style="display: none"{% endif %}>
-                        <h3 class="animal-title">Fotografías</h3>
+                        <h2 class="seccion-titulo">Fotos</h2>
                         <div id="form-set" class="row">
                             {{ images_form.management_form }}
                             {% for form in images_form %}
@@ -568,8 +361,8 @@
                         </div>
 
                         <div class="text-center">
-                            <button type="button" id="add_more" class="btn btn-primary add-photo-btn">
-                                <i class="fa fa-plus-circle"></i> Agregar Foto
+                            <button type="button" id="add_more" class="btn btn-secondary add-photo-btn">
+                                <i class="fa fa-plus-circle" aria-hidden="true"></i> Agregar otra foto
                             </button>
                         </div>
 
@@ -584,20 +377,15 @@
                         </div>
                     </div>
 
-                    <div class="text-center mt-4 mb-3 d-flex justify-content-center">
-                        <button id="send-form-button-bottom" class="btn btn-primary">
-                            <i class="fa fa-save mr-2"></i> Guardar Cambios
+                    <div class="acciones-finales">
+                        <a id="btn-volver" class="btn btn-secondary" href="/accounts/profile/">
+                            <i class="fa fa-arrow-left mr-2" aria-hidden="true"></i> Volver al panel
+                        </a>
+                        <button id="send-form-button-bottom" class="btn btn-primary btn-lg">
+                            <i class="fa fa-save mr-2" aria-hidden="true"></i> {% if animal %}Guardar cambios{% else %}Guardar y publicar{% endif %}
                         </button>
                     </div>
                 </form>
-            </div>
-
-            <div class="section-divider"></div>
-
-            <div class="text-center mb-3">
-                <a id="btn-volver" class="btn" href="/accounts/profile/">
-                    <i class="fa fa-arrow-left"></i> Volver
-                </a>
             </div>
         </div>
     </div>
@@ -609,7 +397,7 @@
 <script src="/static/js/tinymce/tinymce.min.js"></script>
 <link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css">
 <script src="/static/vendor/cropper/cropper.min.js"></script>
-<script src="/static/js/crop-widget.js?v=2"></script>
+<script src="/static/js/crop-widget.js?v=3"></script>
 
 <script>
     /*
@@ -726,7 +514,7 @@
     function getDataFromIG(btn, animalId) {
         var url = $("#ig-url-input").val();
         if (!url) {
-            $.alert("Debe ingresar un link de Instagram");
+            $.alert("Pegá primero el link del posteo de Instagram.");
             return;
         }
 
@@ -755,11 +543,11 @@
             }
 
             if (!response["Nombre"] || !response["Descripcion"]) {
-                $.alert("No se encontraron datos en el link ingresado... :( Por favor intenta nuevamente o ingresá otro link.");
+                $.alert("No encontramos datos en ese link. Probá de nuevo o con otro link.");
                 return;
             }
 
-            $.info("Datos obtenidos de Instagram con éxito para " + response["Nombre"] + "!");
+            $.info("Listo, trajimos los datos de " + response["Nombre"] + ". Revisalos antes de guardar.");
 
             $([document.documentElement, document.body]).animate({
                 scrollTop: $("#id_tipo").offset().top - 20
@@ -774,7 +562,7 @@
                 tinyMCE.get('id_datos').setContent(response["Descripcion"])
             }
         }, 'json').fail(function() {
-            $.alert("Error al obtener datos de Instagram");
+            $.alert("No pudimos traer los datos de Instagram. Probá de nuevo en un rato.");
             enableForm(btn, oldHtml)
         });
     }
@@ -793,15 +581,17 @@
             }, false)
         })
 
+        // Solo lo que la ficha muestra después: el resto (colores, tipos de letra, tablas,
+        // imágenes) lo saca el filtro html_seguro al publicar, así que ofrecerlo era
+        // prometer de más. Y en el celular la barra ocupaba varias filas.
         tinymce.init({
             selector: '#id_datos',
             menubar: false,
-            plugins: [
-            'advlist autolink lists link image charmap print preview anchor',
-            'searchreplace visualblocks code fullscreen',
-            'insertdatetime media table paste code help wordcount'
-            ],
-            toolbar: 'undo redo | bold italic underline strikethrough | fontselect fontsizeselect formatselect | alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist | forecolor backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons | fullscreen  preview save print | insertfile image media pageembed template link anchor codesample | a11ycheck ltr rtl | showcomments addcomment',
+            plugins: 'autolink lists link paste',
+            toolbar: 'bold italic underline | bullist numlist | link | undo redo',
+            branding: false,
+            statusbar: false,
+            content_style: "body { font-family: 'Open Sans', 'Helvetica Neue', Arial, sans-serif; font-size: 16px; color: #2d3748; }",
         });
 
         $("#id_nombre").change(function() {
@@ -879,7 +669,7 @@
 
         function updateRemove(el) {
             if ($(el)[0].checked) {
-                $.info("Por favor clickear en GUARDAR para confirmar eliminar la foto.");
+                $.info("La foto se elimina cuando toques «Guardar cambios».");
             }
         }
 
@@ -910,8 +700,8 @@
                 holder = fileInput.parent();
             }
 
-            var button = $('<button type="button" class="btn btn-outline-primary btn-sm" style="width: 100%; margin-top: 8px;">'
-                + '<i class="fa fa-crop-alt"></i> <span class="crop-label"></span></button>');
+            var button = $('<button type="button" class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 10px;">'
+                + '<i class="fa fa-crop-alt" aria-hidden="true"></i> <span class="crop-label"></span></button>');
             var state = $('<small class="form-text text-muted"></small>');
 
             holder.append(button).append(state);
@@ -980,8 +770,8 @@
                 state.toggle(hasPhoto);
                 button.find('.crop-label').text(crop ? 'Cambiar recorte' : 'Elegir recorte para Instagram');
                 state.text(crop
-                    ? 'Recorte elegido: así se va a ver en Instagram.'
-                    : 'Si no elegís, lo recortamos automáticamente.');
+                    ? 'Ya elegiste qué parte de la foto sale en Instagram.'
+                    : 'Si no elegís, la recortamos nosotros.');
             }
 
             function subtitulo() {
@@ -1014,8 +804,39 @@
                 });
             });
 
+            // La foto elegida se ve en el momento. Antes quedaba solo el nombre del archivo,
+            // y al cambiar una foto ya guardada seguía a la vista la anterior.
+            var miniatura = holder.find('img').first();
+            var srcGuardado = miniatura.length ? miniatura.attr('src') : null;
+            var urlMiniatura = null;
+
+            function mostrarElegida() {
+
+                var file = fileInput[0].files && fileInput[0].files[0];
+
+                if (urlMiniatura) {
+                    URL.revokeObjectURL(urlMiniatura);
+                    urlMiniatura = null;
+                }
+
+                if (file && /^image\//.test(file.type)) {
+                    urlMiniatura = URL.createObjectURL(file);
+                    if (!miniatura.length) {
+                        // un formato que el navegador no sabe mostrar (HEIC): sin miniatura
+                        miniatura = $('<img alt="">').on('error', function() { $(this).hide(); }).insertAfter(fileInput);
+                    }
+                    miniatura.attr('src', urlMiniatura).show();
+                } else if (srcGuardado) {
+                    miniatura.attr('src', srcGuardado).show();
+                } else if (miniatura.length) {
+                    miniatura.remove();
+                    miniatura = $();
+                }
+            }
+
             // si cambia la foto, el recorte viejo ya no corresponde
             fileInput.change(function() {
+                mostrarElegida();
                 setCrop(null);
             });
 

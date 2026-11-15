@@ -72,8 +72,9 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
         last_fields = [Field(name) for name in ANIMAL_LAST_FIELDS]
 
         layout = Layout(
-            Fieldset("Datos del Animal", *basic_fields),
-            Fieldset("Descripción del Animal", *last_fields),
+            Fieldset("Datos del animal", *basic_fields),
+            #sin título: el campo ya se llama "Descripción"
+            Fieldset("", *last_fields),
         )
 
         self.helper.layout = layout
@@ -87,11 +88,12 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 
         labels = {
             'Estado': "Publicado en adopción",
+            'datos': "Descripción",
         }
 
         help_texts = {
-            'datos': 'Descripción del animal que aparecerá en la web',
-            'zona': 'La zona en la que se encuentra.'
+            'datos': 'Cómo es, qué necesita y con quién se lleva. Es lo que se lee en su ficha.',
+            'zona': 'El barrio o la localidad donde está. Por ejemplo: Caballito, o Lanús.'
         }
 
 
@@ -270,7 +272,11 @@ class SignupForm(UserCreationForm):
         super(UserCreationForm, self).__init__(*args, **kwargs)
 
         self.fields["password1"].label = _("Contraseña")
-        self.fields["password2"].label = _("Confimar contraseña")
+        self.fields["password2"].label = _("Confirmar contraseña")
+
+        #el mensaje de Django ("Ya existe un/a Usuario con este/a Email") no dice qué hacer
+        self.fields["email"].error_messages["unique"] = _("Ya hay una cuenta con ese mail. Ingresá, o recuperá tu contraseña si no te la acordás.")
+        self.error_messages = dict(self.error_messages, password_mismatch=_("Las dos contraseñas no son iguales. Escribilas de nuevo."))
 
         self.fields["password1"].help_text = _("Al menos 8 caracteres, no solo números, y que no se parezca a tu mail ni sea una contraseña común.")
         self.fields["password2"].help_text = _("Por favor ingresá la misma contraseña nuevamente.")
