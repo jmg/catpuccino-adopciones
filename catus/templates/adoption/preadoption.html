@@ -954,6 +954,14 @@
         $("#adoption-form-container").hide();
     }
 
+    // Las preguntas condicionales ("16.1. Por favor indicá sexos y edades") no son
+    // obligatorias en el formulario, porque solo se contestan si la anterior fue "Sí":
+    // prepararCampos() las marca "(opcional)". Pero cuando aparecen sí hay que
+    // contestarlas, así que ahí se les saca la marca.
+    function quitarOpcional(question) {
+        question.closest(".form-group").find(".opcional").remove();
+    }
+
     function initQuestions(masterQuestion, slaveQuestions, alternativeQuestions) {
 
         for (var i=0; i < slaveQuestions.length; i++) {
@@ -983,6 +991,7 @@
                     if (required) {
                         question.addClass("required");
                         question.attr("required", "");
+                        quitarOpcional(question);
                     }
                 } else {
                     question.parent().slideUp();
@@ -1014,6 +1023,7 @@
                         if (required) {
                             question.addClass("required");
                             question.attr("required", "");
+                            quitarOpcional(question);
                         }
                     } else {
                         question.parent().slideUp();
