@@ -1,0 +1,20 @@
+{
+ "DJANGO_SECRET_KEY": "cambiame-por-cualquier-texto-largo",
+ "DB_ENGINE": "django.db.backends.sqlite3",
+ "DB_NAME": "db.sqlite3",
+ "DB_USER": "",
+ "DB_PASSWORD": "",
+ "DB_HOST": "",
+ "DB_PORT": "",
+ "ADMIN_PASSWORD": "cambiame",
+ "ADMIN_URL": "admin-local/",
+ "SEND_MAIL": "noreply@example.com",
+ "SENDGRID_API_KEY": "",
+ "SENTRY_DSN": "",
+ "FACEBOOK_APP_ID": "",
+ "FACEBOOK_APP_SECRET": "",
+ "OPENIA_API_KEY": "",
+ "OPENIA_API_ORG_ID": "",
+ "PROXY_USER": "",
+ "PROXY_PASSWORD": ""
+}
