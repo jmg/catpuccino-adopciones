@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% comment %}
+Postularse a otro animal con las respuestas de un formulario ya enviado (PostularseView).
+La abre quien tiene el link privado: acá no se muestra nada de lo que la persona contestó.
+Va en dos pasos, sin JS: elegir un animal de la lista (?id=) y confirmar con un POST.
+{% endcomment %}
+
+{% block title %}{% if vencido %}Este link ya no sirve{% else %}Postularme a otro {{especie}}{% endif %} | Catpuccino Adopciones{% endblock %}
+
+{% block css %}
+<style>
+    .postularse {
+        background-color: #fff;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
+        box-shadow: var(--card-shadow);
+        padding: 28px;
+        margin: 8px auto 32px;
+        max-width: 760px;
+    }
+
+    .postularse h1 {
+        font-size: 1.6rem;
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--text-color);
+        margin: 0 0 10px;
+    }
+
+    .postularse h2 {
+        font-size: 1.15rem;
+        font-weight: 800;
+        line-height: 1.25;
+        color: var(--text-color);
+        margin: 28px 0 12px;
+    }
+
+    .postularse p {
+        margin: 0 0 12px;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--text-color);
+    }
+
+    .postularse .nota {
+        color: var(--text-muted);
+        font-size: 15px;
+    }
+
+    .postularse .aviso {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin: 0 0 18px;
+        font-size: 16px;
+        line-height: 1.5;
+    }
+
+    .postularse .aviso-ok {
+        background: #e3f4e8;
+        border: 1px solid #bfe3cb;
+        color: #14532d;
+    }
+
+    .postularse .aviso-error {
+        background: #fdecee;
+        border: 1px solid #f5c2c7;
+        color: #7a1c26;
+    }
+
+    /* a quiénes ya se postuló */
+    .anteriores {
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        padding: 0;
+        margin: 0 0 4px;
+    }
+
+    .anteriores li {
+        background: var(--lavanda);
+        border-radius: 999px;
+        padding: 5px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-color);
+        overflow-wrap: anywhere;
+    }
+
+    .anteriores li span {
+        font-weight: 400;
+        color: var(--text-muted);
+    }
+
+    /* el animal elegido: confirmar */
+    .elegido {
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        border: 2px solid var(--primary-color);
+        border-radius: var(--radio);
+        padding: 16px;
+        margin: 4px 0 8px;
+    }
+
+    .elegido img,
+    .animal-fila img,
+    .sin-foto {
+        display: block;
+        border-radius: 12px;
+        object-fit: cover;
+        background: var(--lavanda);
+    }
+
+    .elegido img,
+    .elegido .sin-foto {
+        width: 112px;
+        height: 112px;
+    }
+
+    .postularse .elegido-nombre,
+    .animal-fila-nombre {
+        font-weight: 800;
+        color: var(--primary-color);
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .postularse .elegido-nombre {
+        font-size: 1.4rem;
+        margin: 0 0 4px;
+    }
+
+    /* con muchos animales, buscar por nombre o zona */
+    .buscar-animal {
+        display: block;
+        width: 100%;
+        height: 48px;
+        margin: 0 0 12px;
+        padding: 0 16px;
+        border: 1px solid var(--borde-campo);
+        border-radius: 12px;
+        font-family: var(--font);
+        font-size: 16px;
+        color: var(--text-color);
+        background: #fff;
+    }
+
+    .buscar-animal:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.18);
+        outline: none;
+    }
+
+    .buscar-animal::placeholder {
+        color: var(--text-muted);
+    }
+
+    .datos {
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    .elegido-acciones {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .elegido-acciones form {
+        margin: 0;
+    }
+
+    /* la lista: toda la fila es el link para elegir */
+    .animales {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        border-top: 1px solid var(--lavanda-borde);
+    }
+
+    .animal-fila {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+        padding: 10px 4px;
+        border-bottom: 1px solid var(--lavanda-borde);
+        color: var(--text-color);
+        text-decoration: none;
+    }
+
+    .animal-fila:hover,
+    .animal-fila:focus {
+        background: var(--lavanda);
+        color: var(--text-color);
+        text-decoration: none;
+    }
+
+    .animal-fila img,
+    .animal-fila .sin-foto {
+        width: 64px;
+        height: 64px;
+    }
+
+    .animal-fila-nombre {
+        font-size: 1.1rem;
+    }
+
+    .animal-fila-elegir {
+        color: var(--primary-dark);
+        font-size: 14px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .animal-fila-elegir i {
+        margin-left: 4px;
+    }
+
+    @media (max-width: 768px) {
+        .postularse {
+            padding: 18px 16px;
+            margin: 0 0 16px;
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
+        }
+
+        .postularse h1 {
+            font-size: 1.4rem;
+        }
+
+        .elegido {
+            grid-template-columns: 88px minmax(0, 1fr);
+        }
+
+        .elegido img,
+        .elegido .sin-foto {
+            width: 88px;
+            height: 88px;
+        }
+
+        .elegido-acciones .btn,
+        .elegido-acciones form {
+            flex: 1 1 100%;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="postularse">
+
+{% if vencido %}
+
+    <h1>Este link ya no sirve</h1>
+    <p>Los links para postularte con las mismas respuestas duran {{vigencia_dias}} días. Si querés adoptar a otro animal, completá el formulario desde su ficha.</p>
+    <a class="btn btn-primary" href="/"><i class="fa fa-paw mr-2" aria-hidden="true"></i> Ver los animales en adopción</a>
+
+{% else %}
+
+    <h1>Postulate a otro {{especie}} con las mismas respuestas</h1>
+
+    {% if recien %}
+    <div class="aviso aviso-ok" role="status">
+        <i class="fa fa-check-circle" aria-hidden="true"></i>
+        <div>Listo: tu formulario para <b>{{recien.nombre}}</b> ya le llegó a quien lo publicó. Si avanza con la adopción, se va a comunicar con vos.</div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="aviso aviso-error" role="alert">
+        <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+        <div>{{error}}</div>
+    </div>
+    {% endif %}
+
+    <p>{% if nombre %}Hola, {{nombre}}. {% endif %}Ya completaste el formulario de pre-adopción: no hace falta escribirlo de nuevo. Elegí a quién más querés adoptar y le mandamos tus mismas respuestas y fotos a quien lo publicó.</p>
+
+    {% if anteriores %}
+    <h2>Ya te postulaste a</h2>
+    <ul class="anteriores">
+        {% for postulacion in anteriores %}
+        <li>{{postulacion.gato.nombre}} <span>· {{postulacion.fecha_ingreso|date:"d/m"}}</span></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if ya_postulado %}
+    <div class="aviso aviso-ok mt-3" role="status">
+        <i class="fa fa-check-circle" aria-hidden="true"></i>
+        <div>A <b>{{ya_postulado.nombre}}</b> ya te postulaste: quien lo publicó tiene tu formulario.</div>
+    </div>
+    {% endif %}
+
+    {% if cupo <= 0 %}
+
+    <h2>Por hoy llegaste al máximo</h2>
+    <p>Te podés postular a {{maximo}} animales por día con estas respuestas. Mañana podés seguir.</p>
+
+    {% else %}
+
+        {% if elegido %}
+        <h2>¿Te postulás a {{elegido.nombre}}?</h2>
+        <div class="elegido">
+            {% with fotos=elegido.animalimage_set.all %}
+            {% if fotos %}<img src="{{fotos.0.image.url}}" alt="Foto de {{elegido.nombre}}">{% else %}<div class="sin-foto"></div>{% endif %}
+            {% endwith %}
+            <div>
+                <p class="elegido-nombre">{{elegido.nombre}}</p>
+                <div class="datos">{{elegido.datos_cortos}}</div>
+            </div>
+            <div class="elegido-acciones">
+                <form method="post" action="/postularme/{{token}}/">
+                    {% csrf_token %}
+                    <input type="hidden" name="animal_id" value="{{elegido.id}}">
+                    <button type="submit" class="btn btn-primary btn-block"><i class="fa fa-paper-plane mr-2" aria-hidden="true"></i> Sí, mandar mi formulario</button>
+                </form>
+                <a class="btn btn-secondary" href="/postularme/{{token}}/">Elegir otro</a>
+            </div>
+        </div>
+        <p class="nota">Tus respuestas y tus fotos las recibe quien publicó a {{elegido.nombre}}, además del equipo de Catpuccino Adopciones.</p>
+        {% endif %}
+
+        {% if animales %}
+        <h2>{% if elegido %}Otros {{especie}}s en adopción{% else %}Elegí a quién querés adoptar{% endif %}</h2>
+        <p class="nota">Hoy te podés postular a {{cupo}} más.</p>
+        {% if animales|length > 12 %}
+        {# form-input: index.js les saca el placeholder a los input que no la tienen #}
+        <input id="buscar-animal" class="buscar-animal form-input" type="search" placeholder="Buscar por nombre o zona" aria-label="Buscar por nombre o zona" autocomplete="off">
+        {% endif %}
+        <ul class="animales" id="animales">
+            {% for animal in animales %}
+            <li data-buscar="{{animal.nombre|lower}} {{animal.zona|default:''|lower}}">
+                <a class="animal-fila" href="/postularme/{{token}}/?id={{animal.id}}">
+                    {% with fotos=animal.animalimage_set.all %}
+                    {% if fotos %}<img loading="lazy" src="{{fotos.0.image.url}}" alt="">{% else %}<div class="sin-foto"></div>{% endif %}
+                    {% endwith %}
+                    <div>
+                        <div class="animal-fila-nombre">{{animal.nombre}}</div>
+                        <div class="datos">{{animal.datos_cortos}}</div>
+                    </div>
+                    <span class="animal-fila-elegir">Elegir<i class="fa fa-chevron-right" aria-hidden="true"></i></span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <p id="sin-coincidencias" class="nota mt-3" hidden>No hay ninguno con ese nombre o esa zona.</p>
+        {% elif not elegido %}
+        <h2>No hay otros {{especie}}s en adopción</h2>
+        <p>Ya te postulaste a todos los que hay publicados. Cuando se sumen otros, los vas a ver acá.</p>
+        {% endif %}
+
+    {% endif %}
+
+    <p class="nota mt-4">Si algo cambió desde que completaste el formulario (te mudaste, sumaste otro animal a tu casa), mejor completalo de nuevo desde la ficha del animal.</p>
+
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+// el buscador de la lista: esconde las filas que no coinciden
+(function () {
+    var caja = document.getElementById("buscar-animal");
+    if (!caja) {
+        return;
+    }
+    caja.addEventListener("input", function () {
+        var buscado = caja.value.trim().toLowerCase();
+        var quedan = 0;
+        Array.prototype.forEach.call(document.querySelectorAll("#animales > li"), function (fila) {
+            var coincide = (fila.getAttribute("data-buscar") || "").indexOf(buscado) !== -1;
+            fila.hidden = !coincide;
+            if (coincide) {
+                quedan++;
+            }
+        });
+        document.getElementById("sin-coincidencias").hidden = quedan > 0;
+    });
+})();
+</script>
+{% endblock %}

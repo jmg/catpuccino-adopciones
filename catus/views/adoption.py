@@ -13,7 +13,7 @@ from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
 from catus.services.images import shrink_uploads
-from catus.services import throttle
+from catus.services import postulacion, throttle
 from catus.views.contrato import mail_del_adoptante
 
 from django.template import Context
@@ -285,6 +285,9 @@ class PreAdoptionView(BaseView):
         response_context["success"] = True
         #para decir en "formulario enviado" a qué animal fue
         response_context["animal_enviado"] = animal
+        #y para postularse a otro con las mismas respuestas (services/postulacion.py)
+        response_context["link_postularme"] = postulacion.link(estado)
+        response_context["animal_type"] = self.animal_type
         return self._post_response(response_context)
 
     def avisar_bloqueo(self, estado, actividad, animal_name):
@@ -394,7 +397,9 @@ class PreAdoptionView(BaseView):
 
         email_context = dict(self._datos_del_mail(fields, animal), animal=animal, tipo=self.form_type,
                              form_hash=estado.hash, settings=settings,
-                             url_formulario="https://{}/formularios/{}/".format(settings.HOST, estado.hash))
+                             url_formulario="https://{}/formularios/{}/".format(settings.HOST, estado.hash),
+                             #el formulario que la persona completó para otro animal, si este es una copia
+                             copiado_de=estado.copiado_de)
         content = self.render(self._get_email_template(), email_context)
 
         to_emails = ["catpuccino.ok@gmail.com"]
@@ -424,10 +429,13 @@ class PreAdoptionView(BaseView):
         if throttle.hit("adoption-receipt", mailbox, 24 * 60 * 60) > RECEIPTS_MAX_PER_DAY:
             return
 
+        link_postularme = postulacion.link(estado)
         email_context = {
             "animal": animal,
             "tipo": self.form_type,
             "settings": settings,
+            "url_postularme": "https://{}{}".format(settings.HOST, link_postularme) if link_postularme else None,
+            "maximo_por_dia": postulacion.MAX_POR_DIA,
         }
 
         subject = "Catpuccino Adopciones - Formulario Recibido"

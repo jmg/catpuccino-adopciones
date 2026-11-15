@@ -152,6 +152,26 @@ a uuid hash, and emails both the rescuer and the applicant. `AdoptionService` re
 out of the `FieldEntry` rows **by Spanish label** ("Nombre y Apellido", "Email", …), so
 renaming a field label in the admin silently breaks parsing.
 
+**Applying for another animal with the same answers** (`services/postulacion.py`,
+`views/postulacion.py`). There are no adopter accounts: the person's "profile" is the
+pre-adoption form they already sent, opened with a private link, `/postularme/<token>/`,
+that the "form sent" page and the receipt mail carry (and that the browser keeps for two
+weeks, so the form of the next animal they look at offers "Usar mis respuestas"). The token
+is `django.core.signing` over the original form's id — unguessable, expiring
+(`VIGENCIA_DIAS`, 60), nothing stored — and deliberately **not** `EstadoFormulario.hash`,
+which the rescuer and the team know. Applying copies the `FormEntry` and its `FieldEntry`
+rows (the first answer, the animal id, is the only one that changes) into a new
+`EstadoFormulario` whose `copiado_de` points to the original, always the original and never
+another copy, and then does exactly what a fresh submission does: BuenAdoptante first, then
+the mail to the rescuer and the receipt. The rescuer's mail and form page say the answers
+were written for another animal, without naming it. Limits live in `postular()`: same
+species only (the dogs' form has other questions), never the same animal twice, and
+`MAX_POR_DIA` (3) per person per 24 h, counted in the database. The page shows nothing the
+person answered — only their first name and the animals they applied to — so a forwarded
+link does not hand over the form; and it is two steps without JS (pick with `?id=`, confirm
+with a POST), because applying sends personal data to another rescuer and cannot be undone.
+If BuenAdoptante blocks a copy the link stops working, with the same page as an expired one.
+
 `catus/signals.py` keeps the forms-builder "which animal" dropdown in sync: any `Animal` or
 `Form` save/delete rewrites that `Field.choices` string with the current adoptable animal ids.
 It finds each field by label (`ANIMAL_FIELD_LABELS`), handles cats and dogs independently so a
@@ -349,9 +369,11 @@ permission** — an attacker gets an account for free. Two rules carry the model
   views predate the mixin and inline the same check, returning plain text instead of a
   redirect; match whichever style the file already uses.
 
-Two endpoints are deliberately open and must stay that way: `/contrato/<hash>/`, where the
-adopter fills in their half without an account, and `/animal/photos/`, used by the public
-pre-adoption form (it only serves approved animals).
+Three endpoints are deliberately open and must stay that way: `/contrato/<hash>/`, where the
+adopter fills in their half without an account, `/animal/photos/`, used by the public
+pre-adoption form (it only serves approved animals), and `/postularme/<token>/`, where
+someone who already sent a form applies for another animal (the signed token is the
+permission; the page must never show the form's answers or contact details).
 
 Anything reached by a sequential id (`/formulario/<id>/…`, `/contrato_adopcion/<id>/…`) is
 enumerable, so it needs an ownership check, not just a login.

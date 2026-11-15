@@ -383,6 +383,45 @@
         margin-top: 12px;
     }
 
+    .envio-otro {
+        margin-top: 26px;
+        padding-top: 20px;
+        border-top: 1px solid var(--lavanda-borde);
+    }
+
+    .envio-otro p {
+        margin-bottom: 0;
+    }
+
+    /* "Ya completaste este formulario": usar las mismas respuestas para este animal */
+    .aviso-postularme {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 16px;
+        background: var(--lavanda);
+        border: 1px solid var(--lavanda-borde);
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--text-color);
+    }
+
+    .aviso-postularme[hidden] {
+        display: none;
+    }
+
+    .aviso-postularme div {
+        flex: 1 1 220px;
+    }
+
+    .aviso-postularme .btn {
+        flex: none;
+        margin: 0;
+    }
+
     .envio details {
         margin-top: 18px;
         text-align: left;
@@ -486,6 +525,32 @@
                 }
             })();
             </script>
+
+            {% if form_type == "preadoption" %}
+            {% comment %}
+            Quien ya mandó este formulario desde este navegador puede postularse a otro
+            animal con las mismas respuestas (services/postulacion.py). El link privado
+            quedó guardado al enviarlo (ver más abajo, donde se llama a clearForm): acá no
+            hay ningún dato de la persona, y sin ese link el aviso no aparece.
+            {% endcomment %}
+            <div id="aviso-postularme" class="aviso-postularme" hidden>
+                <div><b>Ya completaste este formulario.</b> Podés postularte{% if animal %} a {{animal.nombre}}{% endif %} con las mismas respuestas, sin escribir todo de nuevo.</div>
+                <a id="aviso-postularme-link" class="btn btn-primary" href="#">Usar mis respuestas</a>
+            </div>
+            <script>
+            (function avisoPostularme() {
+                try {
+                    var guardado = JSON.parse(localStorage.getItem("catpuccino-postularme-{{animal_type}}") || "null");
+                    // dos semanas: después hay que completarlo de nuevo, o usar el link del mail
+                    if (!guardado || !/^\/postularme\/[A-Za-z0-9_:-]+\/$/.test(guardado.link) || Date.now() - guardado.cuando > 14 * 24 * 60 * 60 * 1000) {
+                        return;
+                    }
+                    document.getElementById("aviso-postularme-link").href = guardado.link{% if animal %} + "?id={{animal.id}}"{% endif %};
+                    document.getElementById("aviso-postularme").hidden = false;
+                } catch (e) {}
+            })();
+            </script>
+            {% endif %}
 
             {% if form.intro %}
             {% comment %}
@@ -611,6 +676,14 @@
                 <p>{{form.response}}</p>
                 <p class="envio-nota">Si pusiste bien tu mail, te llega una copia de tus respuestas.</p>
                 <a class="btn btn-primary" href="/"><i class="fa fa-paw mr-2" aria-hidden="true"></i> Ver más animales en adopción</a>
+
+                {% if link_postularme %}
+                {# postularse a otro animal sin completar todo de nuevo (services/postulacion.py) #}
+                <div class="envio-otro">
+                    <p><b>¿Te gustó algún otro?</b> Podés postularte con estas mismas respuestas, sin completar el formulario de nuevo.</p>
+                    <a class="btn btn-secondary" href="{{link_postularme}}">Postularme a otro animal</a>
+                </div>
+                {% endif %}
             </div>
             {% elif bloqueado %}
 
@@ -715,6 +788,14 @@
             try {
                 clearForm();
             } catch(e) {}
+            {% if link_postularme %}
+            // Después de clearForm(), que borra todo: el link privado para postularse a otro
+            // animal con estas respuestas, para ofrecerlo en el formulario del próximo que
+            // mire (aviso-postularme). Es un link, no las respuestas.
+            try {
+                localStorage.setItem("catpuccino-postularme-{{animal_type}}", JSON.stringify({link: "{{ link_postularme|escapejs }}", cuando: Date.now()}));
+            } catch(e) {}
+            {% endif %}
             {% else %}
             try {
                 formToLocalStorage();

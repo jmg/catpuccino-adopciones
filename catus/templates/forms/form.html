@@ -51,6 +51,14 @@
         </div>
 
         <div class="form-content-wrapper">
+            {% if estado_form.copiado_de_id %}
+            {% comment %}La persona usó "postularme a otro animal con las mismas respuestas" (services/postulacion.py).{% endcomment %}
+            <div class="copia-section" role="note">
+                <i class="fa fa-copy" aria-hidden="true"></i>
+                <div><b>Usó las respuestas de un formulario anterior.</b> Lo completó el {{estado_form.copiado_de.fecha_ingreso|date:"d/m/Y"}} para otro animal y lo envió también para {{gato_nombre|default:"este"}}: las respuestas pueden nombrar a ese otro animal.</div>
+            </div>
+            {% endif %}
+
             {% if buenadoptante %}
             <div class="buenadoptante-section {% if buenadoptante.mala %}buenadoptante-mala{% endif %}">
                 <div class="section-header">
@@ -292,6 +300,24 @@
     .buenadoptante-section.buenadoptante-mala {
         background-color: #fdecee;
         border-color: #f5c2c7;
+    }
+
+    .copia-section {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        background: #fff8e5;
+        border: 1px solid #f1dca4;
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--text-color);
+    }
+
+    .copia-section i {
+        color: #a86a00;
+        flex: none;
     }
 
     .badge {

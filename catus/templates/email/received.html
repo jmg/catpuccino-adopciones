@@ -12,6 +12,12 @@ Animal o, con la opción "otro", el nombre que escribió la persona; en tránsit
 <p style="margin:0;">Si querés, también podés escribirle por Instagram:</p>
 {% include "email/_boton.html" with url=animal.cargado_por.get_instagram_link texto="Escribirle a "|add:animal.cargado_por.get_instagram margen="16px 0 8px" %}
 {% endif %}
+{% if url_postularme %}
+{% comment %}El link privado para postularse a otro animal sin completar todo de nuevo (services/postulacion.py).{% endcomment %}
+<p style="margin:20px 0 0;"><b>¿Te gustó algún otro?</b> Podés postularte con estas mismas respuestas, sin completar el formulario de nuevo (hasta {{ maximo_por_dia }} por día).</p>
+{% include "email/_boton.html" with url=url_postularme texto="Postularme a otro animal" margen="16px 0 8px" %}
+<p style="margin:0;font-size:13px;color:#6b6f80;">Este link es solo tuyo: no lo reenvíes.</p>
+{% endif %}
 {% else %}
 {% include "email/_titulo.html" with antetitulo="Formulario de tránsito recibido" titulo="¡Gracias por ofrecerte como tránsito!" %}
 <p style="margin:0 0 14px;">Ya tenemos tu formulario. El equipo lo va a revisar y se va a comunicar con vos a la brevedad.</p>

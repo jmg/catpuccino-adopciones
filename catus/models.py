@@ -336,6 +336,11 @@ class EstadoFormulario(BaseEntity):
         ("TP", "Tránsito - Perros"),
     )
     tipo = models.CharField(max_length=2, choices=tipo_choices, default="A")
+
+    #"Postularme a otro animal con las mismas respuestas" (services/postulacion.py): el
+    #formulario que la persona completó a mano y del que salió esta copia. Las copias
+    #apuntan siempre al original, nunca a otra copia.
+    copiado_de = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="copias")
     _gato = None
 
     def get_fecha_ingreso(self):

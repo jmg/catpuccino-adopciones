@@ -9,6 +9,11 @@ con |safe (test_seguridad). Las fotos son URL del sitio que arma la vista (_dato
 {% include "email/_titulo.html" %}
 <p style="margin:0;color:#4a5568;">Abajo están sus datos y todas sus respuestas. Desde el sitio podés cambiarle el estado y seguir la adopción.</p>
 
+{% if copiado_de %}
+{% comment %}La persona usó "postularme a otro animal con las mismas respuestas" (services/postulacion.py).{% endcomment %}
+<p style="margin:16px 0 0;padding:12px 16px;background-color:#fff8e5;border:1px solid #f1dca4;border-radius:10px;font-size:14px;line-height:1.5;color:#2d3748;"><b>Usó las respuestas de un formulario anterior.</b> Lo completó el {{ copiado_de.fecha_ingreso|date:"d/m/Y" }} para otro animal y lo envió también para {{ nombre_animal|default:"este" }}: las respuestas pueden nombrar a ese otro animal.</p>
+{% endif %}
+
 {% if url_formulario %}{% include "email/_boton.html" with url=url_formulario texto="Ver el formulario en el sitio" %}{% endif %}
 
 {% if ficha %}
