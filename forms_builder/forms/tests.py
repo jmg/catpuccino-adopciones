@@ -142,7 +142,8 @@ class Tests(TestCase):
         form.fields.create(label="field", field_type=NAMES[0][0],
                            required=True, visible=True)
         response = self.client.post(form.get_absolute_url(), {"foo": "bar"})
-        self.assertTrue("This field is required" in str(response.content))
+        # the site runs with USE_I18N on and LANGUAGE_CODE es-ar
+        self.assertTrue("Este campo es obligatorio" in response.content.decode())
 
     def test_form_redirect(self):
         redirect_url = 'http://example.com/foo'

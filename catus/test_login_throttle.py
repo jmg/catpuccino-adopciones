@@ -158,7 +158,8 @@ class PasswordPolicyTest(TestCase):
             self.assertFalse(get_user_model().objects.filter(email="nueva@example.com").exists(), weak)
 
     def test_the_form_says_why(self):
-        self.assertContains(self.register("12345678901"), "entirely numeric")
+        #en español: el sitio tiene prendidas las traducciones de Django (USE_I18N)
+        self.assertContains(self.register("12345678901"), "completamente por dígitos")
 
     def test_a_good_one_does(self):
         response = self.register(GOOD)

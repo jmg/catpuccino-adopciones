@@ -201,7 +201,10 @@ LANGUAGE_CODE = 'es-ar'
 
 TIME_ZONE = 'America/Argentina/Buenos_Aires'
 
-USE_I18N = False
+# Con las traducciones apagadas, los mensajes que arma Django (errores de validación de
+# los formularios, requisitos de la contraseña, el admin) salían en inglés en un sitio que
+# es todo en español. Los textos propios del sitio ya están escritos en español.
+USE_I18N = True
 
 USE_TZ = True
 
