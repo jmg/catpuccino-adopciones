@@ -1,6 +1,7 @@
 """Tests de la publicación en Instagram.
 
-Nada acá habla con la API de verdad: el stub de pyfb falla si alguien lo intenta.
+Nada acá habla con la API de verdad: ClienteGraph, lo único que le pide cosas a Graph,
+está reemplazado, y los errores de Graph se arman pasando una respuesta falsa por requests.
 Lo que se prueba son las decisiones previas, que son las que dejaron posts de más
 o de menos en la cuenta real.
 """
@@ -10,9 +11,7 @@ import shutil
 import tempfile
 from contextlib import redirect_stdout
 from datetime import timedelta
-from email.message import Message
 from unittest import mock
-from urllib.error import HTTPError
 
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -214,12 +213,12 @@ class PublishImagenDeInstagramTest(TestCase):
         self.animal = make_animal(nombre="Willy", cargado_por=make_user())
         FacebookAccount.objects.create(facebook_token="x", business_account_id="1")
 
-        #el borde: pyfb es lo único que habla con Graph, así que se reemplaza entero y
-        #queda anotado cada pedido que la publicación hubiera mandado
+        #el borde: ClienteGraph es lo único que habla con Graph, así que se reemplaza
+        #entero y queda anotado cada pedido que la publicación hubiera mandado
         self.pedidos = []
-        self.patcher = mock.patch("catus.services.facebook.Pyfb")
-        Pyfb = self.patcher.start()
-        Pyfb.return_value.request.side_effect = self.responder
+        self.patcher = mock.patch("catus.services.facebook.ClienteGraph")
+        ClienteGraph = self.patcher.start()
+        ClienteGraph.return_value.request.side_effect = self.responder
 
     def tearDown(self):
         self.patcher.stop()
@@ -312,22 +311,27 @@ class PublishImagenDeInstagramTest(TestCase):
 
 
 def error_de_graph(cuerpo, codigo_http=400):
-    """Un 400 de Graph tal como llega: pyfb pide con urlopen, que levanta HTTPError."""
+    """Un 400 de Graph tal como llega: la respuesta pasa por el mismo graph_post que usa la
+    publicación (con requests reemplazado) y sale el GraphError que levanta."""
 
-    headers = Message()
-    headers["Content-Type"] = "application/json"
-    headers["x-fb-trace-id"] = "AbCdEfGhIjK"
+    from catus.services.facebook import GraphError
 
-    if isinstance(cuerpo, str):
-        cuerpo = cuerpo.encode("utf-8")
+    if isinstance(cuerpo, bytes):
+        cuerpo = cuerpo.decode("utf-8")
 
-    return HTTPError(
-        "https://graph.facebook.com/v5.0/17841400000000000/media",
-        codigo_http,
-        "Bad Request",
-        headers,
-        io.BytesIO(cuerpo),
-    )
+    respuesta = mock.Mock(status_code=codigo_http, text=cuerpo, headers={"x-fb-trace-id": "AbCdEfGhIjK"})
+    try:
+        respuesta.json.return_value = json.loads(cuerpo)
+    except ValueError:
+        respuesta.json.side_effect = ValueError("no es JSON")
+
+    with mock.patch("catus.services.facebook.requests.post", return_value=respuesta):
+        try:
+            FacebookApiService.graph_post("17841400000000000/media", access_token="x", caption="texto")
+        except GraphError as error:
+            return error
+
+    raise AssertionError("graph_post no levantó GraphError con un {}".format(codigo_http))
 
 
 TOKEN_VENCIDO = json.dumps({"error": {
@@ -400,7 +404,8 @@ class ShowErrorTest(TestCase):
         self.assertIsInstance(mensaje, str)
 
     def test_leerlo_dos_veces_no_rompe(self):
-        """El cuerpo de un HTTPError se lee UNA sola vez: la segunda viene vacío."""
+        """Con pyfb el cuerpo de un HTTPError se leía UNA sola vez y la segunda venía vacío:
+        el mismo error tiene que decir lo mismo cada vez que se lo muestra."""
 
         error = error_de_graph(TOKEN_VENCIDO)
 
@@ -422,7 +427,7 @@ class ShowErrorTest(TestCase):
 class PublicacionConGraphFalso(TestCase):
     """Base para lo que se mira mirando los pedidos que salieron a Instagram.
 
-    Mismo borde que el resto: pyfb es lo único que llega a Graph y está reemplazado
+    Mismo borde que el resto: ClienteGraph es lo único que llega a Graph y está reemplazado
     entero, así que nada de esto habla con la API.
     """
 
@@ -438,9 +443,9 @@ class PublicacionConGraphFalso(TestCase):
 
         self.pedidos = []
         self.falla_si = None
-        self.patcher = mock.patch("catus.services.facebook.Pyfb")
-        Pyfb = self.patcher.start()
-        Pyfb.return_value.request.side_effect = self.responder
+        self.patcher = mock.patch("catus.services.facebook.ClienteGraph")
+        ClienteGraph = self.patcher.start()
+        ClienteGraph.return_value.request.side_effect = self.responder
 
     def tearDown(self):
 

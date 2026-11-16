@@ -1,5 +1,4 @@
 from ..models import Animal, FacebookAccount
-from pyfb.pyfb import Pyfb
 from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
@@ -19,6 +18,47 @@ logger = logging.getLogger(__name__)
 
 class MediaError(Exception):
     """Instagram marcó el contenedor como fallado: reintentar no lo va a arreglar."""
+
+
+class GraphError(Exception):
+    """Graph contestó con un error.
+
+    El JSON de error que manda (message, code, error_subcode, error_user_msg) queda entero
+    en .error, que es lo que lee show_error: el código es lo único estable para distinguir
+    un token vencido de un tope de posteos. str() es el mensaje, como en el graph_get de
+    antes. Sin JSON (un 502 del proxy, un cuerpo vacío) .error es None y str() dice el status.
+    """
+
+    def __init__(self, error=None, status=None, cuerpo=""):
+
+        self.error = error if isinstance(error, dict) else None
+        self.status = status
+
+        if self.error is not None:
+            mensaje = self.error.get("message") or str(self.error)
+        else:
+            mensaje = "Graph contestó {}: {}".format(status, (cuerpo or "sin cuerpo").strip()[:200])
+
+        super().__init__(mensaje)
+
+
+class ClienteGraph:
+    """Lo que se le pide a Graph con un token: sin datos es un GET, con datos un POST.
+
+    Es lo que hacía pyfb (0.6.0, abandonado), al que reemplaza, pero con requests, timeout y
+    la versión de Graph de FacebookApiService.GRAPH: pyfb pedía a la v5.0, sin timeout, y
+    un error llegaba como HTTPError con el motivo escondido en el cuerpo.
+    """
+
+    def __init__(self, token):
+        self.token = token
+
+    def request(self, path, **data):
+
+        if data:
+            return FacebookApiService.graph_post(path, access_token=self.token, **data)
+
+        return FacebookApiService.graph_get(path, access_token=self.token)
 
 
 class FacebookApiService:
@@ -103,16 +143,12 @@ class FacebookApiService:
         #post sin el final que ningún post
         return cls.recortar_texto(arriba + abajo, cls.MAX_CARACTERES_TEXTO)
 
-    def __init__(self, token=None, account=None, raw_data=False):
-
-        facebook = Pyfb(settings.FACEBOOK_APP_ID, raw_data=raw_data)
+    def __init__(self, token=None, account=None):
 
         if account:
             token = account.facebook_token
 
-        facebook.set_access_token(token)
-
-        self.facebook = facebook
+        self.facebook = ClienteGraph(token)
         self.account = account
 
     @classmethod
@@ -130,13 +166,11 @@ class FacebookApiService:
     @classmethod
     def get_long_lived_token(cls, token):
 
-        params = "grant_type=fb_exchange_token&client_id={}&client_secret={}&fb_exchange_token={}".format(settings.FACEBOOK_APP_ID, settings.FACEBOOK_APP_SECRET, token)
-        url = "https://graph.facebook.com/v4.0/oauth/access_token?{}".format(params)
-        response = requests.get(url)
-
-        data = response.json()
-        if "error" in data:
-            raise Exception(data["error"]["message"])
+        #pedía a la v4.0, sin timeout: la versión es la de todo lo demás (GRAPH)
+        data = cls.graph_get(
+            "oauth/access_token", grant_type="fb_exchange_token", client_id=settings.FACEBOOK_APP_ID,
+            client_secret=settings.FACEBOOK_APP_SECRET, fb_exchange_token=token,
+        )
 
         if not "access_token" in data:
             raise Exception(u"{}".format(data))
@@ -147,8 +181,10 @@ class FacebookApiService:
     @classmethod
     def get_long_lived_token_instagram(cls, token):
 
-        url = "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token={}".format(token)
-        response = requests.get(url)
+        response = requests.get(
+            "https://graph.instagram.com/refresh_access_token",
+            params={"grant_type": "ig_refresh_token", "access_token": token}, timeout=cls.TIMEOUT,
+        )
 
         data = response.json()
         if "error" in data:
@@ -160,20 +196,52 @@ class FacebookApiService:
         expire_in = cls.get_expires_in(data)
         return data["access_token"], expire_in
 
-    #Versión de Graph para lo que se pide con requests. A la v4.0 de arriba Meta la
-    #redirige sola a la más vieja que sigue viva.
+    #La versión de Graph, una sola para todo lo que se le pide. Antes había tres: la v5.0 de
+    #pyfb para publicar, la v4.0 para el token y esta. A una versión que ya no existe Meta
+    #la pasa sola a la más vieja que sigue viva.
     GRAPH = "https://graph.facebook.com/v21.0"
+
+    #Ninguna llamada a Graph o a Instagram espera más que esto. Sin timeout, un Graph
+    #colgado dejaba colgado al cron o al pedido web que publicaba.
+    TIMEOUT = 20
+
+    @classmethod
+    def graph_url(cls, path):
+
+        return "{}/{}".format(cls.GRAPH, path.lstrip("/"))
+
+    @classmethod
+    def leer_respuesta(cls, response):
+        """Lo que contestó Graph, o GraphError si contestó un error."""
+
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+
+        if isinstance(data, dict) and data.get("error"):
+            raise GraphError(data["error"], response.status_code)
+
+        if response.status_code >= 400 or data is None:
+            raise GraphError(None, response.status_code, response.text)
+
+        return data
 
     @classmethod
     def graph_get(cls, path, **params):
+        """GET a Graph. path puede traer su propia query string (?fields=...)."""
 
-        response = requests.get("{}/{}".format(cls.GRAPH, path), params=params, timeout=20)
-        data = response.json()
+        response = requests.get(cls.graph_url(path), params=params, timeout=cls.TIMEOUT)
+        return cls.leer_respuesta(response)
 
-        if "error" in data:
-            raise Exception(data["error"].get("message") or data["error"])
+    @classmethod
+    def graph_post(cls, path, **data):
+        """POST a Graph, con los datos (y el token) en el cuerpo y no en la URL. Lo que no es
+        texto (el destinatario de un mensaje) va como JSON, que es como lo lee Graph."""
 
-        return data
+        datos = {clave: json.dumps(valor) if isinstance(valor, (dict, list)) else valor for clave, valor in data.items()}
+        response = requests.post(cls.graph_url(path), data=datos, timeout=cls.TIMEOUT)
+        return cls.leer_respuesta(response)
 
     @classmethod
     def get_page_token(cls, user_token, page_id):
@@ -338,12 +406,11 @@ class FacebookApiService:
                 raise
 
             except Exception as e:
-                #show_error y no str(e): pyfb pide con urlopen, así que un error de Graph
-                #llega como HTTPError y str() da "HTTP Error 400: Bad Request", con el
-                #motivo -que viene en el cuerpo JSON- tirado a la basura. Este texto
-                #termina en instagram_error y es lo que el equipo lee en
-                #/tools/colainstagram/: sin esto, un token vencido y un tope de posteos
-                #alcanzado se ven exactamente iguales y no hay con qué decidir qué hacer.
+                #show_error y no str(e): str() es solo el mensaje, y el código de Graph es
+                #lo que distingue un token vencido de un tope de posteos alcanzado. Este
+                #texto termina en instagram_error y es lo que el equipo lee en
+                #/tools/colainstagram/: sin el código, los dos se ven exactamente iguales y
+                #no hay con qué decidir qué hacer.
                 error_str = cls.show_error(e)
                 if "Media ID is not available" in error_str or "does not exist" in error_str.lower():
                     raise Exception("Media container {} is not available: {}".format(creation_id, error_str))
@@ -612,51 +679,18 @@ class FacebookApiService:
 
     @classmethod
     def leer_error_de_graph(cls, e):
-        """El JSON de error que manda Graph en el cuerpo de la respuesta, o None.
+        """El JSON de error que mandó Graph (el de GraphError), o None si e no es de Graph."""
 
-        Esto corre en el camino de error, así que no puede tirar nada por su cuenta: el
-        cuerpo puede venir vacío, no ser JSON, o estar ya leído.
-        """
-
-        leer = getattr(e, "read", None)
-        if not callable(leer):
-            return None
-
-        try:
-            #HTTPError es también un archivo, y el cuerpo se lee UNA sola vez: si alguien
-            #ya lo leyó, la segunda vez viene vacío
-            cuerpo = leer()
-        except Exception:
-            return None
-
-        if not cuerpo:
-            return None
-
-        if isinstance(cuerpo, bytes):
-            cuerpo = cuerpo.decode("utf-8", "replace")
-
-        try:
-            datos = json.loads(cuerpo)
-        except (ValueError, TypeError):
-            return None
-
-        if not isinstance(datos, dict):
-            return None
-
-        error = datos.get("error")
-        if not isinstance(error, dict):
-            return None
-
-        return error
+        error = getattr(e, "error", None)
+        return error if isinstance(error, dict) else None
 
     @classmethod
     def show_error(cls, e):
 
-        #pyfb pide con urlopen, así que un 400 de Graph llega como HTTPError: hasattr(e,
-        #"info") daba True, pero e.info() devuelve un HTTPMessage y no un dict, fallaba el
-        #isinstance y esto terminaba devolviendo la lista de headers HTTP. El motivo real
-        #viene en el cuerpo, que no se leía nunca: token vencido, tope diario de posteos y
-        #cuenta mal vinculada se veían los tres igual y no había con qué distinguirlos.
+        #Con pyfb un 400 de Graph llegaba como HTTPError y esto devolvía la lista de headers
+        #HTTP, con el motivo -que viene en el cuerpo- sin leer: token vencido, tope diario de
+        #posteos y cuenta mal vinculada se veían los tres igual. GraphError trae el JSON, y
+        #el código va adelante, que es lo que lee el cron (publish.CODIGO_DE_GRAPH).
         error = cls.leer_error_de_graph(e)
 
         if error is not None:
@@ -847,7 +881,7 @@ class FacebookApiService:
         try:
             data = service.facebook.request(url, **data)
         except Exception as e:
-            #e.__dict__ de un HTTPError no dice nada útil: show_error lee el motivo de Graph
+            #show_error trae el código y el motivo de Graph
             logger.warning("No se pudo mandar el mensaje por Instagram: %s", cls.show_error(e))
 
 
