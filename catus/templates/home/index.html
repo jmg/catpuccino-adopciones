@@ -1,6 +1,22 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% comment %}
+Lo que la portada dice de sí misma en Google y en WhatsApp. El perfil de cada rescatista
+(usuario/animales.html) extiende esta página: por eso el "if main", y ahí pisa los suyos.
+Con ?buscar= o ?tipo= la canónica sigue siendo la portada.
+{% endcomment %}
+{% block descripcion %}{% if main %}{{descripcion_portada}}{% else %}{{block.super}}{% endif %}{% endblock %}
+{% block canonical %}{% if main %}<link rel="canonical" href="{{url_canonica}}">{% endif %}{% endblock %}
+{% block og_descripcion %}{% if main %}{{descripcion_portada}}{% else %}{{block.super}}{% endif %}{% endblock %}
+{% block og_imagen %}{% if main %}
+    <meta property="og:image" content="{{imagen_para_compartir}}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Catpuccino Adopciones">
+{% endif %}{% endblock %}
+{% block twitter_card %}<meta name="twitter:card" content="{% if main %}summary_large_image{% else %}summary{% endif %}">{% endblock %}
+
 {% block header %}
 {% comment %}El nombre del sitio ya está en la barra de arriba: acá va lo que se viene a hacer.{% endcomment %}
 <div class="site-heading">

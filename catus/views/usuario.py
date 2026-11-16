@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, render
 from django.views.generic import TemplateView
 from catus.forms import CatusUserForm
 from catus.models import Animal, CatusUser
+from catus.services import ficha
 from django.http import Http404, HttpResponse
 from catus.utils import get_context_columns, send_html_email
 from django.conf import settings
@@ -66,6 +67,8 @@ class AnimalesView(BaseView):
         context["is_user"] = True
         context["perros_en_adopcion"] = bool([animal for animal in context["animals"] if animal.tipo == "P"])
         context["SSL_HOST"] = settings.SSL_HOST
+        #/<handle>/ y /usuario/<id>/animales/ son la misma página: los buscadores, una sola
+        context["url_canonica"] = settings.SSL_HOST + ficha.url_del_perfil(catus_user)
 
         return BaseView.render_to_response(self, context)
 
