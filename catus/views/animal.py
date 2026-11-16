@@ -516,7 +516,10 @@ class EditView(LoginRequiredMixin, BaseView):
                         #que tiene el equipo para frenarlo.
                         InstagramAutoService().agendar(animal)
 
-                        self.avisar_del_animal_nuevo(animal)
+                        #sin mail al equipo: ya está en el sitio y no espera a nadie. El
+                        #mail decía "espera la aprobación del equipo" de cada alta que la
+                        #IA había aprobado sola. Lo que queda por frenar es el posteo, y
+                        #eso se ve en /tools/colainstagram/.
                         self.request.session["is_new_animal_approved"] = True
                     else:
                         self.avisar_del_animal_nuevo(animal)

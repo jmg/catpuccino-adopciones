@@ -345,6 +345,75 @@ class NoPublicarTest(ColaTestCase):
         self.assertEqual(mail.outbox[0].subject, "Catpuccino Adopciones - Editado ya no está publicado")
 
 
+@override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", **SITIO)
+class MailAlEquipoEnElAltaTest(TestCase):
+    """El mail "Nuevo animal para revisar… espera la aprobación del equipo" salía en todas
+    las altas, también en las que la revisión ya había aprobado y estaban en el sitio."""
+
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+
+        self.factory = RequestFactory()
+        self.rescatista = make_user(email="rescatista@catpuccino.test")
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def alta(self, animales, descripcion="Se ve un gato."):
+
+        from catus.views.animal import EditView
+
+        request = self.factory.post("/animales/", {
+            "tipo": "G", "estado": "D", "nombre": "Willy", "edad": "2 años", "sexo": "M",
+            "zona": "CABA", "datos": "Gatito en adopción.",
+            "animalimage_set-TOTAL_FORMS": "1", "animalimage_set-INITIAL_FORMS": "0",
+            "animalimage_set-MIN_NUM_FORMS": "0", "animalimage_set-MAX_NUM_FORMS": "1000",
+            "animalimage_set-0-image": uploaded_photo(),
+        })
+        request.user = self.rescatista
+        SessionMiddleware(lambda request: None).process_request(request)
+        request.session.save()
+
+        view = EditView()
+        view.request = request
+
+        respuesta = json.dumps({"animales": animales, "descripcion": descripcion,
+                                "texto_sospechoso": False, "inapropiado": False})
+        with mock.patch.object(ModeracionService, "_preguntar", return_value=respuesta):
+            view.req(is_post=True)
+
+        return Animal.objects.get(nombre="Willy")
+
+    def test_el_alta_que_se_aprobo_sola_no_avisa_al_equipo(self):
+
+        animal = self.alta(["gato"])
+
+        self.assertTrue(animal.aprobado, "el test no probó el caso: la IA no lo aprobó")
+        self.assertEqual(len(mail.outbox), 0, "le avisó al equipo de algo que no espera nada")
+
+    def test_el_que_espera_avisa_con_el_motivo_y_el_boton_a_la_cola(self):
+
+        animal = self.alta([], "No se ve ningún animal.")
+
+        self.assertFalse(animal.aprobado)
+        self.assertEqual(len(mail.outbox), 1)
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn("No se ve ningún animal", html)
+        self.assertIn('href="https://adopciones.test/tools/animalespendientes/#animal-{}"'.format(animal.id), html)
+        self.assertNotIn("/animal/aprobar/", html)
+
+    def test_un_fallo_del_mail_no_voltea_el_alta_que_espera(self):
+
+        with mock.patch.object(MailService, "send_new_animal_mail", side_effect=Exception("sendgrid caído")):
+            animal = self.alta([], "No se ve ningún animal.")
+
+        self.assertFalse(animal.aprobado)
+        self.assertIn(animal, PendientesService().esperando())
+
+
 class IndiceDeHerramientasTest(TestCase):
 
     def setUp(self):
