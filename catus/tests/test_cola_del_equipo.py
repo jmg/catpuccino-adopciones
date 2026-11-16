@@ -345,6 +345,110 @@ class NoPublicarTest(ColaTestCase):
         self.assertEqual(mail.outbox[0].subject, "Catpuccino Adopciones - Editado ya no está publicado")
 
 
+@override_settings(**SITIO)
+class VuelveALaColaTest(TestCase):
+    """El camino de vuelta: el dueño edita el que no se publicó y vuelve a la cola."""
+
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+
+        self.factory = RequestFactory()
+        self.duenio = make_user(email="duenio@catpuccino.test")
+        self.equipo = make_user(email="equipo@catpuccino.test", is_superuser=True, is_staff=True)
+        self.animal = no_publicado(nombre="Willy", cargado_por=self.duenio, fecha_ingreso=hace(200),
+                                   no_publicar_motivo="Fotos o datos insuficientes")
+        make_animal_image(animal=self.animal)
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def editar(self, user=None, **cambios):
+
+        from catus.views.animal import EditView
+
+        animal = self.animal
+        imagenes = list(animal.get_images())
+        datos = {
+            "tipo": animal.tipo, "estado": animal.estado, "nombre": animal.nombre,
+            "edad": animal.edad or "", "sexo": animal.sexo, "zona": animal.zona or "",
+            "datos": animal.datos or "",
+            "animalimage_set-TOTAL_FORMS": str(len(imagenes)),
+            "animalimage_set-INITIAL_FORMS": str(len(imagenes)),
+            "animalimage_set-MIN_NUM_FORMS": "0",
+            "animalimage_set-MAX_NUM_FORMS": "1000",
+        }
+        for i, imagen in enumerate(imagenes):
+            datos["animalimage_set-%d-id" % i] = str(imagen.id)
+            datos["animalimage_set-%d-animal" % i] = str(animal.id)
+        datos.update(cambios)
+
+        request = self.factory.post("/animales/%s/" % animal.id, datos)
+        request.user = user or self.duenio
+        SessionMiddleware(lambda request: None).process_request(request)
+        request.session.save()
+
+        view = EditView()
+        view.request = request
+        view.req(is_post=True, animal_id=str(animal.id))
+
+        self.animal.refresh_from_db()
+        return request
+
+    def test_editarlo_lo_devuelve_a_la_cola(self):
+        """Tal cual lo dice el mail: "si sigue en adopción, editalo y lo volvemos a mirar".
+        Vuelve a "En adopción", sin aprobar, y espera desde ahora."""
+
+        self.editar(zona="Palermo")
+
+        self.assertEqual(self.animal.estado, "D")
+        self.assertFalse(self.animal.aprobado)
+        self.assertIsNone(self.animal.no_publicar_el)
+        self.assertIsNone(self.animal.no_publicar_motivo)
+        self.assertGreater(self.animal.fecha_ingreso, hace(1), "el tiempo en la cola no arrancó de nuevo")
+        self.assertIn(self.animal, PendientesService().esperando())
+
+    def test_el_equipo_recibe_el_mail_de_para_revisar(self):
+
+        self.editar(zona="Palermo")
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["catpuccino.ok@gmail.com"])
+        self.assertEqual(mail.outbox[0].subject, "Catpuccino Adopciones - Vuelve a revisión: Willy")
+        self.assertIn("Fotos o datos insuficientes", mail.outbox[0].alternatives[0][0])
+
+    def test_no_se_aprueba_solo_aunque_la_ia_diga_que_esta_bien(self):
+        """Una persona ya decidió una vez que no: lo vuelve a mirar una persona."""
+
+        with override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k"), \
+                mock.patch.object(ModeracionService, "_preguntar", return_value=json.dumps({
+                    "animales": ["gato"], "descripcion": "Se ve un gato.",
+                    "texto_sospechoso": False, "inapropiado": False,
+                })):
+            self.editar(datos="Ahora con más datos")
+
+        self.assertEqual(self.animal.revision_ia_estado, Animal.REVISION_OK)
+        self.assertFalse(self.animal.aprobado)
+
+    def test_si_lo_edita_alguien_del_equipo_no_vuelve(self):
+        """Corregirle un dato no deshace la decisión de no publicarlo."""
+
+        self.editar(user=self.equipo, zona="Palermo")
+
+        self.assertTrue(self.animal.no_se_publico())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_si_lo_marca_adoptado_no_vuelve_a_la_cola(self):
+
+        self.editar(estado="A")
+
+        self.assertEqual(self.animal.estado, "A")
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertNotIn(self.animal, PendientesService().esperando())
+
+
 @override_settings(MODERACION_IA_ACTIVA=True, OPENIA_API_KEY="k", **SITIO)
 class MailAlEquipoEnElAltaTest(TestCase):
     """El mail "Nuevo animal para revisar… espera la aprobación del equipo" salía en todas
@@ -412,6 +516,62 @@ class MailAlEquipoEnElAltaTest(TestCase):
 
         self.assertFalse(animal.aprobado)
         self.assertIn(animal, PendientesService().esperando())
+
+
+class PanelDelRescatistaTest(TestCase):
+    """En el panel, lo que no se publicó dice eso y por qué, no "En revisión" para siempre."""
+
+    def setUp(self):
+        self.rescatista = make_user()
+        self.client.force_login(self.rescatista)
+
+    def panel(self):
+        return self.client.get("/accounts/profile/").content.decode()
+
+    def test_dice_que_no_se_publico_y_por_que(self):
+
+        animal = no_publicado(nombre="Willy", cargado_por=self.rescatista, no_publicar_motivo="Repetido: <ya está>")
+
+        html = self.panel()
+
+        self.assertIn("No se publicó", html)
+        self.assertIn("Motivo: Repetido: &lt;ya está&gt;", html, "el motivo sale escapado")
+        self.assertIn("Si sigue en adopción, editalo y lo volvemos a mirar.", html)
+        self.assertNotIn("En revisión", html)
+        self.assertNotIn("Publicado hace más de 30 días", html)
+        self.assertNotIn('id="update-estado-animal-expirado-{}"'.format(animal.id), html,
+                         "se republica editándolo, no con un clic")
+
+    def test_no_le_pregunta_si_sigue_en_adopcion(self):
+        """Esa tarjeta es para lo que expiró solo: republicar con un clic es justo lo que
+        no tiene que pasar con lo que el equipo decidió no publicar."""
+
+        no_publicado(nombre="Willy", cargado_por=self.rescatista)
+
+        self.assertNotIn("¿Siguen en adopción?", self.panel())
+
+    def test_el_motivo_del_archivo_no_repite_como_volver(self):
+
+        no_publicado(nombre="Willy", cargado_por=self.rescatista, no_publicar_motivo=MOTIVO_SIN_REVISION)
+
+        self.assertEqual(self.panel().count("editalo y lo volvemos a mirar"), 1)
+
+    def test_lo_que_espera_sigue_diciendo_en_revision(self):
+
+        make_animal(nombre="Willy", cargado_por=self.rescatista, aprobado=False)
+
+        html = self.panel()
+
+        self.assertIn("En revisión", html)
+        self.assertNotIn("No se publicó", html)
+
+    def test_si_alguien_lo_vuelve_a_poner_en_adopcion_ya_no_dice_que_no_se_publico(self):
+        """"Republicar" (MarcarEnAdopcion) no limpia la fecha: el panel no puede seguir
+        diciendo que no se publicó de algo que volvió a la cola."""
+
+        no_publicado(nombre="Willy", cargado_por=self.rescatista, estado="D")
+
+        self.assertNotIn("No se publicó", self.panel())
 
 
 class IndiceDeHerramientasTest(TestCase):

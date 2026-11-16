@@ -176,21 +176,53 @@ class EditView(LoginRequiredMixin, BaseView):
 
         InstagramAutoService().agendar(animal)
 
-    def avisar_del_animal_nuevo(self, animal):
-        """Le avisa al equipo del alta. Un fallo del mail no puede voltear el alta.
+    def avisar_del_animal_nuevo(self, animal, **datos):
+        """Le avisa al equipo que un animal espera su aprobación. Un fallo del mail no
+        puede voltear el alta.
 
         `send_html_email` reintenta tres veces y después vuelve a lanzar (utils.py), así
         que una API key vencida de SendGrid o un 429 le devolvían un 500 al rescatista con
-        el animal YA guardado, ya revisado, ya aprobado y ya agendado para Instagram: la
-        persona ve un error, no sabe que quedó cargado, y si vuelve a intentar carga un
-        duplicado. Es el mismo criterio que `aprobar_animales` en admin.py y que
-        `AprobarView`, que ya lo tenían.
+        el animal YA guardado y ya revisado: la persona ve un error, no sabe que quedó
+        cargado, y si vuelve a intentar carga un duplicado. Es el mismo criterio que
+        `aprobar_animales` en admin.py y que `AprobarView`, que ya lo tenían.
         """
 
         try:
-            MailService().send_new_animal_mail(animal)
+            MailService().send_new_animal_mail(animal, **datos)
         except Exception:
             logger.exception("No se pudo avisar del alta de %s", animal.id)
+
+    def no_se_publico_y_lo_edita_su_duenio(self, animal):
+        """Si este guardado es el dueño editando un animal que el equipo decidió no publicar.
+
+        Es el camino de vuelta que le indican el mail y el panel ("si sigue en adopción,
+        editalo y lo volvemos a mirar"). Sólo el dueño: si alguien del equipo entra a
+        corregirle un dato, la decisión de no publicarlo no se deshace por eso.
+        """
+
+        return (
+            animal is not None
+            and animal.no_se_publico()
+            and animal.cargado_por_id == self.request.user.id
+        )
+
+    def volver_a_la_cola(self, animal):
+        """Lo deja otra vez esperando la aprobación del equipo, desde ahora.
+
+        fecha_ingreso es desde cuándo espera en la cola y desde cuándo corre el mes de
+        publicado (expirar_animales): las dos cosas arrancan de nuevo. El "Expirado" que le
+        dejó "No publicar" vuelve a "En adopción", que es lo que el dueño vino a decir; si en
+        el form lo marcó reservado o adoptado, eso se respeta.
+        """
+
+        if animal.estado == "E":
+            animal.estado = "D"
+
+        animal.aprobado = False
+        animal.no_publicar_el = None
+        animal.no_publicar_motivo = None
+        animal.expiro_el = None
+        animal.fecha_ingreso = timezone.now()
 
     def get_error_messages(self, animal_form, image_form_set):
         """Arma la lista de errores que ve el rescatista cuando no se puede guardar.
@@ -328,6 +360,11 @@ class EditView(LoginRequiredMixin, BaseView):
 
         if is_post:
 
+            #antes de armar el form: al validarlo, el form le escribe al animal lo que llegó
+            #en el POST, y el estado que trae puede no ser ya el "E" de "No publicar"
+            vuelve_a_la_cola = self.no_se_publico_y_lo_edita_su_duenio(animal)
+            motivo_anterior = animal.no_publicar_motivo if vuelve_a_la_cola else None
+
             animal_form = AnimalForm(self.request.POST, instance=animal)
             image_form_set = ImageFormSet(self.request.POST, self.request.FILES, instance=animal)
             instagram_images = self.get_instagram_images()
@@ -380,6 +417,9 @@ class EditView(LoginRequiredMixin, BaseView):
                         animal.ig_url_for_chatgpt = self.request.POST.get("ig_url_for_chatgpt")
                     if self.request.POST.get("chatgpt_response"):
                         animal.chatgpt_response = self.request.POST.get("chatgpt_response")
+
+                    if vuelve_a_la_cola:
+                        self.volver_a_la_cola(animal)
 
                     animal.save()
 
@@ -467,6 +507,15 @@ class EditView(LoginRequiredMixin, BaseView):
 
                 if cambio_lo_revisable and not is_new_animal:
                     ModeracionService().revisar_y_guardar(animal)
+
+                #El dueño editó uno que el equipo no publicó: vuelve a la cola y el equipo se
+                #entera como de un alta, después de la revisión para que el mail diga lo que
+                #vio. No se auto-aprueba aunque la IA diga OK: una persona ya decidió una vez
+                #que no, así que lo vuelve a mirar una persona. Si lo marcó adoptado no espera
+                #nada.
+                if vuelve_a_la_cola and animal.estado in ("D", "R"):
+                    self.avisar_del_animal_nuevo(animal, vuelve=True, motivo_anterior=motivo_anterior)
+                    self.request.session["is_new_animal"] = True
 
                 if is_new_animal:
 
