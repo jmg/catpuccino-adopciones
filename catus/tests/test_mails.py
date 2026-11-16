@@ -133,10 +133,119 @@ class PlantillasTest(TestCase):
         self.assertNotIn("https://adopciones.testhttps://", html)
         self.assertIn("https://adopciones.test/refugiomichi/", html)
 
-    def test_animal_nuevo_al_equipo_con_el_boton_de_aprobar(self):
+    def test_animal_nuevo_al_equipo_lleva_a_la_cola_y_no_aprueba(self):
+        """El botón era un link que aprobaba con un GET: lo aprobaba cualquier cosa que
+        abriera el link (la vista previa del mail, el antivirus que revisa los links). Ahora
+        lleva a la cola, donde aprobar es un POST."""
 
         MailService().send_new_animal_mail(self.gato)
 
         html = mail.outbox[0].alternatives[0][0]
-        self.assertIn('href="https://adopciones.test/animal/aprobar/?id={}"'.format(self.gato.id), html)
+        self.assertIn('href="https://adopciones.test/tools/animalespendientes/#animal-{}"'.format(self.gato.id), html)
+        self.assertNotIn("/animal/aprobar/", html)
         self.assertIn("<b>Muy</b> mimosa", html, "la descripción pasa por html_seguro, como en el sitio")
+
+    def test_animal_nuevo_al_equipo_con_lo_que_dijo_la_revision(self):
+        """Es lo primero que hay que mirar, y antes había que entrar al sitio para verlo."""
+
+        self.gato.revision_ia_estado = "R"
+        self.gato.revision_ia_motivo = "No se ve ningún animal en las fotos."
+        self.gato.save()
+
+        MailService().send_new_animal_mail(self.gato)
+
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn("Revisión automática", html)
+        self.assertIn("Revisar a mano", html)
+        self.assertIn("No se ve ningún animal en las fotos.", html)
+
+    def test_el_que_vuelve_a_revision_dice_por_que_no_se_habia_publicado(self):
+
+        MailService().send_new_animal_mail(self.gato, vuelve=True, motivo_anterior="Repetido: ya está como <Michi>")
+
+        mensaje = mail.outbox[0]
+        html = mensaje.alternatives[0][0]
+        self.assertEqual(mensaje.subject, "Catpuccino Adopciones - Vuelve a revisión: Michi")
+        self.assertIn("Vuelve a revisión", html)
+        self.assertIn("Repetido: ya está como &lt;Michi&gt;", html, "el motivo es texto: va escapado")
+
+
+@override_settings(**SITIO)
+class NoPublicadoMailTest(TestCase):
+    """Al rescatista, cuando el equipo decide no publicar su animal ("No publicar" en la
+    cola, o archivar_pendientes). Antes no se le decía nada: el animal quedaba "En revisión"
+    para siempre y la persona no sabía por qué ni qué hacer."""
+
+    def setUp(self):
+        self.rescatista = make_user(email="rescatista@catpuccino.test")
+        self.gato = make_animal(nombre="Michi", cargado_por=self.rescatista, aprobado=False)
+
+    def html(self):
+
+        return mail.outbox[0].alternatives[0][0]
+
+    def test_dice_cual_el_motivo_y_como_volver(self):
+
+        MailService().send_mail_no_publicado(self.rescatista, [self.gato], "Fotos o datos insuficientes")
+
+        mensaje = mail.outbox[0]
+        self.assertEqual(mensaje.to, ["rescatista@catpuccino.test"])
+        self.assertEqual(mensaje.subject, "Catpuccino Adopciones - Michi no se publicó")
+        self.assertIn("Michi no se publicó", self.html())
+        self.assertIn("Fotos o datos insuficientes", self.html())
+        self.assertIn("Si sigue en adopción, editalo y lo volvemos a mirar.", self.html())
+        self.assertIn('href="https://adopciones.test/animales/{}/"'.format(self.gato.id), self.html())
+
+    def test_sin_motivo_igual_dice_como_volver(self):
+
+        MailService().send_mail_no_publicado(self.rescatista, [self.gato], None)
+
+        self.assertNotIn("Motivo", self.html())
+        self.assertIn("Si sigue en adopción, editalo y lo volvemos a mirar.", self.html())
+
+    def test_el_motivo_que_ya_dice_como_volver_no_se_repite(self):
+
+        from catus.services.pendientes import MOTIVO_SIN_REVISION
+
+        MailService().send_mail_no_publicado(self.rescatista, [self.gato], MOTIVO_SIN_REVISION)
+
+        #en el cuerpo: el resumen oculto que muestra la bandeja de entrada lo dice siempre
+        cuerpo = self.html().split('class="mail-cuerpo"')[1]
+        self.assertEqual(cuerpo.count("editalo y lo volvemos a mirar"), 1)
+
+    def test_el_nombre_y_el_motivo_van_escapados(self):
+
+        self.gato.nombre = "<img src=x onerror=alert(1)>"
+        self.gato.save()
+
+        MailService().send_mail_no_publicado(self.rescatista, [self.gato], "Otro: <b>raro</b>")
+
+        self.assertNotIn("<img src=x", self.html())
+        self.assertNotIn("<b>raro</b>", self.html())
+
+    def test_varios_animales_van_en_un_solo_mail(self):
+
+        otro = make_animal(nombre="Pelusa", cargado_por=self.rescatista, aprobado=False)
+
+        MailService().send_mail_no_publicado(self.rescatista, [self.gato, otro], "Pasó mucho tiempo")
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, "Catpuccino Adopciones - 2 animales no se publicaron")
+        self.assertIn("Michi", self.html())
+        self.assertIn("Pelusa", self.html())
+        self.assertIn('href="https://adopciones.test/accounts/profile/"', self.html())
+
+    def test_al_que_se_saca_del_sitio_se_le_dice_eso(self):
+
+        MailService().send_mail_no_publicado(self.rescatista, [self.gato], None, sacado_del_sitio=True)
+
+        self.assertEqual(mail.outbox[0].subject, "Catpuccino Adopciones - Michi ya no está publicado")
+        self.assertIn("la sacamos del sitio", self.html())
+
+    def test_sin_mail_no_rompe(self):
+
+        sin_mail = make_user(email="", username="sinmail")
+
+        MailService().send_mail_no_publicado(sin_mail, [self.gato], None)
+
+        self.assertEqual(len(mail.outbox), 0)

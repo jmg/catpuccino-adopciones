@@ -79,7 +79,12 @@ class AnimalPermissionsTest(TestCase):
 
 
 class ApproveTest(TestCase):
-    """Approving publishes the animal on the site and mails its rescuer."""
+    """Approving publishes the animal on the site and mails its rescuer.
+
+    It is a POST with the CSRF token, from the team's queue: it used to be a GET whose link
+    went out in the team's mail, so anything that opened the link (a mail preview, a link
+    scanner, a browser prefetch) approved the animal.
+    """
 
     def setUp(self):
         from catus.models import Animal, CatusUser
@@ -87,14 +92,15 @@ class ApproveTest(TestCase):
         self.owner = CatusUser.objects.create(username="refugio", email="refugio@example.com")
         self.team = CatusUser.objects.create_superuser("equipo@example.com", password="x")
         self.animal = Animal.objects.create(nombre="Michi", cargado_por=self.owner, estado="D", tipo="G")
-        self.url = "/animal/aprobar/?id={}".format(self.animal.id)
+        self.url = "/animal/aprobar/"
+        self.data = {"id": self.animal.id}
 
     def approved(self):
         self.animal.refresh_from_db()
         return self.animal.aprobado
 
     def test_without_an_account_it_asks_to_log_in(self):
-        response = self.client.get(self.url)
+        response = self.client.post(self.url, self.data)
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/accounts/login/", response["Location"])
@@ -102,16 +108,53 @@ class ApproveTest(TestCase):
 
     def test_a_rescuer_cannot_approve_even_their_own(self):
         self.client.force_login(self.owner)
-        response = self.client.get(self.url)
+        response = self.client.post(self.url, self.data)
 
         self.assertEqual(response.status_code, 403)
         self.assertFalse(self.approved())
 
-    def test_the_team_approves(self):
+    def test_the_team_approves_and_goes_back_to_the_queue(self):
         self.client.force_login(self.team)
-        response = self.client.get(self.url)
+        response = self.client.post(self.url, self.data)
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/tools/animalespendientes/")
+        self.assertTrue(self.approved())
+
+    def test_the_old_mail_link_does_not_approve(self):
+        """The links already sitting in the team's inbox land on the queue, approving nothing."""
+        self.client.force_login(self.team)
+        response = self.client.get("/animal/aprobar/?id={}".format(self.animal.id))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/tools/animalespendientes/")
+        self.assertFalse(self.approved())
+
+    def test_without_the_csrf_token_it_does_not_approve(self):
+        from django.test import Client
+
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.team)
+        response = client.post(self.url, self.data)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(self.approved())
+
+    def test_the_queue_form_carries_the_token(self):
+        """The approve button is a form on the queue page: without its token, the
+        CSRF check above would reject every click."""
+        from django.test import Client
+
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.team)
+        page = client.get("/tools/animalespendientes/").content.decode()
+
+        self.assertIn('action="/animal/aprobar/"', page)
+        token = page.split('name="csrfmiddlewaretoken" value="')[1].split('"')[0]
+
+        response = client.post(self.url, dict(self.data, csrfmiddlewaretoken=token))
+
+        self.assertEqual(response.status_code, 302)
         self.assertTrue(self.approved())
 
 

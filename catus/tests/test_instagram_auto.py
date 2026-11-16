@@ -371,16 +371,18 @@ class CaminosDeAprobacionTest(TestCase):
 
         return request
 
-    def aprobar_por_el_link_del_mail(self):
+    def aprobar_desde_la_cola(self):
+        """Era el link "Aprobar" del mail, un GET; ahora es un POST desde la cola."""
 
-        request = self.factory.get("/", {"id": self.animal.id})
+        request = self.factory.post("/", {"id": self.animal.id})
         request.user = self.equipo
+        request.session = {}
 
         return AprobarView.as_view()(request)
 
-    def test_el_link_aprobar_del_mail_agenda(self):
+    def test_aprobar_desde_la_cola_agenda(self):
 
-        self.aprobar_por_el_link_del_mail()
+        self.aprobar_desde_la_cola()
 
         self.animal.refresh_from_db()
         self.assertTrue(self.animal.aprobado)
@@ -444,11 +446,12 @@ class CaminosDeAprobacionTest(TestCase):
         una excepción acá, el equipo ve un 500 y el animal se queda sin aprobar."""
 
         with mock.patch.object(InstagramAutoService, "esta_activo", side_effect=RuntimeError("boom")):
-            response = self.aprobar_por_el_link_del_mail()
+            response = self.aprobar_desde_la_cola()
 
         self.animal.refresh_from_db()
         self.assertTrue(self.animal.aprobado, "se perdió la aprobación porque falló el posteo automático")
-        self.assertEqual(response.status_code, 200)
+        #de vuelta a la cola, no un 500
+        self.assertEqual(response.status_code, 302)
 
 
 @override_settings(ENV="TEST", INSTAGRAM_AUTO_ACTIVO=True)
