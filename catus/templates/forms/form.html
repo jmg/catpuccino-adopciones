@@ -48,6 +48,32 @@
                 </a>
                 {% endif %}
             </div>
+
+            {% comment %}
+            En qué quedó el candidato (views/forms.py::botones_de_estado). Un formulario común,
+            sin JS: el POST vuelve a esta página con ?hecho=. Reservar y Adoptó cambian también
+            el estado del animal, así que piden confirmación.
+            {% endcomment %}
+            {% if botones_estado or estado_cambiado %}
+            <section class="form-estado" aria-labelledby="titulo-estado">
+                {% if estado_cambiado == "error" %}
+                <p class="estado-aviso estado-error" role="alert"><i class="fa fa-exclamation-circle mr-2" aria-hidden="true"></i>No se pudo cambiar el estado. Probá de nuevo.</p>
+                {% elif estado_cambiado %}
+                <p class="estado-aviso" role="status"><i class="fa fa-check-circle mr-2" aria-hidden="true"></i>Listo: quedó como «{{estado_form.get_estado_display}}».{% if estado_form.estado == "A" and estado_form.gato %} Si querés, ahora armá el contrato.{% endif %}</p>
+                {% endif %}
+                <h2 id="titulo-estado">¿En qué quedó?</h2>
+                <p class="estado-actual">Ahora: <b>{{estado_form.get_estado_display}}</b></p>
+                {% if botones_estado %}
+                <form method="post" class="estado-botones">
+                    {% csrf_token %}
+                    <input type="hidden" name="volver" value="1">
+                    {% for valor, texto, primario, confirmar in botones_estado %}
+                    <button type="submit" name="estado" value="{{valor}}" class="btn {% if primario %}btn-primary{% else %}btn-secondary{% endif %}"{% if confirmar %} data-confirmar="{{confirmar}}"{% endif %}>{{texto}}</button>
+                    {% endfor %}
+                </form>
+                {% endif %}
+            </section>
+            {% endif %}
         </div>
 
         <div class="form-content-wrapper">
@@ -152,6 +178,14 @@
 
 {% block js %}
 <script type="text/javascript">
+    // Reservar y Adoptó sacan al animal del sitio: se confirma antes de mandar
+    document.addEventListener("click", function(evento) {
+        var boton = evento.target.closest ? evento.target.closest(".estado-botones [data-confirmar]") : null;
+        if (boton && !window.confirm(boton.getAttribute("data-confirmar") + " ¿Seguimos?")) {
+            evento.preventDefault();
+        }
+    });
+
     var ocultarDatosForm = false;
 
     function showDatosFormulario(btn) {
@@ -261,6 +295,50 @@
 
     .form-contacto:empty {
         display: none;
+    }
+
+    /* ¿En qué quedó? (botones_de_estado) */
+    .form-estado {
+        margin-top: 20px;
+        padding-top: 18px;
+        border-top: 1px solid var(--lavanda-borde);
+    }
+
+    .form-estado h2 {
+        font-size: 1.2rem;
+        font-weight: 800;
+        line-height: 1.25;
+        color: var(--text-color);
+        margin: 0 0 4px;
+    }
+
+    .estado-actual {
+        margin: 0 0 12px;
+        color: var(--text-muted);
+        font-size: 15px;
+    }
+
+    .estado-botones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 0;
+    }
+
+    .estado-aviso {
+        background: #e7f6ec;
+        border: 1px solid #b9e2c7;
+        color: #1d5e33;
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 0 0 14px;
+        font-size: 15px;
+    }
+
+    .estado-aviso.estado-error {
+        background: #fdecee;
+        border-color: #f5c2c7;
+        color: #8a1c2b;
     }
 
     .form-content-wrapper {
@@ -429,6 +507,10 @@
 
         .form-contacto .btn-primary {
             flex-basis: 100%;
+        }
+
+        .estado-botones .btn {
+            flex: 1 1 40%;
         }
 
         .form-actions .btn {
