@@ -1,5 +1,5 @@
 from catus.models import ActividadBuenAdoptante, EstadoFormulario
-from catus.services import estados
+from catus.services import aviso_candidatos, estados
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService, descripcion_alerta, descripcion_marca
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
@@ -44,8 +44,9 @@ def botones_de_estado(estado_form, usuario):
             ("P", "Ya lo contacté", False, ""),
             ("R", "Reservar para esta persona", False,
              "{} va a dejar de verse en el sitio como disponible.".format(nombre) if animal else ""),
-            ("A", "Adoptó", True,
-             "{} va a pasar a adoptado y deja de verse en el sitio.".format(nombre) if animal else ""),
+            #"Adoptó" no manda nada: lleva al paso de confirmación (?confirmar=adopcion), que
+            #pregunta si avisarles a los demás que se postularon
+            ("A", "Adoptó", True, ""),
             ("D", "Descartar", False, ""),
         ]
 
@@ -112,6 +113,7 @@ class FormView(LoginRequiredMixin, BaseView):
         return self.render_to_response({
             "botones_estado": botones_de_estado(estado_form, self.request.user),
             "estado_cambiado": self.request.GET.get("hecho"),
+            "confirmar_adopcion": self.confirmar_adopcion(estado_form),
             "estado_form_form": estado_form_form,
             "estado_form": estado_form,
             "estado_formulario": estado_form,
@@ -160,6 +162,25 @@ class FormView(LoginRequiredMixin, BaseView):
             "alertas": alertas,
             "marcas": [descripcion_marca(m) for m in actividad.get_marcas()],
             "perfil_url": actividad.perfil_url,
+        }
+
+    def confirmar_adopcion(self, estado_form):
+        """El paso de "Adoptó": a quién y a cuántos más se les avisaría, o None si no se pidió.
+
+        Marcar "Adoptado" puede terminar en mails a los demás que se postularon
+        (services/aviso_candidatos.py): el rescatista lo ve antes y elige, con la casilla
+        marcada de entrada. Si nadie más se postuló, no hay casilla."""
+
+        if self.request.GET.get("confirmar") != "adopcion" or estado_form.estado == "A":
+            return None
+        if not any(boton[0] == "A" for boton in botones_de_estado(estado_form, self.request.user)):
+            return None
+
+        animal = estado_form.gato
+        return {
+            "nombre": animal.nombre if animal else "el animal",
+            "otros": aviso_candidatos.candidatos(animal, sin=estado_form.id) if animal else 0,
+            "especie": "perros" if animal is not None and animal.tipo == "P" else "gatos",
         }
 
     def post(self, *args, **kwargs):
@@ -235,10 +256,10 @@ class FormView(LoginRequiredMixin, BaseView):
             if nuevo_estado == "R":
                 estados.reservar(gato)
             elif gato.estado_formulario_id:
-                estados.marcar_adoptado(gato)
+                estados.marcar_adoptado(gato, avisar=self.avisar())
             else:
                 #este formulario es el de quien lo adoptó: queda vinculado y va a BuenAdoptante
-                estados.marcar_adoptado(gato, formulario=estado_form)
+                estados.marcar_adoptado(gato, formulario=estado_form, avisar=self.avisar())
                 return self.json_response({"status": "ok", "estado": estado_form.estado})
 
         #el rescatista dice que esta persona adoptó: el animal queda vinculado a su
@@ -248,9 +269,20 @@ class FormView(LoginRequiredMixin, BaseView):
                 gato.estado_formulario = estado_form
                 gato.adoptante = (estado_form.get_persona() or "")[:255] or None
                 gato.save(update_fields=["estado_formulario", "adoptante"])
+            #ya estaba adoptado (desde la edición, o el mail de expiración) y ahora pasó por el
+            #paso de "Adoptó": vale lo que eligió en la casilla
+            if self.request.POST.get("confirmo_adopcion") == "1":
+                gato.avisar_candidatos = self.avisar()
+                gato.save(update_fields=["avisar_candidatos"])
             BuenAdoptanteService().registrar_adopcion(estado_form, gato)
 
         return self.json_response({"status": "ok", "estado": estado_form.estado})
+
+    def avisar(self):
+        """La casilla del paso de "Adoptó": True si la dejó marcada. Un POST sin ese paso (el
+        AJAX de antes, una pestaña vieja) no avisa a nadie."""
+
+        return self.request.POST.get("avisar_candidatos") == "1"
 
     def json_response(self, data):
         """JSON para los pedidos AJAX; para los botones de la página, volver a ella con un

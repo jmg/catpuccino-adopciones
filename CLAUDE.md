@@ -392,23 +392,30 @@ in a row stop the loop (`send_html_email` waits 6 s per failed mail; the same cu
 the candidates' notice); `--simular` sends nothing; under `ENV=LOCAL` no mail leaves (a local copy of the production database has real
 addresses).
 
-**The other candidates hear when an animal finds a family** (`services/aviso_candidatos.py`,
-`email/ya_tiene_familia.html`); 67 people in 90 days had applied for animals already adopted and
-never heard back. `expirar_animales` runs it at the end (no cron of its own); `avisar_candidatos`
-runs it by hand and only counts without `--aplicar`. It mails the pre-adoption forms (`A`/`AP`)
-still `N` or `P` of animals in `A` — never the form linked as the adopter's, nor a mailbox equal
-to the adopter's — once the adopter is known or three days after `fecha_adopcion`, and only for
-adoptions dated from the optional `AVISO_CANDIDATOS_DESDE` config key (`"AAAA-MM-DD"`; without it,
-or malformed, nobody is mailed, so the first day doesn't reach back months). One mail per mailbox
-per run, grouped by address; it reads the "Email" answer of all forms in two queries and
-validates it with `contacto.mail_valido`. The text is neutral ("si esa familia sos vos,
-¡felicitaciones!") because the reader may be the adopter, names nobody, and offers up to four
-animals of the same species with the `postulacion.link()` of the newest form. It shares the
-receipt's daily cap per mailbox (`throttle` scope `adoption-receipt`, `RECEIPTS_MAX_PER_DAY`): a
-capped mailbox waits for the next day. `EstadoFormulario.aviso_cierre_el` is set on the mailed
-forms and on those skipped for good (no valid address, the adopter's); a failed send stays unset
-and is retried the next day. `completar_fecha_adopcion` dates old adoptions, so run it with a
-`--desde` before `AVISO_CANDIDATOS_DESDE`, or their candidates get the notice.
+**The other candidates hear when an animal finds a family — if the rescuer says so**
+(`services/aviso_candidatos.py`, `email/ya_tiene_familia.html`); 67 people in 90 days had applied
+for animals already adopted and never heard back. Marking "Adoptado" may be a mistake, so it
+never mails by itself: every place that marks it — the "Adoptó" button of `/formularios/<hash>/`
+(now a confirmation step, `?confirmar=adopcion`, without JS), "¿Quién lo adoptó?" in the panel,
+the edit form's state selector and "Ya se adoptó" of the expiry mail — shows a checkbox, ticked
+by default, saying how many would be told ("Avisarles a las otras N personas que se
+postularon…", counted by `candidatos()`/`avisables_por_animal()` without the adopter's form)
+and that it goes out the next day. The choice is `Animal.avisar_candidatos` (None = not asked,
+e.g. the admin: no mail); leaving "Adoptado" clears it, so undoing a mistaken adoption cancels
+the notice. `expirar_animales` runs it at the end (no cron of its own); `avisar_candidatos` runs
+it by hand and only counts without `--aplicar`. It mails the pre-adoption forms (`A`/`AP`)
+still `N` or `P` of animals in `A` with `avisar_candidatos=True`, at least `HORAS_DE_MARGEN` (24)
+after `fecha_adopcion` — never the form linked as the adopter's, nor a mailbox equal to the
+adopter's — and only for adoptions dated from `AVISO_CANDIDATOS_DESDE` (`"AAAA-MM-DD"`; without
+it, or malformed, nobody is mailed). One mail per mailbox per run, grouped by address; it reads
+the "Email" answer of all forms in two queries and validates it with `contacto.mail_valido`.
+The text is neutral ("si esa familia sos vos, ¡felicitaciones!") because the reader may be the
+adopter, names nobody, and offers up to four animals of the same species with the
+`postulacion.link()` of the newest form. It shares the receipt's daily cap per mailbox
+(`throttle` scope `adoption-receipt`, `RECEIPTS_MAX_PER_DAY`; the cron containers have no
+memcached, so there the cap does not count). `EstadoFormulario.aviso_cierre_el` is set on the
+mailed forms and on those skipped for good (no valid address, the adopter's); a failed send stays
+unset and is retried the next day.
 
 **The team's queue and "No publicar"** (`services/pendientes.py`, `views/tools.py::AnimalesPendientesView`).
 `/tools/animalespendientes/` lists only what waits for a person's approval —

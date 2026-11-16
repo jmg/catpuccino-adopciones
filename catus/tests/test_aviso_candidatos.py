@@ -46,7 +46,7 @@ class AvisoCandidatosBase(TestCase):
         self.addCleanup(patcher.stop)
 
         self.rescatista = make_user(email="rescatista@catpuccino.test")
-        self.michi = make_animal(nombre="Michi", tipo="G", estado="A", fecha_adopcion=hace(4), cargado_por=self.rescatista)
+        self.michi = make_animal(nombre="Michi", tipo="G", estado="A", avisar_candidatos=True, fecha_adopcion=hace(4), cargado_por=self.rescatista)
         self.luna = make_animal(nombre="Luna", tipo="G", cargado_por=self.rescatista)
         self.firulais = make_animal(nombre="Firulais", tipo="P", cargado_por=self.rescatista)
 
@@ -156,7 +156,7 @@ class CuandoTest(AvisoCandidatosBase):
     def test_no_avisa_por_adopciones_anteriores_al_corte(self):
         """El primer día no tienen que salir mails por adopciones de hace meses."""
 
-        viejo = make_animal(nombre="Viejo", estado="A", fecha_adopcion=hace(200), cargado_por=self.rescatista)
+        viejo = make_animal(nombre="Viejo", estado="A", avisar_candidatos=True, fecha_adopcion=hace(200), cargado_por=self.rescatista)
         formulario = self.formulario(viejo, "Ana Gómez", "ana@ejemplo.test")
 
         self.avisar()
@@ -164,32 +164,60 @@ class CuandoTest(AvisoCandidatosBase):
         self.assertEqual(mail.outbox, [])
         self.assertFalse(self.avisado(formulario))
 
-    def test_espera_tres_dias_si_no_se_sabe_quien_adopto(self):
-        """Le da tiempo al rescatista a contestar "¿Quién lo adoptó?" en el panel."""
+    def test_solo_si_el_rescatista_eligio_avisar(self):
+        """Marcar "Adoptado" no manda nada por sí solo: el rescatista ve la casilla "avisarles a
+        las N personas que se postularon" y elige. Sin elección (el admin) no se avisa."""
 
-        self.michi.fecha_adopcion = hace(1)
+        ana = self.formulario(self.michi, "Ana Gómez", "ana@ejemplo.test")
+        for eleccion in (None, False):
+            with self.subTest(eleccion=eleccion):
+                self.michi.avisar_candidatos = eleccion
+                self.michi.save()
+                self.avisar()
+                self.assertEqual(mail.outbox, [])
+                self.assertFalse(self.avisado(ana))
+
+        self.michi.avisar_candidatos = True
+        self.michi.save()
+        self.avisar()
+        self.assertEqual(self.destinatarios(), ["ana@ejemplo.test"])
+
+    def test_espera_un_dia_aunque_se_sepa_quien_adopto(self):
+        """El margen es para deshacer un "Adoptado" por error antes de que salga nada."""
+
+        self.michi.fecha_adopcion = timezone.now() - timedelta(hours=2)
+        self.michi.estado_formulario = self.formulario(self.michi, "Carla Paz", "carla@ejemplo.test", estado="A")
         self.michi.save()
         ana = self.formulario(self.michi, "Ana Gómez", "ana@ejemplo.test")
 
         self.avisar()
         self.assertEqual(mail.outbox, [])
 
-        self.michi.fecha_adopcion = hace(4)
+        self.michi.fecha_adopcion = timezone.now() - timedelta(hours=25)
         self.michi.save()
         self.avisar()
         self.assertEqual(self.destinatarios(), ["ana@ejemplo.test"])
         self.assertTrue(self.avisado(ana))
 
-    def test_si_ya_se_sabe_quien_adopto_no_espera(self):
+    def test_volverlo_a_en_adopcion_cancela_el_aviso(self):
+        """Un "Adoptado" por error se deshace volviéndolo a "En adopción": la elección se borra
+        y, aunque después se lo marque de nuevo sin preguntar, no sale nada."""
 
-        self.michi.fecha_adopcion = hace(0)
-        self.michi.estado_formulario = self.formulario(self.michi, "Carla Paz", "carla@ejemplo.test", estado="A")
+        from catus.services import estados
+
+        self.michi.fecha_adopcion = hace(4)
         self.michi.save()
         self.formulario(self.michi, "Ana Gómez", "ana@ejemplo.test")
 
-        self.avisar()
+        estados.republicar(self.michi)
+        self.michi.refresh_from_db()
+        self.assertIsNone(self.michi.avisar_candidatos)
 
-        self.assertEqual(self.destinatarios(), ["ana@ejemplo.test"])
+        estados.cambiar_estado(self.michi, "A")
+        self.michi.fecha_adopcion = hace(4)
+        self.michi.save()
+        self.avisar()
+        self.assertEqual(mail.outbox, [])
 
     def test_nunca_dos_veces(self):
 
@@ -205,7 +233,7 @@ class UnMailPorCasillaTest(AvisoCandidatosBase):
 
     def test_un_mail_aunque_se_haya_postulado_a_varios_adoptados(self):
 
-        pelusa = make_animal(nombre="Pelusa", tipo="G", estado="A", fecha_adopcion=hace(5), cargado_por=self.rescatista)
+        pelusa = make_animal(nombre="Pelusa", tipo="G", estado="A", avisar_candidatos=True, fecha_adopcion=hace(5), cargado_por=self.rescatista)
         uno = self.formulario(self.michi, "Ana Gómez", "ana@ejemplo.test")
         otro = self.formulario(pelusa, "Ana Gómez", "ANA@ejemplo.test")
 
@@ -251,7 +279,7 @@ class ElMailTest(AvisoCandidatosBase):
     def test_el_nombre_del_animal_sale_escapado(self):
 
         mail.outbox = []
-        otro = make_animal(nombre="<b>Tom</b>", tipo="G", estado="A", fecha_adopcion=hace(5))
+        otro = make_animal(nombre="<b>Tom</b>", tipo="G", estado="A", avisar_candidatos=True, fecha_adopcion=hace(5))
         self.formulario(otro, "Beto Ruiz", "beto@ejemplo.test")
 
         self.avisar()

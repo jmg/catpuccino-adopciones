@@ -1933,3 +1933,30 @@ body .swal2-actions .swal2-styled:focus-visible {
   outline: 3px solid var(--primary-color);
   outline-offset: 2px;
 }
+
+/* "Avisarles a los demás que se postularon" al marcar un animal adoptado (formulario, panel,
+   edición, mail de expiración): marcada de entrada, el rescatista elige (services/aviso_candidatos.py) */
+.aviso-candidatos {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--lavanda);
+  border: 1px solid var(--lavanda-borde);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.aviso-candidatos input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 2px;
+  accent-color: var(--primary-color);
+}

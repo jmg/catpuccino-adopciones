@@ -133,6 +133,12 @@ class Animal(BaseEntity):
     #republica y vuelve a expirar, expiro_el es más nuevo y corresponde otro mail.
     expiro_avisado_el = models.DateTimeField(null=True, blank=True)
 
+    #Si el rescatista, al marcarlo adoptado, eligió avisarles a los demás que se postularon que
+    #ya encontró familia (services/aviso_candidatos.py). None es que nadie lo eligió (el
+    #admin, o antes de que existiera la casilla): entonces no se avisa. Se borra al salir de
+    #"Adoptado", así un cambio de estado por error no deja un aviso pendiente.
+    avisar_candidatos = models.BooleanField(null=True, blank=True)
+
     #El equipo decidió no publicarlo: "No publicar" en /tools/animalespendientes/, o el
     #comando archivar_pendientes con lo que esperó demasiado sin que nadie lo mirara. Queda
     #en "E", sin aprobar y sin expiro_el (así el panel no pregunta "¿siguen en adopción?"),

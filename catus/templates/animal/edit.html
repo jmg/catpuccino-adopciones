@@ -335,6 +335,20 @@
 
                     {% crispy animal_form %}
 
+                    {% if avisables %}
+                    {% comment %}
+                    Aparece debajo del estado al elegir "Adoptado" (lo mueve y lo muestra el JS de abajo):
+                    marcarlo así puede mandarles un mail a los que se postularon, así que se elige acá.
+                    {% endcomment %}
+                    <div id="aviso-candidatos-edicion" hidden>
+                        <input type="hidden" name="aviso_candidatos_mostrado" value="0">
+                        <label class="aviso-candidatos">
+                            <input type="checkbox" name="avisar_candidatos" value="1" checked>
+                            <span>Avisarle{{ avisables|pluralize }} a {% if avisables == 1 %}la persona que se postuló{% else %}las {{avisables}} personas que se postularon{% endif %} que ya encontró familia, ofreciéndole{{ avisables|pluralize }} otros animales en adopción. El mail sale al día siguiente: si te equivocaste, volvelo a «En adopción» antes y no se manda.</span>
+                        </label>
+                    </div>
+                    {% endif %}
+
                     <div class="mt-4 mb-4 images-preview" style="display: none;" id="images-container-div">
                         <h2 class="seccion-titulo">Fotos de Instagram</h2>
                         <div id="images-container" class="row">
@@ -400,6 +414,25 @@
 <script src="/static/js/crop-widget.js?v=3"></script>
 
 <script>
+    // La casilla del aviso a los que se postularon, debajo del estado y solo con "Adoptado"
+    document.addEventListener("DOMContentLoaded", function () {
+        var aviso = document.getElementById("aviso-candidatos-edicion");
+        var estado = document.getElementById("id_estado");
+        var grupo = document.getElementById("div_id_estado");
+        if (!aviso || !estado || !grupo) {
+            return;
+        }
+        grupo.parentNode.insertBefore(aviso, grupo.nextSibling);
+        var mostrado = aviso.querySelector('input[name="aviso_candidatos_mostrado"]');
+        function actualizar() {
+            var adoptado = estado.value === "A";
+            aviso.hidden = !adoptado;
+            mostrado.value = adoptado ? "1" : "0";
+        }
+        estado.addEventListener("change", actualizar);
+        actualizar();
+    });
+
     /*
      * "Guardar Cambios" se apaga en cuanto sale el formulario.
      *

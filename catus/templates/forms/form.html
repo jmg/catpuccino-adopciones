@@ -63,12 +63,38 @@
                 {% endif %}
                 <h2 id="titulo-estado">¿En qué quedó?</h2>
                 <p class="estado-actual">Ahora: <b>{{estado_form.get_estado_display}}</b></p>
-                {% if botones_estado %}
+                {% if confirmar_adopcion %}
+                {% comment %}
+                El paso de "Adoptó" (FormView.confirmar_adopcion): marcarlo puede mandarles un mail a
+                los demás que se postularon, así que se ve antes y se elige. Sin JS.
+                {% endcomment %}
+                <form method="post" class="confirmar-adopcion">
+                    {% csrf_token %}
+                    <input type="hidden" name="volver" value="1">
+                    <input type="hidden" name="estado" value="A">
+                    <input type="hidden" name="confirmo_adopcion" value="1">
+                    <p><b>¿{{persona_nombre|default:"Esta persona"}} adoptó a {{confirmar_adopcion.nombre}}?</b> {{confirmar_adopcion.nombre}} deja de verse en el sitio y la adopción se registra en BuenAdoptante.</p>
+                    {% if confirmar_adopcion.otros %}
+                    <label class="aviso-candidatos">
+                        <input type="checkbox" name="avisar_candidatos" value="1" checked>
+                        <span>Avisarle{{ confirmar_adopcion.otros|pluralize }} a {% if confirmar_adopcion.otros == 1 %}la otra persona que se postuló{% else %}las otras {{confirmar_adopcion.otros}} personas que se postularon{% endif %} que ya encontró familia, ofreciéndole{{ confirmar_adopcion.otros|pluralize }} otros {{confirmar_adopcion.especie}} en adopción. El mail sale al día siguiente: si te equivocaste, volvelo a «En adopción» antes y no se manda.</span>
+                    </label>
+                    {% endif %}
+                    <div class="estado-botones">
+                        <button type="submit" class="btn btn-primary">Sí, adoptó</button>
+                        <a href="." class="btn btn-secondary">Cancelar</a>
+                    </div>
+                </form>
+                {% elif botones_estado %}
                 <form method="post" class="estado-botones">
                     {% csrf_token %}
                     <input type="hidden" name="volver" value="1">
                     {% for valor, texto, primario, confirmar in botones_estado %}
+                    {% if valor == "A" %}
+                    <a href="?confirmar=adopcion#titulo-estado" class="btn {% if primario %}btn-primary{% else %}btn-secondary{% endif %}">{{texto}}</a>
+                    {% else %}
                     <button type="submit" name="estado" value="{{valor}}" class="btn {% if primario %}btn-primary{% else %}btn-secondary{% endif %}"{% if confirmar %} data-confirmar="{{confirmar}}"{% endif %}>{{texto}}</button>
+                    {% endif %}
                     {% endfor %}
                 </form>
                 {% endif %}
@@ -323,6 +349,13 @@
         flex-wrap: wrap;
         gap: 10px;
         margin: 0;
+    }
+
+    .confirmar-adopcion p {
+        margin: 0 0 4px;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--text-color);
     }
 
     .estado-aviso {
