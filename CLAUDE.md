@@ -313,8 +313,9 @@ acts on POST through `services/estados.py`; after "Ya se adoptó" it points to t
 who. It never shows anything about the candidates. `Animal.expiro_avisado_el` (≥ `expiro_el`)
 keeps it to one mail per expiry. `--avisar-ya-expirados --desde AAAA-MM-DD` sends the same mail
 for animals that expired earlier (skipping "No republicar"), and without `--aplicar` only counts
-per rescuer id. A failed mail logs a `warning` and never undoes the expiry; `--simular` sends
-nothing; under `ENV=LOCAL` no mail leaves (a local copy of the production database has real
+per rescuer id. A failed mail logs a `warning` and never undoes the expiry, and three failures
+in a row stop the loop (`send_html_email` waits 6 s per failed mail; the same cutoff applies to
+the candidates' notice); `--simular` sends nothing; under `ENV=LOCAL` no mail leaves (a local copy of the production database has real
 addresses).
 
 **The other candidates hear when an animal finds a family** (`services/aviso_candidatos.py`,
