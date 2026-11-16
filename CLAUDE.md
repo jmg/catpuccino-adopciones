@@ -88,8 +88,24 @@ keys: `DJANGO_SECRET_KEY`, `DB_ENGINE`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`/`DB_HOS
 `DEBUG` is derived as `ENV == "LOCAL"`; Sentry and the real `ALLOWED_HOSTS` only activate
 when `ENV != "LOCAL"`. `catus_project/settings_local.py` is imported last if present.
 
-Production uses MySQL through PyMySQL (`pymysql.install_as_MySQLdb()`); `forms.sql` is a
-MySQL dump of the `forms_builder` tables used to seed the adoption forms.
+Errors go to the platform's Jentry (Sentry-compatible) with **no personal data**: the forms
+are personal data (the pre-adoption answers, the contract's DNI). `send_default_pii=False`,
+`max_request_body_size="never"`, `include_local_variables=False` (in those views the locals
+are the answers), and `catus_project/sentry.py::sin_datos_personales`, as `before_send` and
+`before_send_transaction`, drops the request body, cookies, query string, session/IP headers,
+the user except its id, emails in log lines and exception messages, the query strings of
+outgoing calls (Graph takes its token there) and the hash of `/contrato/`, `/postularme/` and
+`/formularios/` links. Keep it that way when adding a log line: no emails, no answers.
+
+**Mail** goes through `catus/mail_backend.py::SendGridBackend`, our own backend over SendGrid's
+v3 API (`POST /v3/mail/send`, `requests`, timeout) — it replaced the unmaintained
+`sendgrid-django` and builds the same JSON it did. A rejection raises `SendGridError` (no
+addresses in the message), `fail_silently` logs it, and `utils.send_html_email` retries three
+times before raising. `DEFAULT_FROM_EMAIL` is `SEND_MAIL`, so Django's own password reset mail
+does not go out from `webmaster@localhost`, which SendGrid refuses.
+
+Production uses MySQL through `mysqlclient`; `forms.sql` is a MySQL dump of the
+`forms_builder` tables used to seed the adoption forms.
 
 ## URL and template conventions (django-conventions)
 
@@ -136,10 +152,13 @@ render HTML cells.
 - `AnimalImage` — gallery photo plus a separately generated `image_for_instagram` and its
   layout parameters (font size, name/age placement).
 - `EstadoFormulario` — a submitted adoption form's pipeline state, keyed by a uuid `hash`
-  that is emailed as an unauthenticated link (`/formularios/<hash>/`). `tipo` is
+  that is emailed as a link (`/formularios/<hash>/`). `tipo` is
   `A`/`AP` pre-adopción gatos/perros, `T`/`TP` tránsito.
 - `CatusUser` — `AUTH_USER_MODEL`, logs in by **email**, has a public `handle` serving
   `/<handle>/` as a mini-profile of that rescuer's animals.
+- `EstadoFormulario.hash`, `Contrato.hash` and `CatusUser.handle` are indexed (migration
+  0042) but **not unique**: `handle` has duplicates from before it was validated, and the
+  hashes were never checked; the migration's docstring has the queries to check.
 - `Contrato` / `ContratoPersona` — the adoption contract's data, again reachable by `hash`
   so the adopter can fill in their own half at `/contrato/<hash>/`.
 - `FacebookAccount` — single row holding the long-lived token and IG business account ids.
@@ -150,7 +169,13 @@ admin, *not* Django forms in this repo — `views/adoption.py::PreAdoptionView` 
 if the slug is gone. On submit it saves a `FormEntry`, wraps it in a new `EstadoFormulario` with
 a uuid hash, and emails both the rescuer and the applicant. `AdoptionService` reads answers back
 out of the `FieldEntry` rows **by Spanish label** ("Nombre y Apellido", "Email", …), so
-renaming a field label in the admin silently breaks parsing.
+renaming a field label in the admin silently breaks parsing. `FieldEntry.field_id` is not a
+foreign key: `AdoptionService.respuestas(form_entry)` loads the answers and their questions in
+two queries and keeps them on the `FormEntry` for the rest of the request, so the form page and
+the POST, which read them four or five times, don't query once per question (they used to:
+~200 `forms_field` queries per page). Change an answer on those same objects (as
+`set_animal_name_otro` does), or later reads in that request see the old value.
+`tests/test_consultas_formulario.py` checks the query count doesn't grow with the questions.
 
 **Applying for another animal with the same answers** (`services/postulacion.py`,
 `views/postulacion.py`). There are no adopter accounts: the person's "profile" is the
@@ -175,11 +200,16 @@ If BuenAdoptante blocks a copy the link stops working, with the same page as an 
 `catus/signals.py` keeps the forms-builder "which animal" dropdown in sync: any `Animal` or
 `Form` save/delete rewrites that `Field.choices` string with the current adoptable animal ids.
 It finds each field by label (`ANIMAL_FIELD_LABELS`), handles cats and dogs independently so a
-failure on one doesn't stall the other, and logs what it swallows — it runs inside `Animal.save()`
-and must never make saving an animal fail.
+failure on one doesn't stall the other, and logs what it swallows — it must never make saving
+an animal fail. It runs in `transaction.on_commit` (robust), so a rolled-back create never
+offers an animal that doesn't exist; it reads only ids (one query per species, not
+`get_all_for_adoption` with its photo prefetch); and a `save(update_fields=...)` that doesn't
+touch `CAMPOS_DEL_DESPLEGABLE` (`estado`, `aprobado`, `tipo` — the options are ids only, the
+names come from the page's JSON) skips it. In a `TestCase` the sync only runs inside
+`self.captureOnCommitCallbacks(execute=True)`.
 
 **Contract PDFs** (`services/contrato.py`) stamp text onto the static templates
-`catus/static/contrato/contrato.pdf` / `contrato_perros.pdf` with reportlab + PyPDF2, at
+`catus/static/contrato/contrato.pdf` / `contrato_perros.pdf` with reportlab + pypdf, at
 hardcoded x/y coordinates per page, and write the result to
 `catus/static/contrato/<hash>/`. That directory is gitignored, and the blank source PDFs are
 not in the repo. `contrato_test/contrato.py` renders a contract from fake objects for
@@ -189,7 +219,12 @@ iterating on coordinates without a database.
 the branded post image (logo, name, age/sex overlay); `FacebookApiService` uploads it as a
 single image or carousel container, polls `wait_for_media_ready`, publishes, then later posts
 an "adoptado" comment when the animal's `estado` changes. Tokens are refreshed by
-`refresh_token`.
+`refresh_token`. Everything that talks to Graph goes through `graph_get`/`graph_post`
+(`requests`, `TIMEOUT` 20 s, the one version in `FacebookApiService.GRAPH`); the per-account
+`service.facebook` is a `ClienteGraph` (GET without data, POST with data — pyfb's interface,
+which it replaced), and it is what the tests patch. Graph's errors come as `GraphError` with
+Graph's JSON in `.error`; `show_error` turns it into "Error de Instagram <code>/<subcode>: …",
+the prefix the `publish` cron parses for the code.
 
 **The post image** (`ImageService.generate_logo_image`). The photo fills the 1400×1400 square
 and a white card with the name (violet, Open Sans ExtraBold), age · sex and the black logo
@@ -265,8 +300,11 @@ outside failure, so the history fallback still applies; hitting your own cap is 
 the session cookie to `ERROR` events. Inactive when `ENV=LOCAL`, when `MODERACION_IA_ACTIVA`
 is off — the default; production sets `"0"` explicitly — or when there is no `OPENIA_API_KEY`.
 "Obtener datos desde Instagram" uses the same key with its own caps (`GPT_IG_MAX_POR_DIA` 10
-per person, `GPT_IG_MAX_TOTAL_POR_DIA` 30 site-wide). Production pins openai 0.28.1 (the 0.x API);
-both SDK generations are supported.
+per person, `GPT_IG_MAX_TOTAL_POR_DIA` 30 site-wide). `requirements.txt` pins openai 1.x
+(`OpenAI(...)` client, `max_retries=0`, timeout); `services/gpt.py` and
+`services/moderacion.py` still fall back to the 0.x call if an image has openai 0.28, which was
+production's until November 2026. Tests patch `openai.OpenAI` with `create=True`
+(`tests/test_gpt.py::openai_falso`), so they run on either SDK.
 
 **Listings expire after a month** (`management/commands/expirar_animales.py`, a daily cron).
 An approved animal in `D` whose `fecha_ingreso` is over 30 days old goes to `E` and gets
@@ -296,7 +334,14 @@ on every create, so `normalizar()` must stay linear (the tag regex), must not ra
 
 ## Front end
 
-Bootstrap 4.3.1 + jQuery, server-rendered. Three layers of CSS, in load order:
+Bootstrap 4.6.2 (`bootstrap.min.js`, without Popper) + jQuery 3.7.1, server-rendered, vendored
+under `static/vendor/` (the CSS `base.html` loads is the copy in `static/css/bootstrap.min.css`)
+and asked for with `?v=<version>`, because static files are cached for a year: bump it when
+replacing them, and check the SRI hash each project publishes. The only Bootstrap dropdown is
+in the navbar, where Bootstrap doesn't use Popper, and the panel loads tippy's Popper 2, which
+Bootstrap 4 can't use: a dropdown outside the navbar or a Bootstrap tooltip needs the bundle.
+`jstests/vendor.spec.js` drives the navbar, tabs, a modal, a carousel, lightslider, alertify
+and SweetAlert on those files. Three layers of CSS, in load order:
 `static/css/base.css` (the Clean Blog template the site started from — mostly legacy, and the
 reason many rules need to be overridden), `static/css/modern.css` (the site's own look: the
 tokens in `:root`, buttons, the top bar, the homepage hero and search, the animal card, the
@@ -306,9 +351,10 @@ on the `<link>`/`<script>` in `base.html` when changing `modern.css` or `index.j
 The look is the Instagram post's: violet `#8a2be2`, lavender borders and fills, grey-blue text,
 Open Sans. Most visitors arrive from Instagram's in-app browser on a phone, so pages are
 designed for ~390px first: the homepage keeps the hero short so the first animal shows without
-scrolling, and the rescuer's panel turns its tables into one card per row. Bootstrap 4.3 has
-no `.container-md`, so `<main class="container-md">` has no padding of its own — wrappers
-like `.lista-animales` bring theirs. `adoption/card.html` is the animal card used by the
+scrolling, and the rescuer's panel turns its tables into one card per row. `<main>` is not a
+`.container`: it has no padding or max width of its own, and wrappers like `.lista-animales`
+bring theirs. (It used to carry `container-md`, which did nothing in Bootstrap 4.3 and in 4.6
+would pad and narrow every page.) `adoption/card.html` is the animal card used by the
 homepage and by each rescuer's public page; `index.js` and `modern-effects.js` find things in
 it by class (`.post-preview` and its `data-*`, `.animalCarrousel`, `.show-more-text`).
 
@@ -376,7 +422,16 @@ someone who already sent a form applies for another animal (the signed token is 
 permission; the page must never show the form's answers or contact details).
 
 Anything reached by a sequential id (`/formulario/<id>/…`, `/contrato_adopcion/<id>/…`) is
-enumerable, so it needs an ownership check, not just a login.
+enumerable, so it needs an ownership check, not just a login. An id that is not a number is
+"not found", not a 500: go through `views/tools.py::por_id`.
+
+The open pages that cost something have limits per connection (`throttle.client_ip`) in the
+container's memcached (`services/throttle.py`), which count nothing — and so never block —
+when memcached is down: failed logins, the pre-adoption form and its receipt mail,
+registration (`views/user.py`, 20 attempts an hour and 5 accounts a day: each account brings
+its own AI and Instagram-reading allowance) and the password reset (`catus/auth.py`, 10 an
+hour per connection and 3 mails a day per address, counted by a hash of the address whether or
+not it has an account, so the message doesn't reveal which ones do).
 
 ## Known rough edges
 
@@ -406,6 +461,12 @@ enumerable, so it needs an ownership check, not just a login.
   back — that silently wiped saved Instagram crops.
 - `CacheService` talks to memcached on `localhost` with pickled values; every call site is
   currently commented out.
+- `utils.send_html_email` normalises `cc` wrongly (`if not isinstance(bcc, list): cc = [bcc]`):
+  a `cc` given as a string reaches Django as a string and raises. No caller passes `cc` today.
+- Graph is called at `v21.0` (`FacebookApiService.GRAPH`), from October 2024; Meta keeps a
+  version at least two years, so it may be retired by now. A call to a retired version goes
+  to the oldest one still alive, so it keeps working, but bumping it means checking the
+  publishing flow against the new version first.
 - `MEDIA_URL = "/"` with `MEDIA_ROOT = <repo>/gallery`, so uploads are served from the site
   root, e.g. `/gallery/<uuid>.jpeg`.
 - Broad `try/except: pass` is common in this codebase (signals, form parsing, email sending).
