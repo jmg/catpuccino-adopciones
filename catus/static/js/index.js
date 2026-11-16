@@ -120,15 +120,12 @@ $(document).on("keydown", "a[role=button]", function(e) {
   }
 })
 
+// modern-effects.js la reemplaza por una que además vuelve a la tarjeta al cerrar; las dos
+// abren con .expanded, que es lo que mira revisarUnMostrarMas()
 function showMore(el) {
   var link = $(el)
-  link.parent().prev().toggleClass("show-more-text")
-
-  if (link.text() == "Mostrar más") {
-    link.text("Mostrar menos")
-  } else {
-    link.text("Mostrar más")
-  }
+  var abierta = link.parent().prev().toggleClass("expanded").hasClass("expanded")
+  link.text(abierta ? "Mostrar menos" : "Mostrar más")
 }
 
 function mobileCheck() {
@@ -456,6 +453,56 @@ function paginar() {
   var total = lista.children(".animal-card").length;
   $("#resultados-cuenta").text((coinciden == total ? total : coinciden + " de " + total) + " en adopción");
   $("#sin-resultados").toggle(coinciden === 0);
+
+  //las tarjetas que recién aparecen se miden ahora que se ven
+  revisarMostrarMas();
+}
+
+// "Mostrar más" va solo donde la descripción no entra en sus tres renglones, y eso se
+// puede medir recién cuando la tarjeta se ve. Antes se decidía una sola vez, al cargar,
+// cuando de la tarjeta 11 en adelante estaban ocultas y medían 0: esas quedaban sin el
+// link, y después de "Cargar más" o de buscar un nombre aparecían cortadas y sin forma de
+// abrirlas. Una tarjeta oculta se saltea: la mide paginar() al mostrarla, o el
+// ResizeObserver cuando cambia de tamaño (al aparecer, al cargar la letra, al girar el
+// celular).
+function revisarUnMostrarMas(texto) {
+
+  var vecino = texto.nextElementSibling
+  var link = vecino ? vecino.querySelector(".show-more-a") : null
+  if (!link || !texto.getClientRects().length) {
+    return
+  }
+
+  //abierta mide lo que mide el texto entero: el link tiene que quedar para cerrarla
+  var hayMas = texto.classList.contains("expanded") || texto.scrollHeight > texto.clientHeight + 1
+  link.parentElement.style.display = hayMas ? "" : "none"
+}
+
+function revisarMostrarMas() {
+
+  var textos = document.querySelectorAll(".show-more-text")
+  for (var i = 0; i < textos.length; i++) {
+    revisarUnMostrarMas(textos[i])
+  }
+}
+
+var observadorDeDescripciones = null;
+
+function observarDescripciones() {
+
+  if (!window.ResizeObserver || observadorDeDescripciones) {
+    return;
+  }
+
+  observadorDeDescripciones = new ResizeObserver(function(entradas) {
+    entradas.forEach(function(entrada) {
+      revisarUnMostrarMas(entrada.target)
+    })
+  })
+
+  $(".show-more-text").each(function() {
+    observadorDeDescripciones.observe(this)
+  })
 }
 
 // Todos / Gatos / Perros: los botones de la portada manejan el <select> #filter-type,
@@ -642,10 +689,13 @@ $(document).ready(function() {
 
     initializeImages()
 
+    observarDescripciones()
     //con un link que trae la búsqueda (?buscar=…) ya se arranca filtrado; filterAnimals pagina
     if (!aplicarLaUrl()) {
       paginar()
     }
+    //donde no hay lista paginada (/adopciones/) paginar() no hace nada: se miden igual
+    revisarMostrarMas()
     $("#cargar-mas").on("click", cargarMas);
     //cuántas tarjetas entran por fila cambia solo al cruzar los 768px o los 1200px
     //(rotar una tablet); un resize común se dispara con cada scroll en el celular
