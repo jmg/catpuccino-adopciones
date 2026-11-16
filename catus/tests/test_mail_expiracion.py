@@ -128,6 +128,21 @@ class MailAlExpirarTest(ExpiracionBase):
         self.assertIn("1 fallidos", salida)
         self.assertNotIn("rescatista@", "\n".join(logs.output))
 
+    def test_con_el_proveedor_caido_corta_en_vez_de_colgar_el_cron(self):
+        """send_html_email espera 6 segundos por cada mail que falla: con cien rescatistas
+        y SendGrid caído, el cron quedaba colgado diez minutos."""
+
+        for numero in range(expiracion.MAX_FALLAS_SEGUIDAS + 2):
+            self.viejo("Gato {}".format(numero), cargado_por=make_user(email="r{}@catpuccino.test".format(numero)))
+
+        with mock.patch.object(expiracion, "send_html_email", side_effect=RuntimeError("SendGrid caído")) as enviar, \
+                self.assertLogs("catus.services.expiracion", "WARNING"):
+            salida = self.correr()
+
+        self.assertEqual(enviar.call_count, expiracion.MAX_FALLAS_SEGUIDAS)
+        self.assertIn("2 sin intentar", salida)
+        self.assertEqual(Animal.objects.filter(estado="E").count(), expiracion.MAX_FALLAS_SEGUIDAS + 2)
+
     def test_con_muchos_animales_muestra_veinte_y_cuenta_el_resto(self):
 
         for numero in range(expiracion.MAX_ANIMALES_POR_MAIL + 2):

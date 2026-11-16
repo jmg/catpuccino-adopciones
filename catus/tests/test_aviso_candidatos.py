@@ -303,6 +303,22 @@ class TopesYFallasTest(AvisoCandidatosBase):
         self.assertTrue(self.avisado(beto))
         self.assertNotIn("ana@", "\n".join(logs.output))
 
+    def test_con_el_proveedor_caido_corta_y_deja_todo_para_manana(self):
+        """send_html_email espera 6 segundos por cada mail que falla: sin el corte, con
+        SendGrid caído el cron quedaba colgado una casilla tras otra."""
+
+        formularios = [self.formulario(self.michi, "Persona {}".format(numero), "p{}@ejemplo.test".format(numero))
+                       for numero in range(aviso_candidatos.MAX_FALLAS_SEGUIDAS + 2)]
+
+        with mock.patch.object(aviso_candidatos, "send_html_email", side_effect=RuntimeError("caído")) as enviar, \
+                self.assertLogs("catus.services.aviso_candidatos", "WARNING"):
+            resultado = self.avisar()
+
+        self.assertEqual(enviar.call_count, aviso_candidatos.MAX_FALLAS_SEGUIDAS)
+        self.assertEqual(resultado["para_despues"], 2)
+        for formulario in formularios:
+            self.assertFalse(self.avisado(formulario))
+
     @override_settings(ENV="LOCAL")
     def test_en_local_no_sale_nada(self):
         """Una copia local de la base de producción tiene mails de gente de verdad."""

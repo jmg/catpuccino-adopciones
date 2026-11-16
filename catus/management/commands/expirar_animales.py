@@ -105,8 +105,8 @@ class Command(BaseCommand):
         if resultado["local"] and aplicar:
             self.stdout.write("expirar_animales: en LOCAL no se mandan mails ({} rescatistas)".format(resultado["rescatistas"]))
         elif aplicar:
-            self.stdout.write("expirar_animales: avisos de expiración: {} mails enviados, {} fallidos ({} animales)".format(
-                resultado["enviados"], resultado["fallidos"], resultado["animales"]))
+            self.stdout.write("expirar_animales: avisos de expiración: {} mails enviados, {} fallidos, {} sin intentar ({} animales)".format(
+                resultado["enviados"], resultado["fallidos"], resultado["sin_intentar"], resultado["animales"]))
 
         return resultado
 
@@ -137,8 +137,8 @@ class Command(BaseCommand):
                 nota, resultado["rescatistas"], resultado["animales"]))
             return
 
-        self.stdout.write("expirar_animales --avisar-ya-expirados: {} mails enviados, {} fallidos ({} rescatistas, {} animales)".format(
-            resultado["enviados"], resultado["fallidos"], resultado["rescatistas"], resultado["animales"]))
+        self.stdout.write("expirar_animales --avisar-ya-expirados: {} mails enviados, {} fallidos, {} sin intentar ({} rescatistas, {} animales)".format(
+            resultado["enviados"], resultado["fallidos"], resultado["sin_intentar"], resultado["rescatistas"], resultado["animales"]))
 
 
 def parse_fecha(texto):

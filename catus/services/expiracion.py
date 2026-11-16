@@ -44,6 +44,11 @@ DIAS_PUBLICADO = 30
 #los mails de más de ~100 KB
 MAX_ANIMALES_POR_MAIL = 20
 
+#send_html_email reintenta cada mail con esperas (6 segundos por mail que falla): con el
+#proveedor caído, seguir probando con cada rescatista dejaba el cron colgado. Después de
+#estas fallas seguidas se corta; lo que quedó sin mandar lo toma --avisar-ya-expirados.
+MAX_FALLAS_SEGUIDAS = 3
+
 SIGUE = "sigue"
 ADOPTADO = "adoptado"
 RESPUESTAS = (SIGUE, ADOPTADO)
@@ -137,9 +142,10 @@ def avisar(animales, aplicar=True):
     """Manda un mail por rescatista con estos animales. Sin `aplicar` solo cuenta.
 
     Devuelve lo que pasó, en números: {"rescatistas", "animales", "enviados", "fallidos",
-    "por_rescatista": [(id del rescatista, cantidad)], "local"}. Un mail que falla no
-    corta a los demás ni a quien llama: se anota en el log como warning (Sentry adjunta los
-    datos de la sesión a los ERROR) y ese animal queda sin marcar.
+    "sin_intentar", "por_rescatista": [(id del rescatista, cantidad)], "local"}. Un mail que
+    falla no corta a quien llama: se anota en el log como warning (Sentry adjunta los datos
+    de la sesión a los ERROR) y esos animales quedan sin marcar. Con MAX_FALLAS_SEGUIDAS
+    fallas seguidas no se intenta con los demás.
     """
 
     grupos = por_rescatista(animales)
@@ -148,6 +154,7 @@ def avisar(animales, aplicar=True):
         "animales": sum(len(lista) for _, lista in grupos),
         "enviados": 0,
         "fallidos": 0,
+        "sin_intentar": 0,
         "por_rescatista": [(rescatista.id, len(lista)) for rescatista, lista in grupos],
         #en LOCAL no sale nada: una copia de la base de producción tiene mails de verdad
         "local": settings.ENV == "LOCAL",
@@ -156,11 +163,21 @@ def avisar(animales, aplicar=True):
     if not aplicar or resultado["local"]:
         return resultado
 
-    for rescatista, lista in grupos:
+    seguidas = 0
+    for numero, (rescatista, lista) in enumerate(grupos):
+
+        if seguidas >= MAX_FALLAS_SEGUIDAS:
+            resultado["sin_intentar"] = len(grupos) - numero
+            logger.warning("Avisos de expiración cortados tras %s fallas seguidas: quedan %s rescatistas",
+                           seguidas, resultado["sin_intentar"])
+            break
+
         if mandar(rescatista, lista):
             resultado["enviados"] += 1
+            seguidas = 0
         else:
             resultado["fallidos"] += 1
+            seguidas += 1
 
     return resultado
 

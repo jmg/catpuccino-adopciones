@@ -54,6 +54,10 @@ MAX_SUGERIDOS = 4
 #la primera corrida con un corte viejo no puede mandar cientos de mails de una: el resto
 #sale en las corridas siguientes
 MAX_CASILLAS_POR_CORRIDA = 200
+#send_html_email reintenta cada mail con esperas (6 segundos por mail que falla): con el
+#proveedor caído, seguir probando con cada casilla dejaba el cron colgado. Después de estas
+#fallas seguidas se corta, y lo que quedó se reintenta mañana.
+MAX_FALLAS_SEGUIDAS = 3
 
 
 def desde():
@@ -196,7 +200,15 @@ def avisar(aplicar=True):
 
     marcar(salteados)
 
-    for mail, lista in list(casillas.values())[:MAX_CASILLAS_POR_CORRIDA]:
+    a_mandar = list(casillas.values())[:MAX_CASILLAS_POR_CORRIDA]
+    seguidas = 0
+    for numero, (mail, lista) in enumerate(a_mandar):
+
+        if seguidas >= MAX_FALLAS_SEGUIDAS:
+            resultado["para_despues"] += len(a_mandar) - numero
+            logger.warning("Avisos de cierre cortados tras %s fallas seguidas: quedan %s casillas para mañana",
+                           seguidas, len(a_mandar) - numero)
+            break
 
         if llego_al_tope(mail):
             resultado["topados"] += 1
@@ -205,8 +217,10 @@ def avisar(aplicar=True):
         if mandar(mail, lista):
             marcar(lista)
             resultado["enviados"] += 1
+            seguidas = 0
         else:
             resultado["fallidos"] += 1
+            seguidas += 1
 
     return resultado
 
@@ -260,8 +274,9 @@ def contenido(formularios):
             adoptados.append(formulario.gato)
 
     #las sugerencias y el link salen del formulario más nuevo: sus respuestas son las más
-    #frescas, y su especie es la que está buscando ahora
-    ultimo = max(formularios, key=lambda f: (f.fecha_ingreso or f.created_at, f.id))
+    #frescas, y su especie es la que está buscando ahora. Por id y no por fecha: hay filas
+    #viejas sin fecha_ingreso
+    ultimo = max(formularios, key=lambda f: f.id)
     link_postularme = postulacion.link(ultimo)
 
     if link_postularme:
