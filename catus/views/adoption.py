@@ -14,7 +14,7 @@ from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
 from catus.services.images import FotoDemasiadoGrande, MENSAJE_FOTO_GRANDE, shrink_uploads
-from catus.services import postulacion, throttle
+from catus.services import embudo, postulacion, throttle
 from catus.services.contacto import contacto
 from catus.views.contrato import mail_del_adoptante
 
@@ -159,6 +159,14 @@ class PreAdoptionView(BaseView):
     def _post_response(self, context):
 
         context.update(self._script_context())
+        #el embudo (services/embudo.py): cómo terminó el envío. El honeypot (bots) no cuenta.
+        if self.form_type == "preadoption" and not context.get("es_bot"):
+            if context.get("success"):
+                embudo.contar(self.animal_type, "enviado")
+            elif context.get("bloqueado"):
+                embudo.contar(self.animal_type, "frenado")
+            else:
+                embudo.contar(self.animal_type, "rechazado")
         return BaseView.render_to_response(self, context)
 
     def _get_form(self):
@@ -208,7 +216,7 @@ class PreAdoptionView(BaseView):
 
         # To a bot it looks like any other submission: nothing is stored or mailed.
         if self.request.POST.get(HONEYPOT_FIELD):
-            return self._post_response({"form": form, "is_post": True, "success": True})
+            return self._post_response({"form": form, "is_post": True, "success": True, "es_bot": True})
 
         rejected = self._rejected()
         if rejected:

@@ -858,6 +858,16 @@
             hideTerms(true);
         }
 
+        // el embudo: abrió el formulario y, con la primera respuesta, empezó a contestar
+        pasoDelFormulario("abrio");
+        // (solo lo que hace una persona: initQuestions() dispara "change" al cargar)
+        $("#adoption-form").on("input.embudo change.embudo", function(evento) {
+            if (evento.originalEvent && evento.originalEvent.isTrusted) {
+                pasoDelFormulario("empezo");
+                $("#adoption-form").off(".embudo");
+            }
+        });
+
         if (getCookie("{{accepted_terms_cookie}}") !== "1") {
             hideForm();
         }
@@ -999,10 +1009,38 @@
         campo.focus({preventScroll: true});
     }
 
+    // ---- Embudo (services/embudo.py) -------------------------------------------------
+
+    // Hasta dónde llega la gente: cada paso una vez por pestaña, con sendBeacon (no frena
+    // nada ni espera respuesta). Solo contadores por día: no se manda ningún dato.
+    function pasoDelFormulario(paso) {
+        {% if form_type == "preadoption" and not is_post %}
+        try {
+            var clave = "embudo-{{ animal_type }}-" + paso;
+            if (sessionStorage.getItem(clave)) {
+                return;
+            }
+            sessionStorage.setItem(clave, "1");
+        } catch (e) {}
+        if (!navigator.sendBeacon || !window.FormData) {
+            return;
+        }
+        var datos = new FormData();
+        datos.append("paso", paso);
+        datos.append("especie", "{% if animal_type == 'perro' %}P{% else %}G{% endif %}");
+        datos.append("csrfmiddlewaretoken", "{{ csrf_token }}");
+        navigator.sendBeacon("/pre-adopcion/paso/", datos);
+        {% endif %}
+    }
+
     function avisarFaltantes(irALaPrimera) {
 
         var faltan = camposConError();
         var barra = $("#faltantes");
+
+        if (faltan.length && irALaPrimera) {
+            pasoDelFormulario("faltantes");
+        }
 
         if (!barra.length) {
             return;
@@ -1034,6 +1072,7 @@
     // formulario, salteándose el nombre, el celular y el mail.
     function aceptarRequisitos() {
 
+        pasoDelFormulario("requisitos");
         hideTerms(true);
         showForm();
 
@@ -1618,6 +1657,7 @@
             return false;
         }
 
+        pasoDelFormulario("intento");
         showLoader();
         return true;
     }

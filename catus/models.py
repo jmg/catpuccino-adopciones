@@ -696,3 +696,32 @@ class ActividadBuenAdoptante(BaseEntity):
             return json.loads(self.alertas or "[]")
         except ValueError:
             return []
+
+
+class PasoFormulario(models.Model):
+    """Cuántas veces por día se llegó a cada paso del formulario de pre-adopción.
+
+    Es el embudo (abrir, aceptar los requisitos, empezar, querer enviar con faltantes,
+    enviar) para saber dónde se queda la gente: con 38 preguntas obligatorias en el de
+    gatos, no había ningún dato. Son contadores agregados, sin cookies ni nada de nadie
+    (services/embudo.py).
+    """
+
+    PASOS = (
+        ("abrio", "Abrió el formulario"),
+        ("requisitos", "Aceptó los requisitos"),
+        ("empezo", "Empezó a contestar"),
+        ("faltantes", "Quiso enviar con respuestas sin contestar"),
+        ("intento", "Lo envió desde el navegador"),
+        ("enviado", "Llegó y se guardó"),
+        ("frenado", "Lo frenó BuenAdoptante"),
+        ("rechazado", "El servidor lo rechazó"),
+    )
+
+    fecha = models.DateField()
+    especie = models.CharField(max_length=1, choices=(("G", "Gatos"), ("P", "Perros")))
+    paso = models.CharField(max_length=12, choices=PASOS)
+    n = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("fecha", "especie", "paso")
