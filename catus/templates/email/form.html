@@ -7,7 +7,10 @@ con |safe (test_seguridad). Las fotos son URL del sitio que arma la vista (_dato
 {% block preheader %}{{ titulo }}. Sus datos y todas sus respuestas.{% endblock %}
 {% block content %}
 {% include "email/_titulo.html" %}
-<p style="margin:0;color:#4a5568;">Abajo están sus datos y todas sus respuestas. Desde el sitio podés cambiarle el estado y seguir la adopción.</p>
+<p style="margin:0;color:#4a5568;">Abajo están sus datos y todas sus respuestas. Si respondés este mail, le llega a la persona. Desde el sitio podés marcar en qué quedó.</p>
+
+{% if contacto.whatsapp %}{% include "email/_boton.html" with url=contacto.whatsapp texto="Escribirle por WhatsApp" margen="20px 0 0" %}{% endif %}
+{% if contacto.llamada %}<p style="margin:12px 0 0;font-size:14px;"><a href="{{ contacto.llamada }}" style="color:#7020a0;font-weight:600;">Llamar a {{ nombre|default:"la persona" }}</a></p>{% endif %}
 
 {% if copiado_de %}
 {% comment %}La persona usó "postularme a otro animal con las mismas respuestas" (services/postulacion.py).{% endcomment %}

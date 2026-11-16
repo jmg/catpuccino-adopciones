@@ -96,6 +96,42 @@ class EnviarFormularioTest(TestCase):
         destinatarios = [dest for m in mail.outbox for dest in m.to]
         self.assertIn("ana@ejemplo.test", destinatarios)
 
+    def test_responder_el_mail_le_escribe_a_quien_se_postulo(self):
+        """El Reply-To eran los mismos destinatarios: "Responder" le escribía al propio
+        rescatista y al equipo, nunca al candidato."""
+
+        from catus.services.adoption import AdoptionService
+
+        entry = self.build_entry(str(self.animal.id))
+        self.enviar(entry, self.animal, AdoptionService().get_animal(entry))
+
+        aviso = next(m for m in mail.outbox if self.rescatista.email in m.to)
+        self.assertEqual(aviso.reply_to, ["ana@ejemplo.test"])
+
+    def test_el_mail_trae_el_boton_de_whatsapp(self):
+
+        from catus.services.adoption import AdoptionService
+
+        campo_celular = make_field(self.form, "Celular")
+        entry = self.build_entry(str(self.animal.id))
+        FieldEntry.objects.create(entry=entry, field_id=campo_celular.id, value="11 5555-4444")
+        self.enviar(entry, self.animal, AdoptionService().get_animal(entry))
+
+        aviso = next(m for m in mail.outbox if self.rescatista.email in m.to)
+        html = aviso.alternatives[0][0]
+        self.assertIn("https://wa.me/5491155554444", html)
+        self.assertIn("Escribirle por WhatsApp", html)
+
+    def test_sin_mail_valido_responder_queda_como_antes(self):
+
+        from catus.services.adoption import AdoptionService
+
+        entry = self.build_entry(str(self.animal.id), email="no tengo")
+        self.enviar(entry, self.animal, AdoptionService().get_animal(entry))
+
+        aviso = next(m for m in mail.outbox if self.rescatista.email in m.to)
+        self.assertNotIn("no tengo", aviso.reply_to)
+
     def test_sin_mail_de_contacto_igual_avisa_al_equipo(self):
 
         entry = self.build_entry(str(self.animal.id), email="")

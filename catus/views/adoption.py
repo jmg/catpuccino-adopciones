@@ -15,6 +15,7 @@ from catus.services.adoption import AdoptionService
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
 from catus.services.images import FotoDemasiadoGrande, MENSAJE_FOTO_GRANDE, shrink_uploads
 from catus.services import postulacion, throttle
+from catus.services.contacto import contacto
 from catus.views.contrato import mail_del_adoptante
 
 from django.template import Context
@@ -390,8 +391,13 @@ class PreAdoptionView(BaseView):
             else:
                 titulo = "{} completó un formulario".format(nombre) if nombre else "Llegó un formulario nuevo"
 
+        #los botones de WhatsApp y llamada, como arriba de /formularios/<hash>/: el rescatista
+        #trabaja desde el mail y casi nunca entra al sitio
+        datos = {etiqueta.lower(): valor for etiqueta, valor in ficha}
+        links = contacto(datos.get("celular"), datos.get("email"))
+
         return {"ficha": ficha, "respuestas": respuestas, "nombre": nombre, "nombre_animal": nombre_animal,
-                "antetitulo": antetitulo, "titulo": titulo}
+                "antetitulo": antetitulo, "titulo": titulo, "contacto": links}
 
     def send_email(self, form_entry, form_for_form, animal, estado):
 
@@ -427,8 +433,12 @@ class PreAdoptionView(BaseView):
 
         #el formulario ya quedó guardado: si el mail falla, avisamos por el log pero
         #no le mostramos un error a quien acaba de completarlo (volvería a mandarlo)
+        #"Responder" le escribe al candidato. Antes el Reply-To eran los mismos destinatarios:
+        #el rescatista se contestaba a sí mismo y al equipo, nunca a quien se postuló.
+        responder_a = mail_del_adoptante(estado)
         try:
-            send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)))
+            send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)),
+                            reply_to=[responder_a] if responder_a else None)
         except Exception:
             logger.exception("No se pudo avisar del formulario %s", estado.hash)
 

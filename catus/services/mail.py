@@ -75,4 +75,5 @@ class MailService(BaseService):
 
         animals.update(mail_preguntar_adopcion_enviado=True)
 
-        send_html_email(subject, content, settings.SEND_MAIL, user.email)
+        #la respuesta ("sí, se adoptó") es para el equipo: sin esto le volvía al rescatista
+        send_html_email(subject, content, settings.SEND_MAIL, user.email, reply_to=["catpuccino.ok@gmail.com"])
