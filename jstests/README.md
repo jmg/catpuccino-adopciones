@@ -62,6 +62,11 @@ Nada de esto toca el sitio: `jstests/` está fuera de `catus/static/`, así que
   Para la navegación que se corta (Detener, Esc) lo corta con `route.abort("aborted")`, el
   `net::ERR_ABORTED` con el que Chromium se queda en la página, y los 90 segundos los
   adelanta con el reloj de Playwright (`page.clock`).
+- **`fixtures/harness-vendor.html`** (`vendor.spec.js`) carga jQuery, Bootstrap y los
+  plugins como `base.html` y usa un poco de cada uno: la barra (collapse y el desplegable,
+  también con el Popper 2 del panel cargado), las pestañas del panel, un modal, un carrusel
+  con `interval: false`, el slider de fotos del formulario, alertify y SweetAlert. Es el
+  que hay que mirar al subir de versión cualquiera de esas librerías.
 - **`template-js.js`** (no es un spec) recorta el JS de `animal/edit.html` para los dos
   harness que lo usan.
 - **`vista-previa.js`** (no es un spec) tiene el oráculo de dónde dibuja

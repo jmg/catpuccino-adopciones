@@ -60,7 +60,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 
-  <link href="/static/css/bootstrap.min.css" rel="stylesheet" type="text/css">
+  <link href="/static/css/bootstrap.min.css?v=4.6.2" rel="stylesheet" type="text/css">
   <link href="/static/css/base.css?v=11" rel="stylesheet" type="text/css">
   <link href="/static/css/modern.css?v=5" rel="stylesheet" type="text/css">
 
@@ -147,7 +147,7 @@
     {% endblock %}
   </div>
 
-  <main id="contenido" tabindex="-1" class="container-md {% if is_user %}main-animals{% endif %}">
+  <main id="contenido" tabindex="-1" class="{% if is_user %}main-animals{% endif %}">
   {% block content %}
   {% endblock %}
   </main>
@@ -219,8 +219,9 @@
 
   <link href='{% static "vendor/fontawesome-free/css/all.min.css" %}' rel="stylesheet" type="text/css">
 
-  <script src='{% static "vendor/jquery/jquery.min.js" %}'></script>
-  <script src='{% static "vendor/bootstrap/js/bootstrap.min.js" %}'></script>
+  {# la versión en la URL: estos archivos se sirven con un año de caché #}
+  <script src='{% static "vendor/jquery/jquery.min.js" %}?v=3.7.1'></script>
+  <script src='{% static "vendor/bootstrap/js/bootstrap.min.js" %}?v=4.6.2'></script>
 
   {% block js %}{% endblock %}
 
