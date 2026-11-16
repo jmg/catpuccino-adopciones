@@ -36,11 +36,22 @@ if ENV != "LOCAL":
     # Configure Sentry for production only. The DSN is the platform's Jentry
     # project's (SENTRY_DSN); the config's, a sentry.io project from the
     # droplet, only counts without it.
+    #Sin datos personales: los formularios del sitio los tienen (el de pre-adopción, el
+    #contrato con el DNI) y con send_default_pii=True cada error se llevaba el cuerpo del
+    #POST, la cookie de sesión y el mail del usuario. Tampoco las variables locales de cada
+    #línea del stack trace, que en esas vistas son las respuestas del formulario.
+    #catus_project/sentry.py limpia lo que quede, también en las transacciones.
+    from .sentry import sin_datos_personales
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN") or app_config.get("SENTRY_DSN"),
         integrations=[DjangoIntegration()],
         traces_sample_rate=0.1,  # Capture 10% of transactions for performance monitoring
-        send_default_pii=True,   # Send personally identifiable information
+        send_default_pii=False,
+        max_request_body_size="never",
+        include_local_variables=False,
+        before_send=sin_datos_personales,
+        before_send_transaction=sin_datos_personales,
         environment="production" if ENV == "PROD" else ENV.lower(),
     )
 else:
