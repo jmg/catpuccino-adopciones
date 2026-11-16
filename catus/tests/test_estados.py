@@ -361,3 +361,78 @@ class ServicioTest(TestCase):
         self.assertEqual(Animal.objects.get(id=animal.id).estado, "D")
         self.assertEqual(animal.estado, "A")
         self.assertIsNotNone(animal.fecha_adopcion)
+
+
+class CompletarFechaAdopcionTest(TestCase):
+    """Los adoptados que quedaron sin fecha por el selector de la edición: el comando los
+    cuenta y, con --aplicar --desde, les pone la fecha para que el panel pregunte quién."""
+
+    def setUp(self):
+        self.rescatista = make_user()
+
+    def adoptado_sin_fecha(self, tocado_hace, nombre="Willy"):
+
+        animal = make_animal(nombre=nombre, estado="A", cargado_por=self.rescatista)
+        #updated_at a mano: save() no lo toca, pero create sí lo puso en ahora
+        Animal.objects.filter(id=animal.id).update(updated_at=hace(tocado_hace))
+        animal.refresh_from_db()
+        return animal
+
+    def correr(self, *args):
+
+        salida = StringIO()
+        call_command("completar_fecha_adopcion", *args, stdout=salida, stderr=StringIO())
+        return salida.getvalue()
+
+    def test_sin_aplicar_solo_cuenta_y_no_imprime_nombres_ni_mails(self):
+
+        reciente = self.adoptado_sin_fecha(3, nombre="Nombre Secreto")
+        self.adoptado_sin_fecha(400, nombre="Otro Secreto")
+        make_animal(nombre="Con fecha", estado="A", fecha_adopcion=hace(5))
+
+        salida = self.correr()
+
+        self.assertIn("2 adoptados sin fecha", salida)
+        self.assertIn("última semana: 1", salida)
+        self.assertIn("más de un año: 1", salida)
+        self.assertNotIn("Secreto", salida)
+        self.assertNotIn("@", salida)
+        reciente.refresh_from_db()
+        self.assertIsNone(reciente.fecha_adopcion)
+
+    def test_aplicar_pone_la_fecha_de_updated_at_solo_desde_el_corte(self):
+
+        reciente = self.adoptado_sin_fecha(10)
+        viejo = self.adoptado_sin_fecha(200, nombre="Viejo")
+        desde = timezone.localdate() - timedelta(days=30)
+
+        salida = self.correr("--aplicar", "--desde", desde.isoformat())
+
+        reciente.refresh_from_db()
+        viejo.refresh_from_db()
+        self.assertEqual(reciente.fecha_adopcion, reciente.updated_at)
+        self.assertIsNone(viejo.fecha_adopcion)
+        self.assertIn("1 adoptados quedaron con fecha", salida)
+
+    def test_el_panel_pregunta_quien_lo_adopto_despues_de_completar(self):
+
+        animal = self.adoptado_sin_fecha(10)
+        make_estado_formulario(animal, persona_nombre="Ana Pérez", tipo="A", hash="h-ana")
+        self.client.force_login(self.rescatista)
+        self.assertNotIn('id="pregunta-adopcion-{}"'.format(animal.id), self.client.get("/accounts/profile/").content.decode())
+
+        self.correr("--aplicar", "--desde", (timezone.localdate() - timedelta(days=30)).isoformat())
+
+        self.assertIn('id="pregunta-adopcion-{}"'.format(animal.id), self.client.get("/accounts/profile/").content.decode())
+
+    def test_aplicar_sin_desde_no_toca_nada(self):
+
+        from django.core.management.base import CommandError
+
+        animal = self.adoptado_sin_fecha(10)
+
+        with self.assertRaises(CommandError):
+            self.correr("--aplicar")
+
+        animal.refresh_from_db()
+        self.assertIsNone(animal.fecha_adopcion)
