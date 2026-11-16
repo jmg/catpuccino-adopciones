@@ -59,10 +59,14 @@ class FormViewPostTest(TestCase):
         self.assertIsNotNone(self.animal.fecha_adopcion)
 
     def test_marcar_adoptado_no_pisa_una_fecha_existente(self):
+        """La fecha es la de la adopción en curso: si el animal ya estaba adoptado, marcar
+        a otro candidato no la cambia. (Desde services/estados.py, salir de "Adoptado" la
+        borra, así que un animal en adopción ya no arrastra la fecha de una adopción vieja.)"""
 
         from django.utils import timezone
 
         fecha = timezone.now() - timezone.timedelta(days=5)
+        self.animal.estado = "A"
         self.animal.fecha_adopcion = fecha
         self.animal.save()
 
@@ -266,3 +270,67 @@ class FormViewPermisosTest(TestCase):
 
         self.animal.refresh_from_db()
         self.assertEqual(self.animal.estado, "A")
+
+
+class BotonesDeEstadoTest(TestCase):
+    """"¿En qué quedó?" en /formularios/<hash>/. El mail al rescatista prometía "desde el
+    sitio podés cambiarle el estado" y la página no tenía cómo: el 99,8% de los formularios
+    de producción quedaba "No asignado" para siempre."""
+
+    def setUp(self):
+        self.rescatista = make_user(email="rescate@catpuccino.test")
+        self.animal = make_animal(nombre="Willy", estado="D", cargado_por=self.rescatista)
+        self.estado_form = make_estado_formulario(animal=self.animal, hash="hash-botones")
+        self.client.force_login(self.rescatista)
+
+    def test_la_pagina_muestra_los_botones(self):
+        html = self.client.get("/formularios/hash-botones/").content.decode()
+        self.assertIn("¿En qué quedó?", html)
+        for texto in ("Ya lo contacté", "Reservar para esta persona", "Adoptó", "Descartar"):
+            self.assertIn(texto, html)
+        self.assertIn('name="volver"', html)
+
+    def test_un_boton_cambia_el_estado_y_vuelve_a_la_pagina(self):
+        response = self.client.post("/formularios/hash-botones/", {"estado": "P", "volver": "1"})
+        self.assertRedirects(response, "/formularios/hash-botones/?hecho=P", fetch_redirect_response=False)
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.estado, "P")
+        #y la vuelta dice cómo salió
+        self.assertContains(self.client.get("/formularios/hash-botones/?hecho=P"), "Listo: quedó como «En proceso de contacto con el candidato»")
+
+    def test_adopto_deja_al_animal_adoptado_con_fecha(self):
+        self.client.post("/formularios/hash-botones/", {"estado": "A", "volver": "1"})
+        self.animal.refresh_from_db()
+        self.assertEqual(self.animal.estado, "A")
+        self.assertIsNotNone(self.animal.fecha_adopcion)
+        self.assertEqual(self.animal.estado_formulario_id, self.estado_form.id)
+
+    def test_un_rescatista_no_puede_bloquear_ni_marcar_duplicado(self):
+        for estado in ("B", "U"):
+            response = self.client.post("/formularios/hash-botones/", {"estado": estado, "volver": "1"})
+            self.assertRedirects(response, "/formularios/hash-botones/?hecho=error", fetch_redirect_response=False)
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.estado, "N")
+
+    def test_el_equipo_puede_liberar_uno_bloqueado(self):
+        equipo = make_user(email="equipo@catpuccino.test", is_superuser=True)
+        self.client.force_login(equipo)
+        self.estado_form.estado = "B"
+        self.estado_form.save()
+
+        html = self.client.get("/formularios/hash-botones/").content.decode()
+        self.assertIn("Liberarlo", html)
+        self.client.post("/formularios/hash-botones/", {"estado": "N", "volver": "1"})
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.estado, "N")
+
+    def test_sin_volver_sigue_contestando_json(self):
+        response = self.client.post("/formularios/hash-botones/", {"estado": "P"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"status": "ok"', response.content.decode())
+
+    def test_un_ajeno_no_ve_la_pagina_ni_cambia_nada(self):
+        self.client.force_login(make_user(email="otro@catpuccino.test"))
+        self.assertEqual(self.client.post("/formularios/hash-botones/", {"estado": "D", "volver": "1"}).status_code, 403)
+        self.estado_form.refresh_from_db()
+        self.assertEqual(self.estado_form.estado, "N")

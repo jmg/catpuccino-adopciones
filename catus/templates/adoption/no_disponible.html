@@ -1,0 +1,15 @@
+{% comment %}
+El link traía un animal que ya no está en adopción (reservado, con familia o expirado). Antes
+la página decía "Formulario para adoptar a X" y el desplegable quedaba sin él: la persona se
+enteraba al final, después de unas 40 preguntas. Lo incluye preadoption.html.
+{% endcomment %}
+{% if animal_no_disponible %}
+<div class="aviso-no-disponible" role="status">
+    <i class="fa fa-info-circle" aria-hidden="true"></i>
+    <div>
+        <b>{{ animal_no_disponible.nombre }} ya no está en adopción:</b> puede estar reservado o ya tener familia.
+        Con este mismo formulario te podés postular a otro {{ animal_type }}.
+        <a href="/">Ver los que buscan familia</a>
+    </div>
+</div>
+{% endif %}

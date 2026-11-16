@@ -23,7 +23,8 @@ from django.conf.urls.static import static
 from django.conf import settings
 from django.contrib.auth import logout, views as auth_views
 from django.shortcuts import redirect
-from catus.forms import PasswordResetForm, UserLoginForm
+from catus.auth import PasswordResetView
+from catus.forms import UserLoginForm
 
 
 def logout_view(request):
@@ -40,11 +41,9 @@ urlpatterns += [
     re_path(r'^forms/', include(forms_builder.forms.urls)),
 
     path('accounts/login/', auth_views.LoginView.as_view(authentication_form=UserLoginForm), name='login'),
-    # Its own form, from when Django's (2.0) mailed the address typed (CVE-2019-19844).
-    # The text part used to be the HTML template too, tags and all.
-    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(
-        form_class=PasswordResetForm, email_template_name='registration/password_reset_email.txt',
-        html_email_template_name='registration/password_reset_email.html')),
+    # Its own form, from when Django's (2.0) mailed the address typed (CVE-2019-19844),
+    # and a limit per connection and per address (catus/auth.py).
+    path('accounts/password_reset/', PasswordResetView.as_view()),
     path('accounts/logout/', logout_view, name='logout'),
     path('accounts/', include('django.contrib.auth.urls')),
 

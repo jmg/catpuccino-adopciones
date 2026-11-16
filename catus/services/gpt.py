@@ -7,11 +7,7 @@ from django.conf import settings
 import openai
 import json
 import re
-import instaloader
-import requests
 from bs4 import BeautifulSoup
-import os.path
-from pathlib import Path
 
 
 class GPTService(BaseService):
@@ -19,32 +15,17 @@ class GPTService(BaseService):
     #la página de un post de Instagram pesa menos de 1 MB
     MAX_POST_BYTES = 5 * 1024 * 1024
 
-    #El pedido web espera esta llamada. Sin request_timeout el SDK 0.x se queda
-    #esperando 600s: el rescatista pegaba el link y se comia un 502 en vez de un
-    #error. Lo mismo que hace ModeracionService.
+    #El pedido web espera esta llamada, y el worker corta a los 30s. Sin timeout el SDK
+    #espera 600s (y el 1.x además reintenta dos veces): el rescatista pegaba el link y se
+    #comía un 502 en vez de un error. Lo mismo que hace ModeracionService.
     TIMEOUT_OPENAI = 12
 
+    #gpt-3.5-turbo ya no existe para las cuentas de OpenAI: la API contestaba
+    #InvalidRequestError y "Obtener datos desde Instagram" fallaba siempre, con un
+    #"No pudimos leer ese post" que no decía por qué.
+    MODELO = "gpt-4o-mini"
+
     def _get_html_title_and_images(self, url):
-
-        # try:
-        #     L = instaloader.Instaloader(save_metadata=False, quiet=True, compress_json=False)
-        #     #get IG shortcode from url
-        #     regex = r"^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com.*\/p\/)([\d\w\-_]+)(?:\/)?(\?.*)?$"
-        #     code = re.findall(regex, url)[0][0]
-
-        #     post = instaloader.Post.from_shortcode(L.context, code)
-        #     path = Path(settings.MEDIA_ROOT)
-        #     media_dir = path.joinpath("gallery", "ig", code)
-
-        #     L.download_post(post, target=media_dir)
-
-        #     text = post.caption
-        #     images = []
-
-        #     for file in os.listdir(media_dir):
-        #         if file.endswith(".jpg") or file.endswith(".png") or file.endswith(".jpeg") or file.endswith(".gif") or file.endswith(".mp4") or file.endswith(".webp"):
-        #             images.append("{}/gallery/ig/{}/{}".format(settings.SSL_HOST, code, file))
-        # except:
 
         #el link lo pega el rescatista y el server lo va a buscar: solo instagram.com,
         #por https, y lo mismo cada redirect. Sin esto se le podía hacer pedir al server
@@ -221,13 +202,6 @@ class GPTService(BaseService):
         if not es_url_de_instagram(url):
             raise ValueError("El link tiene que ser de un post de Instagram (https://www.instagram.com/...).")
 
-        openai.organization = settings.OPENIA_API_ORG_ID
-        openai.api_key = settings.OPENIA_API_KEY
-
-        #gpt-3.5-turbo ya no existe para las cuentas de OpenAI: la API contestaba
-        #InvalidRequestError y "Obtener datos desde Instagram" fallaba siempre, con un
-        #"No pudimos leer ese post" que no decía por qué.
-        model = "gpt-4o-mini"
         prompt = "Si el post es sobre un gato o perro en adopción: Extraer el nombre del animal en adopción, tipo (perro o gato), sexo (se puede deducir del texto, para el resultado usar el valor 'macho' o 'hembra'), edad y descripción (copiarla textualmente sin usar \"). Responder con un objeto JSON. No usar comentarios // en el JSON."
 
         text, images = self._get_html_title_and_images(url)
@@ -237,13 +211,7 @@ class GPTService(BaseService):
             {"role": "user", "content": text},
         ]
 
-        response = openai.ChatCompletion.create(
-            model=model, messages=messages, request_timeout=self.TIMEOUT_OPENAI,
-            #la respuesta copia la descripción del post, y un caption de Instagram tiene
-            #a lo sumo 2200 caracteres: con esto alcanza y una respuesta no se dispara
-            max_tokens=1500,
-        )
-        content = response["choices"][0]["message"]["content"]
+        content = self._preguntar(messages)
 
         if pedido is not None:
             pedido.chatgpt_response = content
@@ -260,3 +228,36 @@ class GPTService(BaseService):
         data["images"] = images
 
         return data
+
+    def _preguntar(self, messages):
+        """La respuesta del modelo. Con el SDK 1.x (openai.OpenAI), el de producción desde
+        que se dejó openai 0.28; el 0.x queda mientras alguna imagen lo tenga instalado."""
+
+        #la respuesta copia la descripción del post, y un caption de Instagram tiene a lo
+        #sumo 2200 caracteres: con esto alcanza y una respuesta no se dispara
+        max_tokens = 1500
+
+        if hasattr(openai, "OpenAI"):
+
+            cliente_kwargs = {
+                "api_key": settings.OPENIA_API_KEY,
+                "timeout": self.TIMEOUT_OPENAI,
+                #el 1.x reintenta dos veces por su cuenta: tres esperas de 12s no entran
+                #en los 30s del worker
+                "max_retries": 0,
+            }
+            if settings.OPENIA_API_ORG_ID:
+                cliente_kwargs["organization"] = settings.OPENIA_API_ORG_ID
+
+            respuesta = openai.OpenAI(**cliente_kwargs).chat.completions.create(
+                model=self.MODELO, messages=messages, max_tokens=max_tokens,
+            )
+            return respuesta.choices[0].message.content
+
+        openai.organization = settings.OPENIA_API_ORG_ID
+        openai.api_key = settings.OPENIA_API_KEY
+
+        respuesta = openai.ChatCompletion.create(
+            model=self.MODELO, messages=messages, request_timeout=self.TIMEOUT_OPENAI, max_tokens=max_tokens,
+        )
+        return respuesta["choices"][0]["message"]["content"]

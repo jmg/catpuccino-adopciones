@@ -51,9 +51,12 @@ class AnimalAdmin(admin.ModelAdmin):
             links += " | <a target='_blank' href='/user/settingslogin/?user_id={}'>Login as user</a>".format(obj.cargado_por.id)
             links += " | <a target='_blank' href='/tools/preguntaradopcion/?user_id={}'>Preguntar Adopción</a>".format(obj.cargado_por.id)
 
-        # Agregar enlace para aprobar animal si no está aprobado
+        #Al que no está aprobado, el link a la cola del equipo, que es donde se aprueba (o
+        #se decide no publicarlo). Antes era un link que aprobaba con un GET: lo disparaba
+        #cualquier cosa que lo abriera. Desde acá también se aprueba con la acción en lote o
+        #el tilde del listado.
         if not obj.aprobado:
-            links += " | <a target='_blank' href='/animal/aprobar/?id={}' style='color: green; font-weight: bold;'>Aprobar Animal</a>".format(obj.id)
+            links += " | <a target='_blank' href='/tools/animalespendientes/#animal-{}' style='color: green; font-weight: bold;'>Revisar en la cola</a>".format(obj.id)
 
         return mark_safe(links)
 

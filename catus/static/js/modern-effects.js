@@ -17,20 +17,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
-  // Verificar qué elementos de texto necesitan el botón "Mostrar más"
-  document.querySelectorAll('.show-more-text').forEach(textElement => {
-    const showMoreLink = textElement.nextElementSibling.querySelector('.show-more-a');
-
-    // Comprobar si el texto está truncado (si el contenido desborda)
-    const isOverflowing = textElement.scrollHeight > textElement.clientHeight;
-
-    if (!isOverflowing) {
-      // Si no hay desbordamiento, ocultar el enlace "Mostrar más"
-      if (showMoreLink) {
-        showMoreLink.parentElement.style.display = 'none';
-      }
-    }
-  });
+  // Qué descripciones necesitan "Mostrar más" lo decide index.js (revisarMostrarMas), que
+  // las mide cuando se ven. Acá se medían todas una sola vez, al cargar, y a las tarjetas
+  // ocultas por la paginación —que miden 0— se les sacaba el link para siempre.
+  if (window.revisarMostrarMas) {
+    window.revisarMostrarMas();
+  }
 
   // Efecto de la navbar al hacer scroll
   const navbar = document.getElementById('mainNav');

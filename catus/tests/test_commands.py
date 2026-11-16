@@ -1,10 +1,8 @@
 """Tests de los comandos de management, que corren por cron sin nadie mirando."""
-import io
 import json
 import shutil
 import tempfile
 from datetime import timedelta
-from urllib.error import HTTPError
 from io import StringIO
 from unittest import mock
 
@@ -24,12 +22,14 @@ from catus.tests.factories import make_animal, make_animal_image, make_user, upl
 def error_de_graph(code, message, subcode=None, user_msg=None):
     """El motivo tal como le llega al cron cuando Graph rechaza una publicación.
 
-    Se arma con un error de verdad -pyfb pide con urlopen, así que un 400 de Graph llega
-    como HTTPError con el JSON en el cuerpo- y se lo pasa por el mismo show_error que usa
-    el pipeline. El test del corte por límite escribía el motivo a mano ("Error 4:
+    Se arma con un error de verdad -la respuesta de Graph, con el JSON en el cuerpo, pasada
+    por el mismo graph_post que usa el pipeline con requests reemplazado- y se lo pasa por el
+    mismo show_error. El test del corte por límite escribía el motivo a mano ("Error 4:
     Application request limit reached"), un texto que no manda nadie: pasaba aunque el
     detector no reconociera ni uno solo de los errores que llegan de verdad.
     """
+
+    from catus.services.facebook import GraphError
 
     error = {"message": message, "type": "OAuthException", "code": code}
 
@@ -40,14 +40,16 @@ def error_de_graph(code, message, subcode=None, user_msg=None):
         #el que Facebook traduce a la locale de la app, y el que show_error prefiere
         error["error_user_msg"] = user_msg
 
-    cuerpo = json.dumps({"error": error}).encode("utf-8")
+    respuesta = mock.Mock(status_code=400, text=json.dumps({"error": error}))
+    respuesta.json.return_value = {"error": error}
 
-    respuesta = HTTPError(
-        "https://graph.facebook.com/v4.0/17841400000000000/media_publish",
-        400, "Bad Request", {}, io.BytesIO(cuerpo),
-    )
+    with mock.patch("catus.services.facebook.requests.post", return_value=respuesta):
+        try:
+            FacebookApiService.graph_post("17841400000000000/media_publish", access_token="x", creation_id="1")
+        except GraphError as e:
+            return FacebookApiService.show_error(e)
 
-    return FacebookApiService.show_error(respuesta)
+    raise AssertionError("graph_post no levantó GraphError")
 
 
 class OptimizeImagesTest(TestCase):

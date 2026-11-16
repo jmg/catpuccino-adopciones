@@ -11,6 +11,17 @@ from catus.services.gpt import GPTService
 from catus.utils import es_url_de_instagram
 
 
+def openai_falso(contenido):
+    """openai.OpenAI de mentira (SDK 1.x), con el cliente que devuelve: su
+    chat.completions.create contesta `contenido`. create=True porque mientras la imagen
+    tenga openai 0.28 el módulo no trae OpenAI; con el 1.x, lo reemplaza igual."""
+
+    cliente = mock.Mock()
+    mensaje = mock.Mock(content=contenido)
+    cliente.chat.completions.create.return_value = mock.Mock(choices=[mock.Mock(message=mensaje)])
+    return mock.patch("catus.services.gpt.openai.OpenAI", create=True, return_value=cliente), cliente
+
+
 class EsUrlDeInstagramTest(TestCase):
 
     def test_acepta_links_de_posts(self):
@@ -281,20 +292,20 @@ class RedirectsTest(TestCase):
 class TimeoutDeOpenAITest(TestCase):
 
     def test_la_llamada_al_modelo_tiene_timeout(self):
-        """Sin request_timeout el SDK 0.x espera 600s y el worker corta a los 30: el
-        rescatista pegaba el link y se comía un 502."""
+        """Sin timeout el SDK espera 600s, y el 1.x además reintenta dos veces; el worker
+        corta a los 30: el rescatista pegaba el link y se comía un 502."""
 
         pagina = (
             b'<html><head><meta property="og:title" content="Willy busca hogar">'
             b"</head><body></body></html>"
         )
 
-        respuesta = {"choices": [{"message": {"content": '{"nombre": "Willy", "tipo": "gato"}'}}]}
+        parche, cliente = openai_falso('{"nombre": "Willy", "tipo": "gato"}')
 
-        with mock.patch("catus.services.gpt.descargar", return_value=pagina):
-            with mock.patch("catus.services.gpt.openai.ChatCompletion.create", return_value=respuesta) as create:
-                data = GPTService().pull_data_from_ig("https://www.instagram.com/p/abc/")
+        with mock.patch("catus.services.gpt.descargar", return_value=pagina), parche as OpenAI:
+            data = GPTService().pull_data_from_ig("https://www.instagram.com/p/abc/")
 
         self.assertEqual(data["Nombre"], "Willy")
-        self.assertTrue(create.call_args[1].get("request_timeout"))
-        self.assertLessEqual(create.call_args[1]["request_timeout"], 15)
+        self.assertLessEqual(OpenAI.call_args.kwargs["timeout"], 15)
+        self.assertEqual(OpenAI.call_args.kwargs["max_retries"], 0)
+        self.assertTrue(cliente.chat.completions.create.called)

@@ -69,6 +69,32 @@
         line-height: 1.45;
     }
 
+    /* El animal del link ya no está en adopción (adoption/no_disponible.html) */
+    .aviso-no-disponible {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        background: var(--lavanda);
+        border: 1px solid var(--lavanda-borde);
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+        color: var(--text-color);
+        font-size: 15px;
+        line-height: 1.5;
+    }
+
+    .aviso-no-disponible .fa {
+        color: var(--primary-color);
+        margin-top: 4px;
+    }
+
+    .aviso-no-disponible a {
+        display: inline-block;
+        margin-top: 6px;
+        font-weight: 700;
+    }
+
     /* Los títulos de los formularios están escritos en mayúsculas en el admin */
     .preadoption-title,
     #terms-and-conditions h4 {
@@ -577,6 +603,7 @@
                     </div>
                 </div>
                 {% endif %}
+                {% include "adoption/no_disponible.html" %}
 
                 {% if not is_user %}
                 <div class="aviso-importante" role="note">
@@ -596,6 +623,7 @@
                 <button type="button" class="btn btn-secondary" onclick="showTerms()"><i class="fa fa-list-ul mr-2" aria-hidden="true"></i> Mostrar requisitos de {% if form_type == "preadoption" %}adopción{% else %}tránsito{% endif %}</button>
             </div>
             {% elif not is_user %}
+            {% include "adoption/no_disponible.html" %}
             <div class="aviso-importante" role="note">
                 <i class="fa fa-info-circle" aria-hidden="true"></i>
                 <div><b>Importante:</b> Los gatos y perros en adopción publicados en este sitio <b>no pertenecen a Catpuccino Adopciones</b>. Son de personas independientes que buscan una adopción responsable para ellos.</div>
@@ -631,7 +659,7 @@
                         </li>
 
                         <li>
-                        Gracias por tomarte el tiempo de completar el formulario. Quien publicó a <b>{{animal.nombre}}</b> lo va a revisar y, si avanza con la adopción, se va a comunicar con vos.
+                        Gracias por tomarte el tiempo de completar el formulario. <span id="quien-publico">{% if animal %}Quien publicó a <b>{{animal.nombre}}</b>{% else %}Quien publicó al animal que elijas{% endif %}</span> lo va a revisar y, si avanza con la adopción, se va a comunicar con vos.
                         </li>
 
                         </ul>
@@ -830,6 +858,16 @@
             hideTerms(true);
         }
 
+        // el embudo: abrió el formulario y, con la primera respuesta, empezó a contestar
+        pasoDelFormulario("abrio");
+        // (solo lo que hace una persona: initQuestions() dispara "change" al cargar)
+        $("#adoption-form").on("input.embudo change.embudo", function(evento) {
+            if (evento.originalEvent && evento.originalEvent.isTrusted) {
+                pasoDelFormulario("empezo");
+                $("#adoption-form").off(".embudo");
+            }
+        });
+
         if (getCookie("{{accepted_terms_cookie}}") !== "1") {
             hideForm();
         }
@@ -971,10 +1009,38 @@
         campo.focus({preventScroll: true});
     }
 
+    // ---- Embudo (services/embudo.py) -------------------------------------------------
+
+    // Hasta dónde llega la gente: cada paso una vez por pestaña, con sendBeacon (no frena
+    // nada ni espera respuesta). Solo contadores por día: no se manda ningún dato.
+    function pasoDelFormulario(paso) {
+        {% if form_type == "preadoption" and not is_post %}
+        try {
+            var clave = "embudo-{{ animal_type }}-" + paso;
+            if (sessionStorage.getItem(clave)) {
+                return;
+            }
+            sessionStorage.setItem(clave, "1");
+        } catch (e) {}
+        if (!navigator.sendBeacon || !window.FormData) {
+            return;
+        }
+        var datos = new FormData();
+        datos.append("paso", paso);
+        datos.append("especie", "{% if animal_type == 'perro' %}P{% else %}G{% endif %}");
+        datos.append("csrfmiddlewaretoken", "{{ csrf_token }}");
+        navigator.sendBeacon("/pre-adopcion/paso/", datos);
+        {% endif %}
+    }
+
     function avisarFaltantes(irALaPrimera) {
 
         var faltan = camposConError();
         var barra = $("#faltantes");
+
+        if (faltan.length && irALaPrimera) {
+            pasoDelFormulario("faltantes");
+        }
 
         if (!barra.length) {
             return;
@@ -1006,6 +1072,7 @@
     // formulario, salteándose el nombre, el celular y el mail.
     function aceptarRequisitos() {
 
+        pasoDelFormulario("requisitos");
         hideTerms(true);
         showForm();
 
@@ -1279,6 +1346,15 @@
         var select = el[0];
         var animals = JSON.parse("{{animals|safe|escapejs}}");
 
+        // Sin una opción vacía quedaba elegido el primero de la lista: quien entraba desde el
+        // menú (sin ?id) mandaba el formulario para "Alma" sin haberlo elegido, y el campo
+        // pasaba como completo. Ahora hay que elegir, y si falta lo marca avisarFaltantes.
+        var vacia = document.createElement("option");
+        vacia.text = isDog ? "Elegí un perro" : "Elegí un gato";
+        vacia.value = "";
+        select.appendChild(vacia);
+        select.required = true;
+
         for (var i=0; i < animals.length; i++) {
 
             var option = document.createElement("option");
@@ -1299,12 +1375,49 @@
 
         $(select).on("change", function() {
 
-            showAnimalPhotos(isDog, $(this).val())
+            mostrarQuienPublico(this);
+            if ($(this).val()) {
+                showAnimalPhotos(isDog, $(this).val())
+            } else {
+                sacarFotosDelAnimal();
+            }
         });
+        mostrarQuienPublico(select);
 
         {% if animal %}
             showAnimalPhotos(isDog, "{{animal.id}}");
         {% endif %}
+    }
+
+    // La nota del final dice a quién le llega el formulario: el animal elegido en el
+    // desplegable, que puede no ser el de la URL (o no haber ninguno).
+    function mostrarQuienPublico(select) {
+        var nota = document.getElementById("quien-publico");
+        if (!nota) {
+            return;
+        }
+        var opcion = select.options[select.selectedIndex];
+        nota.textContent = "";
+        if (opcion && opcion.value) {
+            nota.appendChild(document.createTextNode("Quien publicó a "));
+            var nombre = document.createElement("b");
+            nombre.textContent = opcion.text;
+            nota.appendChild(nombre);
+        } else {
+            nota.appendChild(document.createTextNode("Quien publicó al animal que elijas"));
+        }
+    }
+
+    // Con la opción vacía no hay fotos que mostrar: se saca el carrusel del anterior.
+    function sacarFotosDelAnimal() {
+        fotosDe = null;
+        pedidosDeFotos++;
+        if (slider && typeof slider.pause === "function") {
+            slider.pause();
+            slider.closest(".lSSlideOuter").remove();
+        }
+        slider = null;
+        $("#fotos-animal").remove();
     }
 
     var slider = null;
@@ -1544,6 +1657,7 @@
             return false;
         }
 
+        pasoDelFormulario("intento");
         showLoader();
         return true;
     }

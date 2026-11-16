@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness del "Mostrar más" de la portada</title>
+<link rel="stylesheet" href="/static/css/bootstrap.min.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/modern.css">
+</head>
+<body>
+
+<!--
+  La lista de la portada (catus/templates/home/index.html) con 18 tarjetas y, de cada una,
+  la descripción de catus/templates/adoption/card.html: el <span class="show-more-text"> y,
+  en el div de al lado, el link "Mostrar más". El CSS es el del sitio: el recorte en tres
+  renglones (.show-more-text) y el que oculta de la tarjeta 11 en adelante hasta que corre
+  el JS (#animal-list.paginada-inicial) salen de modern.css. jQuery, Bootstrap, index.js y
+  modern-effects.js también son los de verdad.
+
+  data-cols="12": una tarjeta por fila también en la compu, así son 10 por página en los
+  dos perfiles. Hasta que corre el JS, el CSS oculta de la 11 en adelante en el celular y
+  de la 16 en la compu: la 17 arranca oculta en los dos, y es la que miran los tests. Las
+  tarjetas 2 y 18 tienen una descripción corta, que entra entera.
+
+  Lo que sí es copia es este HTML: si card.html cambia sus clases, hay que actualizarlo acá.
+-->
+<!-- modern-effects.js cuenta con la barra de arriba -->
+<nav id="mainNav"></nav>
+
+<input id="filter-zone" type="search" value="">
+<select id="filter-type"><option value="all" selected>Todos</option></select>
+<p id="resultados-cuenta"></p>
+
+<div class="lista-animales">
+<div id="animal-list" data-cols="12" class="row mt-3 paginada-inicial"></div>
+<div id="sin-resultados" style="display: none">No encontramos animales</div>
+<div id="cargar-mas-container" style="display: none"><button id="cargar-mas" type="button">Cargar más</button><span id="cargar-mas-cuenta"></span></div>
+</div>
+
+<script>
+  // las 14 tarjetas, con el mismo HTML que card.html para la descripción
+  (function() {
+    var nombres = ["Uno", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve", "Diez", "Once", "Doce",
+      "Trece", "Catorce", "Quince", "Dieciséis", "Diecisiete", "Dieciocho"];
+    var larga = "<p>Es muy mimosa y le encanta dormir al sol.</p><p>Se lleva bien con otros gatos y con perros tranquilos.</p>"
+      + "<p>Está vacunada, desparasitada y castrada.</p><p>Usa la piedrita sin problemas.</p><p>Busca una familia responsable que la cuide para siempre.</p>";
+    var corta = "Muy buena.";
+    var lista = document.getElementById("animal-list");
+    nombres.forEach(function(nombre, i) {
+      var id = i + 1;
+      var descripcion = (id === 2 || id === 18) ? corta : larga;
+      lista.insertAdjacentHTML("beforeend",
+        '<div data-id="' + id + '" class="animal-card col-md-12">'
+        + '<div data-id="' + id + '" data-type="G" data-name="' + nombre + '" data-zone="" data-sexo="H" data-edad="" data-meses="" class="post-preview">'
+        + '<div class="post-data">'
+        + '<a class="animal-title" href="/adoptar/' + id + '/"><h2 class="post-subtitle">' + nombre + '</h2></a>'
+        + '<div class="animal-description-container">'
+        + '<span class="animal-desciption show-more-text">' + descripcion + '</span>'
+        + '<div><a class="show-more-a" href="javascript:" onclick="showMore(this)">Mostrar más</a></div>'
+        + '</div></div></div></div>');
+    });
+  })();
+</script>
+
+<script src="/static/vendor/jquery/jquery.min.js"></script>
+<script src="/static/vendor/bootstrap/js/bootstrap.min.js"></script>
+<script src="/static/js/index.js"></script>
+<script src="/static/js/modern-effects.js"></script>
+</body>
+</html>

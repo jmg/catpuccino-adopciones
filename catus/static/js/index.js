@@ -15,17 +15,6 @@
       alertify.success(message);
   };
 
-  var picker = [];
-  var currentYear = new Date().getFullYear();
-
-  $('.date-picker').each(function(idx) {
-      picker[idx] = new Pikaday({
-        field: $(this)[0],
-        yearRange: [1920, currentYear+1],
-        format: 'DD/MM/YYYY',
-      });
-  });
-
   $('input').not('.form-input').removeAttr('placeholder');
   $('textarea').removeAttr('placeholder');
 
@@ -95,6 +84,22 @@ $(document).on("slid.bs.carousel", ".animalCarrousel", function(e) {
   }
 })
 
+// La foto de la tarjeta es un link a la ficha: deslizarla para pasar a la siguiente no es
+// tocarla. Si entre que se apoyó y se soltó el dedo (o el mouse) se movió, no se abre.
+var inicioSobreLaFoto = null;
+
+$(document).on("pointerdown", ".animalCarrousel", function(e) {
+  inicioSobreLaFoto = {x: e.clientX, y: e.clientY}
+})
+
+$(document).on("click", ".animalCarrousel a.foto-ficha", function(e) {
+  var inicio = inicioSobreLaFoto
+  inicioSobreLaFoto = null
+  if (inicio && typeof e.clientX === "number" && Math.abs(e.clientX - inicio.x) > 10) {
+    e.preventDefault()
+  }
+})
+
 // Las flechas del carrusel y el desplegable del menú son <a role="button">: un botón se
 // activa también con la barra espaciadora, que en un link solo baja la página.
 $(document).on("keydown", "a[role=button]", function(e) {
@@ -104,15 +109,12 @@ $(document).on("keydown", "a[role=button]", function(e) {
   }
 })
 
+// modern-effects.js la reemplaza por una que además vuelve a la tarjeta al cerrar; las dos
+// abren con .expanded, que es lo que mira revisarUnMostrarMas()
 function showMore(el) {
   var link = $(el)
-  link.parent().prev().toggleClass("show-more-text")
-
-  if (link.text() == "Mostrar más") {
-    link.text("Mostrar menos")
-  } else {
-    link.text("Mostrar más")
-  }
+  var abierta = link.parent().prev().toggleClass("expanded").hasClass("expanded")
+  link.text(abierta ? "Mostrar menos" : "Mostrar más")
 }
 
 function mobileCheck() {
@@ -262,7 +264,12 @@ function sugerenciaEscapada(suggestion, currentValue) {
 
   var valor = String(suggestion.value)
   var buscado = String(currentValue || "")
-  var desde = buscado ? valor.toLowerCase().indexOf(buscado.toLowerCase()) : -1
+  //sin tildes, como el buscador: "lanus" resalta "Lanús". Sacarle la tilde a una letra
+  //escrita junta deja el mismo largo; si el texto no tiene ese largo, se busca como antes
+  var sinTildes = normalizarTexto(valor)
+  var desde = !buscado ? -1 : sinTildes.length === valor.length
+    ? sinTildes.indexOf(normalizarTexto(buscado))
+    : valor.toLowerCase().indexOf(buscado.toLowerCase())
 
   if (desde === -1) {
     return escaparHtml(valor)
@@ -272,19 +279,106 @@ function sugerenciaEscapada(suggestion, currentValue) {
   return escaparHtml(valor.slice(0, desde)) + "<strong>" + escaparHtml(valor.slice(desde, hasta)) + "</strong>" + escaparHtml(valor.slice(hasta))
 }
 
-function _filter(zone, type) {
+// "Lanús", "LANUS" y "lanus" son lo mismo para el buscador: en minúscula y sin tildes.
+// Antes "Lanus" no encontraba "Lanús", y desde el celular casi nadie escribe la tilde.
+function normalizarTexto(texto) {
 
-  zone = zone.toLowerCase()
+  texto = String(texto == null ? "" : texto).toLowerCase()
+  if (texto.normalize) {
+    texto = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  }
+  return texto
+}
+
+// Cachorros: menos de 12 meses. La edad en meses la estima el server del texto que
+// escribió el rescatista (services/edad.py); si no se pudo, data-meses viene vacío y el
+// animal aparece solo con los filtros de edad apagados.
+var MESES_DE_ADULTO = 12;
+
+function mesesDeLaTarjeta(el) {
+
+  var meses = parseInt(textoDelAtributo(el, "data-meses"), 10)
+  return isNaN(meses) ? null : meses
+}
+
+var PALABRAS_DEL_SEXO = {M: "macho", H: "hembra", A: "macho y hembra"};
+
+// Dónde se busca: nombre, zona, sexo y edad (y "cachorro"/"adulto", para quien lo escribe
+// en vez de tocar el botón). Una línea por dato: una palabra no se arma con dos.
+function textoBuscable(el) {
+
+  var meses = mesesDeLaTarjeta(el)
+  return [
+    textoDelAtributo(el, "data-name"),
+    textoDelAtributo(el, "data-zone"),
+    PALABRAS_DEL_SEXO[textoDelAtributo(el, "data-sexo")] || "",
+    textoDelAtributo(el, "data-edad"),
+    meses === null ? "" : (meses < MESES_DE_ADULTO ? "cachorro" : "adulto"),
+  ].map(normalizarTexto).join("\n")
+}
+
+// Cada palabra buscada tiene que estar en algún lado: "macho lanus" encuentra a los machos
+// de Lanús. Con una sola palabra es lo mismo que antes, buscar un pedazo del nombre o la zona.
+function coincideLaBusqueda(el, palabras) {
+
+  var texto = textoBuscable(el)
+  return palabras.every(function(palabra) {
+    return texto.indexOf(palabra) !== -1
+  })
+}
+
+// "Macho y Hembra" es una camada: entra en los dos
+function coincideElSexo(el, sexo) {
+
+  if (!sexo) {
+    return true
+  }
+  var propio = textoDelAtributo(el, "data-sexo")
+  return propio === sexo || propio === "A"
+}
+
+function coincideLaEdad(el, edad) {
+
+  if (!edad) {
+    return true
+  }
+  var meses = mesesDeLaTarjeta(el)
+  if (meses === null) {
+    return false
+  }
+  return edad === "cachorro" ? meses < MESES_DE_ADULTO : meses >= MESES_DE_ADULTO
+}
+
+function _filter(zone, type, sexo, edad) {
+
+  var palabras = normalizarTexto(zone).split(/\s+/).filter(Boolean)
 
   $(".post-preview").each(function() {
 
     //attr y no data(): data() convierte "1636" en número y "null" en null, y ahí
     //toLowerCase() tiraba un TypeError que dejaba sin andar el buscador y el filtro
-    var filterZone = textoDelAtributo(this, "data-zone").toLowerCase().indexOf(zone) !== -1 || textoDelAtributo(this, "data-name").toLowerCase().indexOf(zone) !== -1
-    var filterType = $(this).data("type") == type || type == "all"
+    var coincide = coincideLaBusqueda(this, palabras)
+      && (textoDelAtributo(this, "data-type") == type || type == "all")
+      && coincideElSexo(this, sexo)
+      && coincideLaEdad(this, edad)
 
     //qué se muestra lo decide paginar(): acá solo se marca si la tarjeta coincide
-    $(this).parent().toggleClass("no-coincide", !(filterZone && filterType));
+    $(this).parent().toggleClass("no-coincide", !coincide);
+  })
+}
+
+// Sexo y edad: dos botones cada uno, que se prenden y se apagan. Ninguno prendido es "todos".
+function filtroElegido(atributo) {
+
+  var elegido = $(".filtro-opciones button[" + atributo + "][aria-pressed=true]").attr(atributo)
+  return elegido || ""
+}
+
+function elegirFiltro(atributo, valor) {
+
+  $(".filtro-opciones button[" + atributo + "]").each(function() {
+    var activo = !!valor && this.getAttribute(atributo) === valor
+    $(this).toggleClass("activo", activo).attr("aria-pressed", activo ? "true" : "false")
   })
 }
 
@@ -348,6 +442,56 @@ function paginar() {
   var total = lista.children(".animal-card").length;
   $("#resultados-cuenta").text((coinciden == total ? total : coinciden + " de " + total) + " en adopción");
   $("#sin-resultados").toggle(coinciden === 0);
+
+  //las tarjetas que recién aparecen se miden ahora que se ven
+  revisarMostrarMas();
+}
+
+// "Mostrar más" va solo donde la descripción no entra en sus tres renglones, y eso se
+// puede medir recién cuando la tarjeta se ve. Antes se decidía una sola vez, al cargar,
+// cuando de la tarjeta 11 en adelante estaban ocultas y medían 0: esas quedaban sin el
+// link, y después de "Cargar más" o de buscar un nombre aparecían cortadas y sin forma de
+// abrirlas. Una tarjeta oculta se saltea: la mide paginar() al mostrarla, o el
+// ResizeObserver cuando cambia de tamaño (al aparecer, al cargar la letra, al girar el
+// celular).
+function revisarUnMostrarMas(texto) {
+
+  var vecino = texto.nextElementSibling
+  var link = vecino ? vecino.querySelector(".show-more-a") : null
+  if (!link || !texto.getClientRects().length) {
+    return
+  }
+
+  //abierta mide lo que mide el texto entero: el link tiene que quedar para cerrarla
+  var hayMas = texto.classList.contains("expanded") || texto.scrollHeight > texto.clientHeight + 1
+  link.parentElement.style.display = hayMas ? "" : "none"
+}
+
+function revisarMostrarMas() {
+
+  var textos = document.querySelectorAll(".show-more-text")
+  for (var i = 0; i < textos.length; i++) {
+    revisarUnMostrarMas(textos[i])
+  }
+}
+
+var observadorDeDescripciones = null;
+
+function observarDescripciones() {
+
+  if (!window.ResizeObserver || observadorDeDescripciones) {
+    return;
+  }
+
+  observadorDeDescripciones = new ResizeObserver(function(entradas) {
+    entradas.forEach(function(entrada) {
+      revisarUnMostrarMas(entrada.target)
+    })
+  })
+
+  $(".show-more-text").each(function() {
+    observadorDeDescripciones.observe(this)
+  })
 }
 
 // Todos / Gatos / Perros: los botones de la portada manejan el <select> #filter-type,
@@ -360,8 +504,11 @@ function elegirTipo(tipo) {
   $("#filter-type").val(tipo).trigger("change");
 }
 
+// "Limpiar la búsqueda": el texto, el tipo, el sexo y la edad
 function verTodos() {
   $("#filter-zone").val("");
+  elegirFiltro("data-sexo", "");
+  elegirFiltro("data-edad", "");
   elegirTipo("all");
 }
 
@@ -372,10 +519,10 @@ function cargarMas() {
 
 function filterAnimals() {
 
-  var zone = $("#filter-zone").val();
+  var zone = $("#filter-zone").val() || "";
   var type = $("#filter-type").val();
 
-  _filter(zone, type)
+  _filter(zone, type, filtroElegido("data-sexo"), filtroElegido("data-edad"))
 
   //solo cuando cambia el orden: reordenar vuelve a armar todos los carruseles
   var sort = $("#filter-sort").val() || "";
@@ -388,6 +535,98 @@ function filterAnimals() {
   //otra búsqueda arranca de nuevo por las primeras filas
   paginasMostradas = 1;
   paginar();
+  reflejarEnLaUrl();
+}
+
+// La búsqueda queda en la URL (?buscar=, ?tipo=, ?sexo=, ?edad=): copiada y mandada por
+// WhatsApp, abre la portada ya filtrada. Con replaceState, que no suma una entrada al
+// historial por cada letra. Los demás parámetros (el fbclid que agrega Instagram) quedan.
+var EN_LA_URL = {
+  tipo: {G: "gatos", P: "perros"},
+  sexo: {M: "machos", H: "hembras"},
+  edad: {cachorro: "cachorros", adulto: "adultos"},
+};
+
+// lo que se acepta al leerla: también en singular, y sin importar mayúsculas
+function desdeLaUrl(filtro, valor) {
+
+  valor = normalizarTexto(valor).replace(/s$/, "")
+  var opciones = EN_LA_URL[filtro]
+  for (var clave in opciones) {
+    if (opciones[clave].replace(/s$/, "") === valor) {
+      return clave
+    }
+  }
+  return ""
+}
+
+var esperaDeLaUrl = null;
+
+function reflejarEnLaUrl() {
+
+  if (!$("#filter-zone").length || !window.URLSearchParams || !window.history || !history.replaceState) {
+    return
+  }
+
+  //una vez que se deja de escribir: Safari corta replaceState después de 100 en 30 segundos
+  clearTimeout(esperaDeLaUrl)
+  esperaDeLaUrl = setTimeout(function() {
+
+    var parametros = new URLSearchParams(location.search)
+    var valores = {
+      buscar: $.trim($("#filter-zone").val() || ""),
+      tipo: EN_LA_URL.tipo[$("#filter-type").val()] || "",
+      sexo: EN_LA_URL.sexo[filtroElegido("data-sexo")] || "",
+      edad: EN_LA_URL.edad[filtroElegido("data-edad")] || "",
+    }
+
+    Object.keys(valores).forEach(function(nombre) {
+      if (valores[nombre]) {
+        parametros.set(nombre, valores[nombre])
+      } else {
+        parametros.delete(nombre)
+      }
+    })
+
+    var query = parametros.toString()
+    var url = location.pathname + (query ? "?" + query : "") + location.hash
+    if (url !== location.pathname + location.search + location.hash) {
+      try {
+        history.replaceState(history.state, "", url)
+      } catch (e) {
+        //sin URL actualizada la búsqueda igual anda
+      }
+    }
+  }, 300)
+}
+
+// Al abrir un link con la búsqueda, se aplica antes de mostrar nada
+function aplicarLaUrl() {
+
+  if (!$("#filter-zone").length || !window.URLSearchParams) {
+    return false
+  }
+
+  var parametros = new URLSearchParams(location.search)
+  var buscar = parametros.get("buscar") || ""
+  var tipo = desdeLaUrl("tipo", parametros.get("tipo") || "")
+  var sexo = desdeLaUrl("sexo", parametros.get("sexo") || "")
+  var edad = desdeLaUrl("edad", parametros.get("edad") || "")
+
+  if (!buscar && !tipo && !sexo && !edad) {
+    return false
+  }
+
+  $("#filter-zone").val(buscar)
+  elegirFiltro("data-sexo", sexo)
+  elegirFiltro("data-edad", edad)
+  $(".filtro-tipo button").each(function() {
+    var activo = $(this).data("tipo") == (tipo || "all");
+    $(this).toggleClass("activo", activo).attr("aria-pressed", activo ? "true" : "false");
+  });
+  $("#filter-type").val(tipo || "all")
+  filterAnimals()
+  return true
 }
 
 // "" es el orden en que llegó la página (los publicados o republicados más recientes
@@ -412,13 +651,14 @@ function sortAnimals(option) {
 }
 
 // Las zonas las escribe cada rescatista: "Belgrano", "BELGRANO" y "belgrano " son la
-// misma, y "....." no es ninguna. Queda una por zona, la primera forma que aparece.
+// misma, igual que "Lanús" y "Lanus", y "....." no es ninguna. Queda una por zona, la
+// primera forma que aparece.
 function zonasParaSugerir(zonesData) {
   var vistas = {};
   var zonas = [];
   zonesData.split("||").forEach(function(zona) {
     var limpia = $.trim(zona).replace(/\s+/g, " ");
-    var clave = limpia.toLowerCase();
+    var clave = normalizarTexto(limpia);
     if (!/[a-z0-9áéíóúüñ]/i.test(limpia) || vistas[clave]) {
       return;
     }
@@ -438,7 +678,13 @@ $(document).ready(function() {
 
     initializeImages()
 
-    paginar()
+    observarDescripciones()
+    //con un link que trae la búsqueda (?buscar=…) ya se arranca filtrado; filterAnimals pagina
+    if (!aplicarLaUrl()) {
+      paginar()
+    }
+    //donde no hay lista paginada (/adopciones/) paginar() no hace nada: se miden igual
+    revisarMostrarMas()
     $("#cargar-mas").on("click", cargarMas);
     //cuántas tarjetas entran por fila cambia solo al cruzar los 768px o los 1200px
     //(rotar una tablet); un resize común se dispara con cada scroll en el celular
@@ -457,6 +703,13 @@ $(document).ready(function() {
     })
     $(".filtro-tipo button").on("click", function() {
       elegirTipo($(this).data("tipo"))
+    })
+    //tocar el que está prendido lo apaga: vuelve a "todos"
+    $(".filtro-opciones button").on("click", function() {
+      var atributo = this.hasAttribute("data-sexo") ? "data-sexo" : "data-edad"
+      var valor = this.getAttribute(atributo)
+      elegirFiltro(atributo, filtroElegido(atributo) === valor ? "" : valor)
+      filterAnimals()
     })
     $("#ver-todos").on("click", verTodos)
     $("#filter-type").on("change", function() {
@@ -478,6 +731,10 @@ $(document).ready(function() {
         lookup: zonasParaSugerir(zonesData),
         minChars: 1,
         lookupLimit: 6,
+        //sin tildes ni mayúsculas, como el buscador: "lanus" sugiere "Lanús"
+        lookupFilter: function(suggestion, query) {
+          return normalizarTexto(suggestion.value).indexOf(normalizarTexto(query)) !== -1
+        },
         formatResult: sugerenciaEscapada,
         onSelect: function (suggestion) {
           filterAnimals()

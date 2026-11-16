@@ -371,6 +371,24 @@
         color: #4a5361;
     }
 
+    /* lo que el equipo decidió no publicar: ámbar, 7:1 */
+    .badge-no-publicado {
+        background-color: #fff4e0;
+        color: #6e4300;
+    }
+
+    .motivo-no-publicado {
+        display: block;
+        font-size: 0.9rem;
+        line-height: 1.45;
+        color: var(--text-light);
+        overflow-wrap: anywhere;
+    }
+
+    .motivo-no-publicado + .motivo-no-publicado {
+        margin-top: 4px;
+    }
+
     .badge-success {
         background-color: #e3f4e8;
         color: #1b6e2d;
@@ -681,6 +699,11 @@
         }
 
         #animales-tab .profile-table td:last-child {
+            grid-column: 1 / -1;
+        }
+
+        /* el motivo de lo que no se publicó va entero, abajo del nombre */
+        #animales-tab .profile-table .fila-no-publicada .celda-no-publicado {
             grid-column: 1 / -1;
         }
 
@@ -1008,12 +1031,28 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
                     {% endcomment %}
                     {% spaceless %}
                     {% for animal in animals %}
-                        <tr class="clickable-row" data-href="/animales/{{animal.id}}/" style="cursor: pointer;">
+                        {% with no_se_publico=animal.no_se_publico %}
+                        <tr class="clickable-row{% if no_se_publico %} fila-no-publicada{% endif %}" data-href="/animales/{{animal.id}}/" style="cursor: pointer;">
                         <td>
                             <div class="limited-td">
                                     <a class="table-action-link" href="/animales/{{animal.id}}/">{{animal.nombre}}</a>
                             </div>
                         </td>
+                        {% if no_se_publico %}
+                        {% comment %}
+                        Lo que el equipo decidió no publicar ("No publicar" o archivar_pendientes).
+                        Antes quedaba "En revisión" para siempre y la persona no sabía por qué.
+                        El motivo lo escribió el equipo y sale escapado; el camino de vuelta es
+                        editarlo, que lo devuelve a la cola (la fila entera lleva a la edición).
+                        {% endcomment %}
+                        <td>
+                            <span id="estado-adopcion-{{animal.id}}" class="badge badge-no-publicado">No se publicó</span>
+                        </td>
+                        <td class="celda-no-publicado">
+                            {% if animal.no_publicar_motivo %}<span class="motivo-no-publicado">Motivo: {{ animal.no_publicar_motivo }}</span>{% endif %}
+                            {% if not animal.no_publicar_motivo or "editalo" not in animal.no_publicar_motivo %}<span class="motivo-no-publicado">Si sigue en adopción, editalo y lo volvemos a mirar.</span>{% endif %}
+                        </td>
+                        {% else %}
                         <td>
                             <span id="estado-adopcion-{{animal.id}}" class="badge badge-{{animal.get_estado_badge}}">{{animal.get_estado_display}}</span>
                             <span id="publicado-expired-text-{{animal.id}}" class="small-text">
@@ -1025,6 +1064,7 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
                         <td>
                             <span class="badge badge-{% if not animal.aprobado %}secondary{% else %}primary{% endif %}">{% if not animal.aprobado %}En revisión{% else %}Publicado{% endif %}</span>
                         </td>
+                        {% endif %}
 
                         <td>
                                 <div class="action-buttons">
@@ -1037,7 +1077,8 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
                                         <i class="fa fa-copy" aria-hidden="true"></i>
                                     </button>
 
-                            {% if animal.estado == "E" %}
+                            {# al que no se publicó no se lo republica con un clic: se lo edita, y vuelve a la cola #}
+                            {% if animal.estado == "E" and not no_se_publico %}
                                     <button type="button" id="update-estado-animal-expirado-{{animal.id}}" onclick="marcarEnAdopcion('{{animal.id}}')" class="action-btn" data-tippy-content="Republicar" aria-label="Republicar a {{animal.nombre}}">
                                         <i class="fa fa-sync" aria-hidden="true"></i>
                                     </button>
@@ -1051,6 +1092,7 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
                                 </div>
                         </td>
                     </tr>
+                        {% endwith %}
                     {% endfor %}
                     {% endspaceless %}
                 </tbody>
@@ -1218,8 +1260,8 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
 {{ candidatos_json|json_script:"candidatos-por-animal" }}
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
 <!-- Agregar la librería Tippy.js -->
-<script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
-<script src="https://unpkg.com/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js"></script>
+<script src="/static/vendor/popper-2.11.8/popper.min.js"></script>
+<script src="/static/vendor/tippy-6.3.7/tippy-bundle.umd.min.js"></script>
 
 <script type="text/javascript">
 $(document).ready(function () {
@@ -1277,7 +1319,7 @@ $(document).ready(function () {
     // dedo) llega al botón. Antes se creaban todos al cargar, y dos veces para los botones
     // de acción: con todos los formularios del equipo eran ~28.000 tooltips y la página
     // quedaba congelada unos segundos en la compu y más de diez en un celular.
-    // sin unpkg no hay tooltips, pero el resto de la página (filas clickeables) sigue
+    // sin tippy no hay tooltips, pero el resto de la página (filas clickeables) sigue
     if (window.tippy) tippy.delegate('body', {
         target: '[data-tippy-content]',
         placement: 'top',

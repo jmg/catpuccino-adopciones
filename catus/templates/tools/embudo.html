@@ -1,0 +1,105 @@
+{% extends "base_form.html" %}
+{% comment %}
+El embudo del formulario de pre-adopción (views/embudo.py, services/embudo.py): cuántos lo
+abren y hasta dónde llegan. Solo contadores por día, nada de nadie.
+{% endcomment %}
+
+{% block title %}Embudo del formulario | Catpuccino Adopciones{% endblock %}
+
+{% block css %}
+<style type="text/css">
+    .embudo {
+        max-width: 760px;
+        margin: 8px auto 32px;
+        background: var(--white);
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
+        box-shadow: var(--card-shadow);
+        padding: 24px;
+    }
+
+    .embudo h1 {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: var(--text-color);
+        margin: 0 0 6px;
+    }
+
+    .embudo .nota {
+        color: var(--text-muted);
+        font-size: 15px;
+        margin: 0 0 18px;
+    }
+
+    .embudo-dias {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .embudo h2 {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--text-color);
+        margin: 22px 0 8px;
+    }
+
+    .embudo table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 15px;
+    }
+
+    .embudo td {
+        padding: 9px 6px;
+        border-top: 1px solid var(--lavanda-borde);
+        vertical-align: middle;
+    }
+
+    .embudo td.numero {
+        text-align: right;
+        font-weight: 700;
+        white-space: nowrap;
+        width: 1%;
+    }
+
+    .embudo .barra {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--primary-color);
+        margin-top: 6px;
+        max-width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container px-2">
+    <div class="embudo">
+        <h1>Embudo del formulario de pre-adopción</h1>
+        <p class="nota">Últimos {{ dias }} días. Cada paso del navegador se cuenta una vez por pestaña; "Llegó y se guardó" lo cuenta el servidor, así que con varias postulaciones desde la misma pestaña puede pasar el 100%.</p>
+        <div class="embudo-dias">
+            <a class="btn btn-secondary btn-sm" href="?dias=7">7 días</a>
+            <a class="btn btn-secondary btn-sm" href="?dias=30">30 días</a>
+            <a class="btn btn-secondary btn-sm" href="?dias=90">90 días</a>
+        </div>
+
+        {% for especie in especies %}
+        <h2>{{ especie.especie }}</h2>
+        {% if especie.abrieron %}
+        <table>
+            {% for paso in especie.pasos %}
+            <tr>
+                <td>{{ paso.descripcion }}{% if paso.porcentaje is not None %}<div class="barra" style="width: {% if paso.porcentaje > 100 %}100{% else %}{{ paso.porcentaje }}{% endif %}%" aria-hidden="true"></div>{% endif %}</td>
+                <td class="numero">{{ paso.n }}{% if paso.porcentaje is not None %} · {{ paso.porcentaje }}%{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <p class="nota">Todavía no hay datos.</p>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

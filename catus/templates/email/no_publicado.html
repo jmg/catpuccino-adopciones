@@ -1,0 +1,52 @@
+{% extends "email/base.html" %}
+{% comment %}
+Al rescatista, cuando el equipo decide no publicar uno o varios de sus animales
+(MailService.send_mail_no_publicado): "No publicar" en /tools/animalespendientes/ o el
+comando archivar_pendientes, que manda uno solo por cuenta. "animales" son {nombre,
+link_editar}. El nombre lo escribió el rescatista y el motivo el equipo: los dos salen
+escapados. El camino de vuelta es editarlo, que lo devuelve a la cola: por eso el botón va a
+la edición y no a otro lado. Si el motivo ya lo dice (el de archivar_pendientes), no se repite.
+{% endcomment %}
+{% block preheader %}{% if animales|length == 1 %}{% if sacado_del_sitio %}{{ animales.0.nombre }} ya no está publicado{% else %}{{ animales.0.nombre }} no se publicó{% endif %}{% else %}{{ animales|length }} animales no se publicaron{% endif %}. Si sigue en adopción, editalo y lo volvemos a mirar.{% endblock %}
+{% block content %}
+{% if animales|length == 1 %}
+{% with animal=animales.0 %}
+{% if sacado_del_sitio %}
+{% include "email/_titulo.html" with antetitulo="Tu publicación" titulo=animal.nombre|add:" ya no está publicado" %}
+<p style="margin:0 0 14px;">Revisamos la publicación de <b>{{ animal.nombre }}</b> y la sacamos del sitio: ya no aparece entre los animales en adopción.</p>
+{% else %}
+{% include "email/_titulo.html" with antetitulo="Tu publicación" titulo=animal.nombre|add:" no se publicó" %}
+<p style="margin:0 0 14px;">Revisamos la publicación de <b>{{ animal.nombre }}</b> y por ahora no la vamos a publicar en el sitio.</p>
+{% endif %}
+{% endwith %}
+{% else %}
+{% include "email/_titulo.html" with antetitulo="Tus publicaciones" titulo=animales|length|stringformat:"d"|add:" animales no se publicaron" %}
+<p style="margin:0 0 8px;">Revisamos estas publicaciones y por ahora no las vamos a publicar en el sitio:</p>
+<ul style="margin:0 0 14px;padding-left:20px;">
+{% for animal in animales %}
+  <li style="margin:0 0 4px;"><a href="{{ animal.link_editar }}" style="color:#7020a0;font-weight:600;">{{ animal.nombre }}</a></li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{% if motivo %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f5fd;border-radius:10px;margin:0 0 14px;">
+  <tr><td style="padding:14px 18px;">
+    <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#7020a0;">Motivo</p>
+    <p style="margin:0;font-size:15px;">{{ motivo }}</p>
+  </td></tr>
+</table>
+{% endif %}
+
+{% if not motivo or "editalo" not in motivo %}
+<p style="margin:0 0 14px;">Si sigue en adopción, editalo y lo volvemos a mirar.</p>
+{% endif %}
+
+{% if animales|length == 1 %}
+{% include "email/_boton.html" with url=animales.0.link_editar texto="Editar a "|add:animales.0.nombre margen="8px 0 24px" %}
+{% else %}
+{% include "email/_boton.html" with url=link_panel texto="Ir a mi panel" margen="8px 0 24px" %}
+{% endif %}
+
+<p style="margin:0;">¡Gracias por publicar con nosotros!<br><b>Equipo de Catpuccino Adopciones</b></p>
+{% endblock %}

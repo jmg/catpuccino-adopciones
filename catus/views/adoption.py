@@ -5,15 +5,17 @@ import logging
 import random
 import re
 import uuid
+from forms_builder.forms import fields as campos_forms_builder
 from forms_builder.forms.forms import FormForForm
-from forms_builder.forms.models import Form, Field, FieldEntry
+from forms_builder.forms.models import Form, FieldEntry
 
 from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
-from catus.services.images import shrink_uploads
-from catus.services import postulacion, throttle
+from catus.services.images import FotoDemasiadoGrande, MENSAJE_FOTO_GRANDE, shrink_uploads
+from catus.services import embudo, postulacion, throttle
+from catus.services.contacto import contacto
 from catus.views.contrato import mail_del_adoptante
 
 from django.template import Context
@@ -123,11 +125,18 @@ class PreAdoptionView(BaseView):
                 context["post_url"] = "/transito/perros/"
 
         if animal_id:
-            try:
-                animal = Animal.objects.filter(id=animal_id)
-                context["animal"] = animal[0]
-            except:
-                pass
+            #Solo animales aprobados: los ids son correlativos y antes cualquiera veía nombre y
+            #foto de uno sin aprobar. Y solo uno en adopción encabeza el formulario: si ya no
+            #lo está, se avisa arriba en vez de dejar que se entere al final, al enviar.
+            animal = Animal.objects.filter(id=animal_id, aprobado=True).first() if animal_id.isdigit() else None
+            if animal is not None and animal.tipo != tipo and self.form_type == "preadoption":
+                #el link de un perro en el formulario de gatos (o al revés): al que corresponde
+                destino = "/pre-adopcion/perros/" if animal.tipo == "P" else "/pre-adopcion/"
+                return self.redirect("{}?id={}".format(destino, animal.id))
+            if animal is not None and animal.estado == "D":
+                context["animal"] = animal
+            elif animal is not None:
+                context["animal_no_disponible"] = animal
 
         return BaseView.render_to_response(self, context)
 
@@ -150,6 +159,14 @@ class PreAdoptionView(BaseView):
     def _post_response(self, context):
 
         context.update(self._script_context())
+        #el embudo (services/embudo.py): cómo terminó el envío. El honeypot (bots) no cuenta.
+        if self.form_type == "preadoption" and not context.get("es_bot"):
+            if context.get("success"):
+                embudo.contar(self.animal_type, "enviado")
+            elif context.get("bloqueado"):
+                embudo.contar(self.animal_type, "frenado")
+            else:
+                embudo.contar(self.animal_type, "rechazado")
         return BaseView.render_to_response(self, context)
 
     def _get_form(self):
@@ -199,15 +216,22 @@ class PreAdoptionView(BaseView):
 
         # To a bot it looks like any other submission: nothing is stored or mailed.
         if self.request.POST.get(HONEYPOT_FIELD):
-            return self._post_response({"form": form, "is_post": True, "success": True})
+            return self._post_response({"form": form, "is_post": True, "success": True, "es_bot": True})
 
         rejected = self._rejected()
         if rejected:
             return self._post_response({"form": form, "is_post": True, "success": False, "errors": rejected})
 
         post = getattr(self.request, "POST", None)
-        # Phone photos are shrunk before they are stored; see shrink_uploads.
-        files = shrink_uploads(getattr(self.request, "FILES", None))
+        # Phone photos are shrunk before they are stored; see shrink_uploads. Only the
+        # form's own file fields: anything else in the POST is not even opened.
+        # (FormForForm names each input after its field's slug.)
+        claves = {campo.slug for campo in form.fields.all()
+                  if campo.field_type == campos_forms_builder.FILE}
+        try:
+            files = shrink_uploads(getattr(self.request, "FILES", None), claves)
+        except FotoDemasiadoGrande:
+            return self._post_response({"form": form, "is_post": True, "success": False, "errors": MENSAJE_FOTO_GRANDE})
 
         animal_id = self.request.GET.get("id")
 
@@ -328,16 +352,13 @@ class PreAdoptionView(BaseView):
 
     def set_animal_name_otro(self, form_entry, value):
 
-        for form_field in form_entry.fields.all():
+        #sobre las respuestas que ya leyó el servicio (dos consultas, no una por pregunta),
+        #y cambiando esos mismos objetos: lo que se lea después en este envío ve el valor nuevo
+        for form_field, field in AdoptionService().respuestas(form_entry):
 
-            try:
-                field = Field.objects.get(id=form_field.field_id)
-            except:
-                continue
-
-            if "Nombre del gato a adoptar" in field.label:
+            if field is not None and "Nombre del gato a adoptar" in field.label:
                 form_field.value = value
-                form_field.save()
+                form_field.save(update_fields=["value"])
 
     #los datos de contacto van juntos, en una ficha, arriba de las respuestas del mail
     DATOS_DE_LA_PERSONA = ("Nombre y Apellido", "Edad", "Profesión", "Celular", "Email", "Direccion",
@@ -375,8 +396,13 @@ class PreAdoptionView(BaseView):
             else:
                 titulo = "{} completó un formulario".format(nombre) if nombre else "Llegó un formulario nuevo"
 
+        #los botones de WhatsApp y llamada, como arriba de /formularios/<hash>/: el rescatista
+        #trabaja desde el mail y casi nunca entra al sitio
+        datos = {etiqueta.lower(): valor for etiqueta, valor in ficha}
+        links = contacto(datos.get("celular"), datos.get("email"))
+
         return {"ficha": ficha, "respuestas": respuestas, "nombre": nombre, "nombre_animal": nombre_animal,
-                "antetitulo": antetitulo, "titulo": titulo}
+                "antetitulo": antetitulo, "titulo": titulo, "contacto": links}
 
     def send_email(self, form_entry, form_for_form, animal, estado):
 
@@ -412,10 +438,14 @@ class PreAdoptionView(BaseView):
 
         #el formulario ya quedó guardado: si el mail falla, avisamos por el log pero
         #no le mostramos un error a quien acaba de completarlo (volvería a mandarlo)
+        #"Responder" le escribe al candidato. Antes el Reply-To eran los mismos destinatarios:
+        #el rescatista se contestaba a sí mismo y al equipo, nunca a quien se postuló.
+        responder_a = mail_del_adoptante(estado)
         try:
-            send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)))
-        except Exception:
-            logger.exception("No se pudo avisar del formulario %s", estado.hash)
+            send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)),
+                            reply_to=[responder_a] if responder_a else None)
+        except Exception as e:
+            logger.warning("No se pudo avisar del formulario %s: %s", estado.id, type(e).__name__)
 
         # The receipt goes to the one address the candidate gave, if it is an address:
         # on the cats' form that field is free text. And since nothing proves it is
@@ -443,8 +473,9 @@ class PreAdoptionView(BaseView):
 
         try:
             send_html_email(subject, content, settings.SEND_MAIL, email)
-        except Exception:
-            logger.exception("No se pudo confirmarle el formulario %s a %s", estado.hash, email)
+        except Exception as e:
+            #sin el mail ni el hash: Sentry adjunta el log, y el hash abre el formulario
+            logger.warning("No se pudo confirmarle el formulario %s: %s", estado.id, type(e).__name__)
 
 
 class PreAdoptionPerrosView(PreAdoptionView):

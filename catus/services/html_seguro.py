@@ -46,7 +46,18 @@ TAGS_SIN_CIERRE = {"br", "hr"}
 #mostrar, así que se descarta entero (si no, el cuerpo del script queda a la vista)
 TAGS_CON_CONTENIDO_DESCARTADO = {"script", "style", "noscript", "iframe", "object", "embed", "template"}
 
+#bloques que no se dejan pasar pero que separan renglones: al sacarlos, su contenido quedaba
+#pegado al siguiente ("sociable.Se entrega castrado"), y es lo que manda el editor cuando se
+#pega texto de otro lado. Al cerrarse dejan un <br>.
+TAGS_DE_BLOQUE = {"div", "section", "article", "header", "footer", "main", "aside", "nav", "figure",
+                  "figcaption", "address", "pre", "h1", "h2", "table", "tr", "dl", "dt", "dd"}
+
 ESQUEMAS_PERMITIDOS = ("http", "https", "mailto")
+
+
+class _SaltoAgregado(str):
+    """El <br> que deja un bloque descartado: se distingue de uno que escribió la persona,
+    para sacarlo si cierra el texto sin tocar los de ella."""
 
 #los navegadores ignoran espacios y caracteres de control adentro del esquema, así que
 #"java\tscript:alert(1)" se ejecuta igual. Los sacamos nosotros: delegarlo en urlparse
@@ -149,6 +160,10 @@ class _Limpiador(HTMLParser):
             self.descartando = max(0, self.descartando - 1)
             return
 
+        if tag in TAGS_DE_BLOQUE and not self.descartando:
+            self._salto()
+            return
+
         if tag in TAGS_SIN_CIERRE or tag not in TAGS_PERMITIDOS:
             return
 
@@ -162,6 +177,11 @@ class _Limpiador(HTMLParser):
             if abierta == tag:
                 break
 
+    def _salto(self):
+        """Un <br> donde terminaba un bloque descartado, salvo al principio o repetido."""
+        if self.partes and self.partes[-1] != "<br>":
+            self.partes.append(_SaltoAgregado("<br>"))
+
     def handle_data(self, data):
 
         if self.descartando:
@@ -170,6 +190,10 @@ class _Limpiador(HTMLParser):
         self.partes.append(escape(data, quote=False))
 
     def resultado(self):
+
+        #el <br> de un bloque que cerraba el texto no separa nada
+        while self.partes and isinstance(self.partes[-1], _SaltoAgregado):
+            self.partes.pop()
 
         while self.abiertas:
             self.partes.append("</{}>".format(self.abiertas.pop()))

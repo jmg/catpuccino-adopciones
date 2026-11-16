@@ -1,0 +1,167 @@
+{% extends "base_form.html" %}
+{% comment %}
+Lo aprobado y en adopción que no tiene posteo en Instagram ni está en camino
+(AnimalesSinPosteoView): el flujo a mano, armar las imágenes y marcarlo listo. Salía de la
+pantalla de pendientes, que ahora es sólo la cola de aprobación. Lo que ya está en el
+pipeline (agendado, listo o con un error) está en la cola de Instagram.
+{% endcomment %}
+
+{% block title %}Aprobados sin posteo | Catpuccino Adopciones{% endblock %}
+
+{% block css %}
+<style>
+    .sin-posteo {
+        max-width: 960px;
+        margin: 8px auto 40px;
+        padding: 0 16px;
+    }
+
+    .sin-posteo-volver {
+        margin: 16px 0 4px;
+        font-size: 15px;
+    }
+
+    .sin-posteo-volver a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        color: var(--primary-dark);
+        font-weight: 700;
+    }
+
+    .sin-posteo h1 {
+        font-size: 1.7rem;
+        font-weight: 800;
+        line-height: 1.2;
+        color: var(--text-color);
+        margin: 0 0 8px;
+    }
+
+    .sin-posteo-resumen {
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--text-light);
+        margin: 0 0 18px;
+        max-width: 70ch;
+    }
+
+    .sin-posteo-resumen a {
+        color: var(--primary-dark);
+        font-weight: 700;
+    }
+
+    .sin-posteo-lista {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        background: #fff;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
+        box-shadow: var(--card-shadow);
+    }
+
+    .sin-posteo-fila {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 16px;
+        border-top: 1px solid var(--lavanda-borde);
+    }
+
+    .sin-posteo-fila:first-child {
+        border-top: 0;
+    }
+
+    .sin-posteo-fila img,
+    .sin-posteo-fila .sin-foto {
+        display: block;
+        width: 56px;
+        height: 56px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: var(--lavanda);
+    }
+
+    .sin-posteo-nombre {
+        font-weight: 800;
+        color: var(--primary-color);
+        overflow-wrap: anywhere;
+    }
+
+    .sin-posteo-detalle {
+        display: block;
+        font-size: 14px;
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .sin-posteo-fila .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+    }
+
+    .sin-posteo-vacia {
+        background: #fff;
+        border: 1px dashed var(--lavanda-borde);
+        border-radius: var(--radio);
+        padding: 24px 16px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 16px;
+    }
+
+    @media (max-width: 480px) {
+        .sin-posteo-fila {
+            grid-template-columns: 56px minmax(0, 1fr);
+        }
+
+        .sin-posteo-fila .btn {
+            grid-column: 1 / -1;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sin-posteo">
+
+    <p class="sin-posteo-volver"><a href="/tools/">← Herramientas</a></p>
+
+    <h1>Aprobados sin posteo</h1>
+
+    <p class="sin-posteo-resumen">
+        Publicados en el sitio que todavía no salieron en Instagram ni están en camino. Para
+        postearlos a mano: armá las imágenes y marcalo como listo para publicar. Lo que ya está
+        agendado, listo o con un error está en la <a href="/tools/colainstagram/">Cola de Instagram</a>.
+        {% if total > maximo %}Se muestran los {{ maximo }} más nuevos de {{ total }}.{% endif %}
+    </p>
+
+    {% if animales %}
+    <ol class="sin-posteo-lista">
+        {% for animal in animales %}
+        <li class="sin-posteo-fila">
+            {% with foto=animal.fotos.0 %}
+            {% if foto %}<img src="{{ foto.image.url }}" alt="" loading="lazy">{% else %}<span class="sin-foto"></span>{% endif %}
+            {% endwith %}
+            <div>
+                <a class="sin-posteo-nombre" href="/animales/{{ animal.id }}/">{{ animal.nombre }}</a>
+                <span class="sin-posteo-detalle">
+                    {% if animal.tipo == "P" %}Perro{% else %}Gato{% endif %}
+                    · {% if animal.cargado_por %}{{ animal.cargado_por.get_instagram|default:animal.cargado_por.email }}{% else %}sin cuenta{% endif %}
+                    {% if animal.fecha_ingreso %}· desde el {{ animal.fecha_ingreso|date:"d/m/Y" }}{% endif %}
+                </span>
+            </div>
+            <a class="btn btn-secondary" href="/tools/generarimagen/{{ animal.id }}/">Imágenes de Instagram</a>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p class="sin-posteo-vacia">No hay animales aprobados sin posteo.</p>
+    {% endif %}
+
+</div>
+{% endblock %}

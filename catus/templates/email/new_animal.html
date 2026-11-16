@@ -1,13 +1,20 @@
 {% extends "email/base.html" %}
 {% load catus_html %}
 {% comment %}
-Un animal nuevo para revisar, al equipo (MailService.send_new_animal_mail). El nombre y el
-texto los escribe cualquiera que se registre: el nombre sale escapado y la descripción pasa
-por |html_seguro, como en el sitio.
+Un animal que espera la aprobación del equipo, al equipo (MailService.send_new_animal_mail):
+un alta que la revisión no aprobó sola, o uno que no se publicó y su dueño editó ("vuelve").
+El nombre y el texto los escribe cualquiera que se registre: el nombre sale escapado y la
+descripción pasa por |html_seguro, como en el sitio. El botón lleva a la cola y no a una
+acción: aprobar es un POST desde ahí.
 {% endcomment %}
 {% block preheader %}{{ animal.nombre }} espera la aprobación del equipo.{% endblock %}
 {% block content %}
+{% if vuelve %}
+{% include "email/_titulo.html" with antetitulo="Vuelve a revisión" titulo=animal.nombre %}
+<p style="margin:0 0 14px;">No se había publicado{% if motivo_anterior %} (<i>{{ motivo_anterior }}</i>){% endif %}. Quien lo cargó lo editó y vuelve a esperar la aprobación del equipo.</p>
+{% else %}
 {% include "email/_titulo.html" with antetitulo="Nuevo animal para revisar" titulo=animal.nombre %}
+{% endif %}
 
 {% with imagenes=animal.get_images %}{% if imagenes %}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;">
@@ -38,6 +45,10 @@ por |html_seguro, como en el sitio.
         <td class="mail-ficha-etiqueta" style="padding:8px 12px 8px 0;font-size:13px;color:#6b6f80;vertical-align:top;border-top:1px solid #ece4f7;">Edad</td>
         <td class="mail-ficha-valor" style="padding:8px 0;font-size:15px;vertical-align:top;border-top:1px solid #ece4f7;">{{ animal.edad|default_if_none:'Desconocida' }}</td>
       </tr>
+      <tr>
+        <td class="mail-ficha-etiqueta" style="padding:8px 12px 8px 0;font-size:13px;color:#6b6f80;vertical-align:top;border-top:1px solid #ece4f7;">Revisión automática</td>
+        <td class="mail-ficha-valor" style="padding:8px 0;font-size:15px;vertical-align:top;border-top:1px solid #ece4f7;{% if animal.revision_ia_estado == 'R' %}color:#a4262c;font-weight:700;{% endif %}">{{ animal.get_revision_ia_estado_display }}{% if animal.revision_ia_motivo %}: <span style="font-weight:400;">{{ animal.revision_ia_motivo }}</span>{% endif %}</td>
+      </tr>
     </table>
   </td></tr>
 </table>
@@ -47,5 +58,5 @@ por |html_seguro, como en el sitio.
 <div style="font-size:15px;color:#2d3748;">{{ animal.datos|html_seguro }}</div>
 {% endif %}
 
-{% include "email/_boton.html" with url=link_aprobar texto="Aprobar" %}
+{% include "email/_boton.html" with url=link_pendientes texto="Ver los que esperan aprobación" %}
 {% endblock %}

@@ -78,7 +78,9 @@ class ExpirarAnimalesTest(TestCase):
         form = Form.objects.create(title="Pre adopción", slug="formulario-de-pre-adopcion")
         campo = make_field(form, ANIMAL_FIELD_LABELS["G"], choices="0")
         make_field(form, ANIMAL_FIELD_LABELS["P"], choices="0")
-        viejo, reciente = self.animal(31), self.animal(2)
+        #el desplegable se sincroniza al confirmar cada save
+        with self.captureOnCommitCallbacks(execute=True):
+            viejo, reciente = self.animal(31), self.animal(2)
         campo.refresh_from_db()
         self.assertIn(str(viejo.id), campo.choices.split(","))
 

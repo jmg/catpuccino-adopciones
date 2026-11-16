@@ -8,12 +8,19 @@ import random
 from django.db.models import F
 
 import json
+import logging
 import os
 import pathlib
 import re
 import uuid
 import requests
 from django.conf import settings
+from django.utils.text import slugify
+
+logger = logging.getLogger(__name__)
+
+#la edad de un animal leído de la base todavía no se conoce (ver Animal.from_db)
+_EDAD_SIN_LEER = object()
 
 
 def ruta_de_imagen(instance, filename):
@@ -121,6 +128,20 @@ class Animal(BaseEntity):
     #lo tienen ("¿siguen en adopción?") y republicarlo lo vacía.
     expiro_el = models.DateTimeField(null=True, blank=True)
 
+    #cuándo se le mandó al rescatista el mail "¿Siguen en adopción?" de esa expiración
+    #(services/expiracion.py). Vale para el expiro_el de ese momento: si después se lo
+    #republica y vuelve a expirar, expiro_el es más nuevo y corresponde otro mail.
+    expiro_avisado_el = models.DateTimeField(null=True, blank=True)
+
+    #El equipo decidió no publicarlo: "No publicar" en /tools/animalespendientes/, o el
+    #comando archivar_pendientes con lo que esperó demasiado sin que nadie lo mirara. Queda
+    #en "E", sin aprobar y sin expiro_el (así el panel no pregunta "¿siguen en adopción?"),
+    #y el panel lo muestra como "No se publicó" con el motivo. Si el dueño lo edita, vuelve a
+    #la cola (EditView). Antes no había forma de decir que no: quedaba "En revisión" para
+    #siempre y tapaba la cola del equipo.
+    no_publicar_el = models.DateTimeField(null=True, blank=True)
+    no_publicar_motivo = models.TextField(null=True, blank=True)
+
     custom_link = models.CharField(max_length=255, null=True, blank=True)
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
@@ -151,6 +172,17 @@ class Animal(BaseEntity):
 
         return self.revision_ia_estado == self.REVISION_REVISAR
 
+    def no_se_publico(self):
+        """Si el equipo decidió no publicarlo y sigue así.
+
+        Se pregunta también por el estado y la aprobación, y no sólo por no_publicar_el:
+        si alguien lo vuelve a poner en adopción o lo aprueba por otro camino (el tilde del
+        admin, "Republicar" del panel) la fecha puede quedar puesta, y el panel le seguiría
+        diciendo al rescatista que no se publicó un animal que está en la cola o en el sitio.
+        """
+
+        return self.no_publicar_el is not None and self.estado == "E" and not self.aprobado
+
     def get_revision_ia_badge(self):
 
         return {
@@ -159,15 +191,64 @@ class Animal(BaseEntity):
             self.REVISION_ERROR: "secondary",
         }.get(self.revision_ia_estado, "light")
 
+    #el texto de la edad como estaba en la base, para saber en save() si cambió
+    _edad_guardada = _EDAD_SIN_LEER
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+
+        animal = super().from_db(db, field_names, values)
+        #con only()/defer() la edad puede no estar leída: ahí queda sin leer
+        animal._edad_guardada = animal.__dict__.get("edad", _EDAD_SIN_LEER)
+        return animal
+
     def save(self, *args, **kwargs):
         from catus.services.cache import CacheService
 
         if not self.fecha_ingreso:
             self.fecha_ingreso = timezone.now()
 
+        if "update_fields" in kwargs:
+            kwargs["update_fields"] = self._completar_edad_en_meses(kwargs["update_fields"])
+        else:
+            self._completar_edad_en_meses(None)
+
         result = super(Animal, self).save(*args, **kwargs)
+        self._edad_guardada = self.__dict__.get("edad", _EDAD_SIN_LEER)
         #CacheService().set("animals-for-adoption", self.get_all_for_adoption(destacado=True, sort="-fecha_ingreso"))
         return result
+
+    def _completar_edad_en_meses(self, update_fields):
+        """Estima edad_en_meses del texto de la edad, que es lo que filtra la portada por
+        Cachorros y Adultos (services/edad.py).
+
+        Se calcula cuando no hay un valor o cuando cambió el texto: uno puesto a mano en el
+        admin se respeta mientras la edad siga diciendo lo mismo. Un save con update_fields
+        que no incluye la edad no la toca. Y nunca hace fallar el guardado: lo peor que
+        puede pasar es que el animal quede sin edad en meses, como estaban casi todos.
+        Devuelve update_fields, con edad_en_meses agregado si hace falta guardarlo.
+        """
+        from catus.services.edad import estimar_meses
+
+        if "edad" not in self.__dict__:
+            return update_fields
+
+        if update_fields is not None and "edad" not in update_fields:
+            return update_fields
+
+        try:
+            guardada = self._edad_guardada
+            cambio = guardada is not _EDAD_SIN_LEER and guardada != self.edad
+
+            if self.edad_en_meses is None or cambio:
+                self.edad_en_meses = estimar_meses(self.edad)
+                if update_fields is not None and "edad_en_meses" not in update_fields:
+                    update_fields = list(update_fields) + ["edad_en_meses"]
+
+        except Exception:
+            logger.exception("No se pudo estimar la edad en meses del animal %s", self.pk)
+
+        return update_fields
 
     def __str__(self, *a, **k):
 
@@ -251,6 +332,21 @@ class Animal(BaseEntity):
 
         return "/pre-adopcion/?id={}".format(self.id)
 
+    def get_slug(self):
+        """El nombre como va en la URL de la ficha. Es decorativo: la ficha se busca por id."""
+
+        return slugify(self.nombre or "")[:60].strip("-")
+
+    def get_ficha_url(self):
+        """La página pública del animal (views/ficha.py), la que se comparte."""
+
+        slug = self.get_slug()
+        if slug:
+            return "/adoptar/{}-{}/".format(self.id, slug)
+
+        #un nombre sin letras ni números ("🐱") no deja nada para la URL
+        return "/adoptar/{}/".format(self.id)
+
     def get_images(self):
 
         #el desempate por id importa: posicion no se escribe en ningún lado, así que sin
@@ -302,6 +398,18 @@ class AnimalImage(BaseEntity):
         else:
             self.crop_x, self.crop_y, self.crop_w, self.crop_h = crop
 
+    def get_object_position(self):
+        """El object-position que centra la foto en el recorte elegido para Instagram, o None.
+
+        Las tarjetas y la ficha muestran las fotos en un cuadrado (object-fit: cover), y sin
+        esto el cuadrado era siempre el del medio: en una foto apaisada con el gato en una
+        punta se veía la pared. El recorte ya es la parte que el rescatista eligió.
+        """
+        from catus.services.ficha import posicion_del_recorte
+        from catus.utils import clean_crop
+
+        return posicion_del_recorte(clean_crop(self.get_crop()))
+
 
 class EstadoFormulario(BaseEntity):
 
@@ -322,7 +430,9 @@ class EstadoFormulario(BaseEntity):
 
     estado = models.CharField(max_length=1, choices=choices, default="N")
 
-    hash = models.CharField(max_length=255)
+    #cada /formularios/<hash>/ busca por acá: sin índice recorría la tabla entera. No es
+    #unique porque no está verificado que no haya repetidos en producción (migración 0042)
+    hash = models.CharField(max_length=255, db_index=True)
 
     form_entry = models.ForeignKey(FormEntry, null=True, blank=True, on_delete=models.SET_NULL)
     gato = models.ForeignKey("animal", null=True, blank=True, on_delete=models.SET_NULL)
@@ -341,6 +451,11 @@ class EstadoFormulario(BaseEntity):
     #formulario que la persona completó a mano y del que salió esta copia. Las copias
     #apuntan siempre al original, nunca a otra copia.
     copiado_de = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="copias")
+
+    #cuándo se resolvió el aviso "ya tiene familia" a quien mandó este formulario
+    #(services/aviso_candidatos.py): se mandó, o se salteó para siempre (mail inválido, era
+    #el formulario de quien adoptó). Vacío es que todavía no le corresponde o no se pudo.
+    aviso_cierre_el = models.DateTimeField(null=True, blank=True)
     _gato = None
 
     def get_fecha_ingreso(self):
@@ -394,7 +509,9 @@ class CatusUser(AbstractUser):
 
     title = models.CharField(max_length=500, null=True, blank=True, default="")
     description = models.TextField(null=True, blank=True, default="")
-    handle = models.CharField(max_length=255, null=True, blank=True)
+    #/<handle>/ busca por acá. Índice y no unique: hay cuentas viejas que lo comparten
+    #(views/usuario.py::get_user_por_handle)
+    handle = models.CharField(max_length=255, null=True, blank=True, db_index=True)
 
     instagram = models.CharField(max_length=255, null=True, blank=True)
     facebook = models.CharField(max_length=255, null=True, blank=True)
@@ -562,7 +679,8 @@ class Contrato(BaseEntity):
     contrato_aceptado = models.BooleanField(default=False)
 
     miembro_adopcion_nombre = models.CharField(max_length=255, null=True, blank=True)
-    hash = models.CharField(max_length=255)
+    #cada /contrato/<hash>/ busca por acá (migración 0042, ver EstadoFormulario.hash)
+    hash = models.CharField(max_length=255, db_index=True)
 
     email_enviado = models.BooleanField(default=False)
 
@@ -696,3 +814,32 @@ class ActividadBuenAdoptante(BaseEntity):
             return json.loads(self.alertas or "[]")
         except ValueError:
             return []
+
+
+class PasoFormulario(models.Model):
+    """Cuántas veces por día se llegó a cada paso del formulario de pre-adopción.
+
+    Es el embudo (abrir, aceptar los requisitos, empezar, querer enviar con faltantes,
+    enviar) para saber dónde se queda la gente: con 38 preguntas obligatorias en el de
+    gatos, no había ningún dato. Son contadores agregados, sin cookies ni nada de nadie
+    (services/embudo.py).
+    """
+
+    PASOS = (
+        ("abrio", "Abrió el formulario"),
+        ("requisitos", "Aceptó los requisitos"),
+        ("empezo", "Empezó a contestar"),
+        ("faltantes", "Quiso enviar con respuestas sin contestar"),
+        ("intento", "Lo envió desde el navegador"),
+        ("enviado", "Llegó y se guardó"),
+        ("frenado", "Lo frenó BuenAdoptante"),
+        ("rechazado", "El servidor lo rechazó"),
+    )
+
+    fecha = models.DateField()
+    especie = models.CharField(max_length=1, choices=(("G", "Gatos"), ("P", "Perros")))
+    paso = models.CharField(max_length=12, choices=PASOS)
+    n = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("fecha", "especie", "paso")

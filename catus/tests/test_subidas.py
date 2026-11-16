@@ -161,3 +161,110 @@ class FormularioPreAdopcionConFotoTest(TestCase):
         # Lo que viene después de guardar sigue pasando: el formulario se registra y se manda por mail.
         self.assertEqual(EstadoFormulario.objects.get().gato, self.animal)
         self.assertTrue(any("pre-adopción" in m.subject for m in mail.outbox))
+
+
+class FotosConDemasiadosPixelesTest(SimpleTestCase):
+    """Una foto que declara demasiados píxeles se rechaza por el encabezado, sin decodificarla.
+
+    El formulario público achicaba todo archivo del POST antes de validar nada, y Pillow
+    solo frena por encima de ~179 Mpx (abajo, apenas avisa): un PNG de paleta de unos
+    cientos de KB que declara 13000×13000 ocupa casi 1 GB al cargarlo y pasarlo a RGBA. Un
+    anónimo podía mandar decenas en un mismo envío y tirar el sitio. Los límites se achican
+    en el test para no tener que fabricar fotos enormes.
+    """
+
+    def test_un_png_con_demasiados_pixeles_se_rechaza_antes_de_cargarlo(self):
+        from unittest import mock
+
+        from PIL import ImageFile
+
+        from catus.services.images import FotoDemasiadoGrande
+
+        upload = photo(300, 300, fmt="PNG", name="captura.png")
+        with mock.patch("catus.services.images.MAX_PIXELES_SIN_REDUCIR", 100 * 100), \
+                mock.patch.object(ImageFile.ImageFile, "load", side_effect=AssertionError("se decodificó")):
+            with self.assertRaises(FotoDemasiadoGrande):
+                shrink_uploaded_image(upload)
+
+    def test_un_jpeg_tiene_un_limite_mas_alto_porque_se_decodifica_reducido(self):
+        from unittest import mock
+
+        from catus.services.images import FotoDemasiadoGrande
+
+        upload = photo(400, 300, name="foto.jpg")
+        with mock.patch("catus.services.images.MAX_PIXELES_SIN_REDUCIR", 100 * 100):
+            shrink_uploaded_image(upload)  # el límite de los PNG no lo alcanza
+        with mock.patch("catus.services.images.MAX_PIXELES", 100 * 100):
+            with self.assertRaises(FotoDemasiadoGrande):
+                shrink_uploaded_image(upload)
+
+    def test_un_jpeg_grande_se_decodifica_reducido_y_queda_del_mismo_tamano(self):
+        """draft() decodifica a 1/2, 1/4 u 1/8 sin bajar de UPLOAD_MAX_SIDE: el resultado es
+        el mismo tamaño de siempre, con mucha menos memoria."""
+        shrunk = shrink_uploaded_image(photo(8000, 6000, quality=60))
+        self.assertEqual(opened(shrunk).size, (1920, 1440))
+
+    def test_lo_que_no_es_un_campo_de_archivo_del_formulario_ni_se_abre(self):
+        from unittest import mock
+
+        files = MultiValueDict({
+            "foto-1": [photo(400, 300, name="a.jpg")],
+            "cualquier-cosa": [photo(400, 300, name="b.jpg"), photo(400, 300, name="c.jpg")],
+        })
+        with mock.patch("catus.services.images.shrink_uploaded_image", side_effect=lambda f: f) as achicar:
+            shrunk = shrink_uploads(files, {"foto-1"})
+
+        self.assertEqual(list(shrunk.keys()), ["foto-1"])
+        self.assertEqual([llamada.args[0].name for llamada in achicar.call_args_list], ["a.jpg"])
+
+
+class FormularioConFotoDemasiadoGrandeTest(FormularioPreAdopcionConFotoTest):
+    """El formulario público contesta con un error claro y no guarda nada."""
+
+    def test_la_foto_demasiado_grande_frena_el_envio_con_un_aviso(self):
+        from unittest import mock
+
+        from forms_builder.forms.models import FormEntry
+
+        from catus.models import EstadoFormulario
+        from catus.services.images import MENSAJE_FOTO_GRANDE
+
+        with mock.patch("catus.services.images.MAX_PIXELES", 100 * 100):
+            response = self.client.post(f"/pre-adopcion/?id={self.animal.id}", {
+                self.animal_field.slug: str(self.animal.id),
+                self.name_field.slug: "Ana Pérez",
+                self.email_field.slug: "ana@example.com",
+                self.photo_field.slug: photo(400, 300, name="IMG_1.jpg"),
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, MENSAJE_FOTO_GRANDE)
+        self.assertFalse(FormEntry.objects.exists())
+        self.assertFalse(EstadoFormulario.objects.exists())
+        self.assertEqual(mail.outbox, [])
+
+    def test_la_foto_guardada_es_la_achicada(self):
+        pass  # heredado: ya corre en la clase de arriba
+
+
+class FotoDeAnimalDemasiadoGrandeTest(SimpleTestCase):
+    """Lo mismo para las fotos de los animales: el registro es abierto, así que cualquiera
+    con una cuenta llegaba a clean_image, que decodificaba la foto entera."""
+
+    def test_el_formulario_de_la_foto_la_rechaza_con_un_aviso(self):
+        from unittest import mock
+
+        from catus.forms import AnimalImageForm
+        from catus.services.images import MENSAJE_FOTO_GRANDE
+
+        with mock.patch("catus.services.images.MAX_PIXELES", 100 * 100):
+            form = AnimalImageForm(data={}, files={"image": photo(400, 300, name="gato.jpg")})
+            self.assertFalse(form.is_valid())
+        self.assertIn(MENSAJE_FOTO_GRANDE, form.errors.get("image", []))
+
+    def test_una_foto_normal_sigue_pasando(self):
+        from catus.forms import AnimalImageForm
+
+        form = AnimalImageForm(data={}, files={"image": photo(1200, 900, name="gato.jpg")})
+        form.is_valid()
+        self.assertNotIn("image", form.errors)

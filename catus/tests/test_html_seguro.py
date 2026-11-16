@@ -230,3 +230,23 @@ class DatosRealesTest(TestCase):
 
         self.assertNotIn("<img", salida)
         self.assertNotIn("rastreador.test", salida)
+
+
+class BloquesDescartadosTest(TestCase):
+    """Los <div> no se dejan pasar, y al sacarlos el texto de un bloque quedaba pegado al
+    del siguiente: "sociable.Se entrega castrado". Es lo que manda el editor cuando se pega
+    texto de otro lado, y desde que la descripción se limpia al guardar también cambiaba la
+    comparación de duplicados."""
+
+    def test_un_div_que_se_cierra_deja_un_salto(self):
+        from catus.services.html_seguro import sanitizar_html
+        self.assertEqual(sanitizar_html("<div>Uno.</div><div>Dos.</div>"), "Uno.<br>Dos.")
+
+    def test_no_deja_saltos_al_final_ni_repetidos(self):
+        from catus.services.html_seguro import sanitizar_html
+        self.assertEqual(sanitizar_html("<div><div>Uno.</div></div><div>Dos.</div><div></div>"), "Uno.<br>Dos.")
+
+    def test_limpiar_dos_veces_da_lo_mismo(self):
+        from catus.services.html_seguro import sanitizar_html
+        texto = "<div>Hola <b>che</b></div><p>Chau</p><script>x</script>"
+        self.assertEqual(sanitizar_html(sanitizar_html(texto)), sanitizar_html(texto))

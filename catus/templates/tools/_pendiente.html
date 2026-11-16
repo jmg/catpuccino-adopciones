@@ -1,0 +1,115 @@
+{% load catus_html %}
+{% comment %}
+La tarjeta de un animal de la cola del equipo (tools/animalespendientes.html). "aprobar" es si
+lleva el botón de aprobar: los ya publicados que la revisión marcó sólo pueden no publicarse.
+Todo lo de acá lo escribió quien cargó el animal salvo el motivo de la revisión: va escapado,
+y la descripción por |html_seguro y no |safe, porque esta pantalla la abre alguien que puede
+aprobar animales.
+{% endcomment %}
+<li class="pendiente{% if animal.necesita_revision_humana %} pendiente-marcado{% endif %}" id="animal-{{ animal.id }}">
+
+    <div class="pendiente-foto">
+        {% with foto=animal.fotos.0 %}
+        {% if foto %}
+            <img src="{{ foto.image.url }}" alt="" loading="lazy">
+        {% else %}
+            <span class="sin-foto">Sin foto</span>
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="pendiente-datos">
+        <h3 class="pendiente-nombre"><a href="/animales/{{ animal.id }}/">{{ animal.nombre }}</a></h3>
+
+        {% if aprobar %}
+        <p class="pendiente-espera{% if animal.dias_esperando > 30 %} espera-larga{% endif %}">
+            {% if animal.dias_esperando == 0 %}
+                Espera desde <b>hoy</b>
+            {% else %}
+                Espera hace <b>{{ animal.dias_esperando }} día{{ animal.dias_esperando|pluralize }}</b>
+            {% endif %}
+        </p>
+        {% else %}
+        <p class="pendiente-espera">
+            Publicado{% if animal.revision_ia_fecha %} · la revisión lo marcó el <b>{{ animal.revision_ia_fecha|date:"d/m/Y" }}</b>{% endif %}
+        </p>
+        {% endif %}
+
+        <dl class="pendiente-ficha">
+            <dt>Animal</dt>
+            <dd>{% if animal.tipo == "P" %}Perro{% else %}Gato{% endif %}{% if animal.edad %} · {{ animal.edad }}{% endif %}{% if animal.zona %} · {{ animal.zona }}{% endif %}</dd>
+
+            <dt>Cuenta</dt>
+            <dd>
+                {% if animal.cargado_por %}
+                    {{ animal.cargado_por.get_instagram|default:animal.cargado_por.email }}
+                {% else %}
+                    Sin cuenta
+                {% endif %}
+            </dd>
+
+            <dt>Historial</dt>
+            <dd>
+                {% if animal.aprobados_por_persona %}
+                    {{ animal.aprobados_por_persona }} animal{{ animal.aprobados_por_persona|pluralize:"es" }} aprobado{{ animal.aprobados_por_persona|pluralize }} por el equipo
+                {% else %}
+                    Ningún animal aprobado por el equipo
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+
+    {% comment %}
+    El veredicto de la revisión con IA y su motivo: es lo único que miró el contenido. Con la
+    revisión apagada (producción hoy) todo dice "No se pudo revisar", y los que se cargaron
+    antes de que existiera, "Sin revisión automática".
+    {% endcomment %}
+    <p class="revision revision-{{ animal.revision_ia_estado }}">
+        <b>{% if animal.revision_ia_estado == "R" %}Revisar publicación{% elif animal.revision_ia_estado == "OK" %}Revisada{% elif animal.revision_ia_estado == "E" %}No se pudo revisar{% else %}Sin revisión automática{% endif %}</b>{% if animal.revision_ia_motivo %}: {{ animal.revision_ia_motivo }}{% endif %}
+    </p>
+
+    {% if animal.datos %}
+    <div class="pendiente-texto">{{ animal.get_datos|html_seguro|truncatewords_html:40 }}</div>
+    {% endif %}
+
+    <div class="pendiente-acciones">
+        {% if aprobar %}
+        {% comment %}
+        POST con el token: aprobar publica el animal, le manda un mail a quien lo cargó y agenda
+        el posteo de Instagram. El nombre va en un data-* y no adentro del JS del onsubmit: el
+        navegador decodifica las entidades de un atributo de evento antes de correrlo.
+        {% endcomment %}
+        <form method="post" action="/animal/aprobar/" data-confirmar="¿Aprobar a {{ animal.nombre }}? Se publica en el sitio y le avisamos a quien lo cargó." onsubmit="return confirm(this.dataset.confirmar)">
+            {% csrf_token %}
+            <input type="hidden" name="id" value="{{ animal.id }}">
+            <button type="submit" class="btn btn-primary">Aprobar</button>
+        </form>
+        {% endif %}
+
+        <details class="no-publicar">
+            <summary class="btn btn-secondary">No publicar…</summary>
+            <form method="post" action="/tools/animalespendientes/">
+                {% csrf_token %}
+                <input type="hidden" name="accion" value="no_publicar">
+                <input type="hidden" name="animal_id" value="{{ animal.id }}">
+
+                <fieldset>
+                    <legend>Motivo (opcional)</legend>
+                    {% for motivo in motivos %}
+                    <label class="opcion"><input type="radio" name="motivo" value="{{ motivo }}"> {{ motivo }}</label>
+                    {% endfor %}
+                </fieldset>
+
+                <label class="detalle-etiqueta" for="detalle-{{ animal.id }}">Contale algo más (opcional)</label>
+                <textarea id="detalle-{{ animal.id }}" name="detalle" rows="2" maxlength="1000"></textarea>
+
+                <p class="nota">
+                    {% if aprobar %}Sale de esta cola{% else %}Sale del sitio{% endif %} y le mandamos un mail a quien
+                    lo cargó con el motivo. Si lo edita, vuelve a la cola.
+                </p>
+
+                <button type="submit" class="btn btn-primary">No publicar</button>
+            </form>
+        </details>
+    </div>
+</li>

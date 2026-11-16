@@ -1,4 +1,5 @@
 from catus.models import ActividadBuenAdoptante, EstadoFormulario
+from catus.services import estados
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService, descripcion_alerta, descripcion_marca
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
@@ -11,6 +12,48 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from catus.views.home import BaseView
 from catus.views.base import puede_editar_animal
+
+
+#Lo que el rescatista puede elegir para un candidato (B y U son del equipo).
+ESTADOS_DEL_RESCATISTA = ("N", "P", "R", "A", "D", "T")
+
+
+def botones_de_estado(estado_form, usuario):
+    """Los botones de "¿En qué quedó?" de /formularios/<hash>/: (estado, texto, primario,
+    confirmación). El mail al rescatista prometía "desde el sitio podés cambiarle el
+    estado" y la página no tenía cómo: el 99,8% de los formularios quedaba "No asignado".
+    """
+
+    actual = estado_form.estado
+    animal = estado_form.gato
+    nombre = animal.nombre if animal else "el animal"
+
+    if actual == "B":
+        if usuario.is_superuser:
+            return [("N", "Liberarlo: pasarlo a «No asignado»", True, "")]
+        return []
+
+    if estado_form.tipo in ("T", "TP"):
+        opciones = [
+            ("P", "Ya lo contacté", False, ""),
+            ("T", "Está transitando", True, ""),
+            ("D", "Descartar", False, ""),
+        ]
+    else:
+        opciones = [
+            ("P", "Ya lo contacté", False, ""),
+            ("R", "Reservar para esta persona", False,
+             "{} va a dejar de verse en el sitio como disponible.".format(nombre) if animal else ""),
+            ("A", "Adoptó", True,
+             "{} va a pasar a adoptado y deja de verse en el sitio.".format(nombre) if animal else ""),
+            ("D", "Descartar", False, ""),
+        ]
+
+    botones = [boton for boton in opciones if boton[0] != actual]
+    #deshacer un "Ya lo contacté" o un "Descartar" tocado sin querer
+    if actual in ("P", "D"):
+        botones.append(("N", "Volver a «No asignado»", False, ""))
+    return botones
 
 
 class FormView(LoginRequiredMixin, BaseView):
@@ -67,6 +110,8 @@ class FormView(LoginRequiredMixin, BaseView):
             extra_forms = []
 
         return self.render_to_response({
+            "botones_estado": botones_de_estado(estado_form, self.request.user),
+            "estado_cambiado": self.request.GET.get("hecho"),
             "estado_form_form": estado_form_form,
             "estado_form": estado_form,
             "estado_formulario": estado_form,
@@ -124,6 +169,16 @@ class FormView(LoginRequiredMixin, BaseView):
 
         datos = self.request.POST.copy()
 
+        #los botones de "¿En qué quedó?" mandan un formulario común (anda sin JS): a esos
+        #se les contesta volviendo a la página, al resto (AJAX) con JSON como siempre
+        self._volver_a = "/formularios/{}/".format(estado_form.hash) if datos.get("volver") else None
+
+        #"Bloqueado por BuenAdoptante" y "Duplicado" son del equipo: un rescatista que se
+        #bloqueaba un formulario a sí mismo dejaba de poder abrirlo
+        permitidos = set(ESTADOS_DEL_RESCATISTA) | ({"B", "U"} if self.request.user.is_superuser else set())
+        if "estado" in datos and datos.get("estado") not in permitidos:
+            return self.json_response({"status": "error", "error": "Ese estado no se puede elegir."})
+
         #'gato' es opcional en el form: si el POST no lo trae (por ejemplo cuando solo
         #se manda el select de estado), guardar lo dejaba en None y el formulario perdía
         #el vínculo con el animal, en silencio
@@ -176,8 +231,15 @@ class FormView(LoginRequiredMixin, BaseView):
                     "error": "Este animal lo cargó otra persona: no podés cambiarle el estado.",
                 })
 
-            gato.set_estado(nuevo_estado)
-            gato.save()
+            #por el mismo camino que el panel y la edición (services/estados.py)
+            if nuevo_estado == "R":
+                estados.reservar(gato)
+            elif gato.estado_formulario_id:
+                estados.marcar_adoptado(gato)
+            else:
+                #este formulario es el de quien lo adoptó: queda vinculado y va a BuenAdoptante
+                estados.marcar_adoptado(gato, formulario=estado_form)
+                return self.json_response({"status": "ok", "estado": estado_form.estado})
 
         #el rescatista dice que esta persona adoptó: el animal queda vinculado a su
         #formulario y la adopción va a BuenAdoptante (la manda el cron)
@@ -189,6 +251,16 @@ class FormView(LoginRequiredMixin, BaseView):
             BuenAdoptanteService().registrar_adopcion(estado_form, gato)
 
         return self.json_response({"status": "ok", "estado": estado_form.estado})
+
+    def json_response(self, data):
+        """JSON para los pedidos AJAX; para los botones de la página, volver a ella con un
+        aviso de cómo salió (?hecho=<estado> o ?hecho=error)."""
+
+        volver_a = getattr(self, "_volver_a", None)
+        if volver_a:
+            hecho = data.get("estado") if data.get("status") == "ok" else "error"
+            return self.redirect("{}?hecho={}".format(volver_a, hecho))
+        return super().json_response(data)
 
 
 #FormsView (/formularios/) y ListView (/formslist/) se sacaron, como en master: nunca

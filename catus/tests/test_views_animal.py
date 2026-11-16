@@ -28,10 +28,12 @@ class AnimalViewTestCase(TestCase):
         self.admin = make_user(email="admin@catpuccino.test", is_superuser=True, is_staff=True)
         self.animal = make_animal(nombre="Willy", cargado_por=self.duenio, aprobado=False)
 
-    def call(self, view_class, user, method="post", data=None, **kwargs):
+    def call(self, view_class, user, method="post", data=None, session=None, **kwargs):
 
         request = getattr(self.factory, method)("/", data or {})
         request.user = user
+        #aprobar deja el aviso en la sesión para la cola; un dict alcanza para eso
+        request.session = {} if session is None else session
         return view_class.as_view()(request, **kwargs)
 
 
@@ -40,7 +42,7 @@ class AprobarViewTest(AnimalViewTestCase):
 
     def test_un_anonimo_no_puede_aprobar(self):
 
-        response = self.call(AprobarView, AnonymousUser(), method="get", data={"id": self.animal.id})
+        response = self.call(AprobarView, AnonymousUser(), data={"id": self.animal.id})
 
         self.animal.refresh_from_db()
         self.assertFalse(self.animal.aprobado, "un anónimo aprobó un animal")
@@ -48,32 +50,88 @@ class AprobarViewTest(AnimalViewTestCase):
 
     def test_un_usuario_comun_no_puede_aprobar(self):
 
-        response = self.call(AprobarView, self.intruso, method="get", data={"id": self.animal.id})
+        response = self.call(AprobarView, self.intruso, data={"id": self.animal.id})
 
         self.animal.refresh_from_db()
         self.assertFalse(self.animal.aprobado, "un usuario común aprobó un animal")
         #a quien ya está logueado se le contesta con un mensaje, no se lo manda al
         #login: ver SinPermisoTest más abajo
-        self.assertNotIn("aprobado!", response.content.decode())
+        self.assertEqual(response.status_code, 403)
 
     def test_el_admin_aprueba(self):
 
-        self.call(AprobarView, self.admin, method="get", data={"id": self.animal.id})
+        self.call(AprobarView, self.admin, data={"id": self.animal.id})
 
         self.animal.refresh_from_db()
         self.assertTrue(self.animal.aprobado)
 
     def test_un_id_inexistente_no_rompe(self):
 
-        response = self.call(AprobarView, self.admin, method="get", data={"id": 999999})
+        response = self.call(AprobarView, self.admin, data={"id": 999999})
 
         self.assertEqual(response.status_code, 200)
 
     def test_sin_id_no_rompe(self):
 
-        response = self.call(AprobarView, self.admin, method="get", data={})
+        response = self.call(AprobarView, self.admin, data={})
 
         self.assertEqual(response.status_code, 200)
+
+    def test_un_id_que_no_es_un_numero_no_rompe(self):
+        """El filter por id castea a entero: con "abc" levantaba ValueError y contestaba 500."""
+
+        response = self.call(AprobarView, self.admin, data={"id": "abc"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No se encontró", response.content.decode())
+
+    def test_un_get_no_aprueba(self):
+        """Aprobar era un GET con el id en la URL, y ese link iba en el mail al equipo: lo
+        aprobaba cualquier cosa que abriera el link (la vista previa del mail, el antivirus
+        que revisa los links, un prefetch). Aprobar publica el animal, le escribe al
+        rescatista y agenda el posteo en Instagram, así que ahora es un POST con el token.
+        El GET quedó para los mails viejos: lleva a la cola, sin aprobar nada."""
+
+        response = self.call(AprobarView, self.admin, method="get", data={"id": self.animal.id})
+
+        self.animal.refresh_from_db()
+        self.assertFalse(self.animal.aprobado, "un GET aprobó el animal")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/tools/animalespendientes/")
+
+    def test_aprobar_vuelve_a_la_cola_con_el_aviso(self):
+        """Se aprueba desde la cola y se vuelve a la cola: antes se abría una pestaña nueva
+        con "Willy aprobado!" y nada más."""
+
+        sesion = {}
+        response = self.call(AprobarView, self.admin, data={"id": self.animal.id}, session=sesion)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/tools/animalespendientes/")
+        self.assertIn("Willy quedó aprobado", sesion.get("pendientes_aviso", ""))
+
+    def test_aprobar_lo_marca_como_aprobado_por_una_persona(self):
+
+        self.call(AprobarView, self.admin, data={"id": self.animal.id})
+
+        self.animal.refresh_from_db()
+        self.assertTrue(self.animal.aprobado_por_persona)
+
+    def test_aprobar_deshace_el_no_publicar(self):
+        """Si se aprueba uno que alguna vez no se publicó, el panel no puede seguir
+        mostrándole al rescatista el motivo de algo que ya está en el sitio."""
+
+        from django.utils import timezone
+
+        self.animal.no_publicar_el = timezone.now()
+        self.animal.no_publicar_motivo = "Repetido"
+        self.animal.save()
+
+        self.call(AprobarView, self.admin, data={"id": self.animal.id})
+
+        self.animal.refresh_from_db()
+        self.assertIsNone(self.animal.no_publicar_el)
+        self.assertIsNone(self.animal.no_publicar_motivo)
 
 
 class MarcarEstadoTest(AnimalViewTestCase):
@@ -391,37 +449,50 @@ class SinPermisoTest(AnimalViewTestCase):
 
     def test_un_usuario_logueado_recibe_un_mensaje(self):
 
-        response = self.call(AprobarView, self.intruso, method="get", data={"id": self.animal.id})
+        response = self.call(AprobarView, self.intruso, data={"id": self.animal.id})
 
         self.assertEqual(response.status_code, 403)
         self.assertIn("No tenes permisos", response.content.decode())
 
     def test_un_anonimo_sigue_yendo_al_login(self):
 
-        response = self.call(AprobarView, AnonymousUser(), method="get", data={"id": self.animal.id})
+        response = self.call(AprobarView, AnonymousUser(), data={"id": self.animal.id})
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/accounts/login/", response.url)
 
     def test_el_permiso_no_se_afloja(self):
 
-        self.call(AprobarView, self.intruso, method="get", data={"id": self.animal.id})
+        self.call(AprobarView, self.intruso, data={"id": self.animal.id})
 
         self.animal.refresh_from_db()
         self.assertFalse(self.animal.aprobado)
 
 
 class NombreEscapadoAlAprobarTest(AnimalViewTestCase):
-    """La respuesta de aprobar sale como text/html en la sesión de quien aprueba.
+    """Lo que dice "aprobado" sale en la sesión de quien aprueba, que es del equipo.
 
-    El nombre lo escribe cualquiera que se registre y el link "Aprobar!" se abre desde
-    el mail con la sesión de alguien del equipo: sin escapar, un animal llamado
-    "<script>..." corría en el navegador del superusuario.
+    El nombre lo escribe cualquiera que se registre: sin escapar, un animal llamado
+    "<script>..." corría en el navegador del superusuario. Antes la respuesta de aprobar
+    era ese texto suelto, como text/html; ahora es el aviso de la cola, que lo escapa.
     """
 
     def aprobar(self, animal):
+        """Aprueba y abre la cola a la que vuelve, con la misma sesión. Devuelve la cola."""
 
-        return self.call(AprobarView, self.admin, method="get", data={"id": animal.id})
+        from catus.views.tools import AnimalesPendientesView
+
+        sesion = {}
+        self.call(AprobarView, self.admin, data={"id": animal.id}, session=sesion)
+
+        request = self.factory.get("/tools/animalespendientes/")
+        request.user = self.admin
+        request.session = sesion
+
+        response = AnimalesPendientesView.as_view(template_name="tools/animalespendientes.html")(request)
+        response.render()
+
+        return response
 
     def test_el_nombre_va_escapado(self):
 
@@ -429,14 +500,18 @@ class NombreEscapadoAlAprobarTest(AnimalViewTestCase):
 
         cuerpo = self.aprobar(animal).content.decode()
 
-        self.assertNotIn("<script>", cuerpo, "el nombre salió sin escapar")
-        self.assertIn("&lt;script&gt;", cuerpo)
+        #"<script>" a secas no: la página trae los scripts del sitio
+        self.assertNotIn("<script>alert(1)", cuerpo, "el nombre salió sin escapar")
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt; quedó aprobado", cuerpo)
 
     def test_tambien_va_escapado_si_ya_estaba_aprobado(self):
 
         animal = make_animal(nombre="<script>alert(1)</script>", cargado_por=self.duenio, aprobado=True)
 
-        self.assertNotIn("<script>", self.aprobar(animal).content.decode())
+        cuerpo = self.aprobar(animal).content.decode()
+
+        self.assertNotIn("<script>alert(1)", cuerpo)
+        self.assertIn("ya estaba aprobado", cuerpo)
 
     def test_un_fallo_del_mail_no_pierde_la_aprobacion(self):
         """El mail se mandaba antes de guardar: si el proveedor fallaba, el animal
@@ -446,12 +521,14 @@ class NombreEscapadoAlAprobarTest(AnimalViewTestCase):
 
         from catus.services.mail import MailService
 
+        sesion = {}
         with mock.patch.object(MailService, "send_mail_aprobacion", side_effect=Exception("proveedor caído")):
-            response = self.aprobar(self.animal)
+            response = self.call(AprobarView, self.admin, data={"id": self.animal.id}, session=sesion)
 
         self.animal.refresh_from_db()
         self.assertTrue(self.animal.aprobado, "se perdió la aprobación porque falló el mail")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("no se pudo mandar el mail", sesion["pendientes_aviso"])
 
 
 class TopeDePedidosAInstagramTest(AnimalViewTestCase):
@@ -560,17 +637,18 @@ class TopeDePedidosAInstagramTest(AnimalViewTestCase):
 
         from catus.views.animal import PullDataFromIg
 
+        from catus.tests.test_gpt import openai_falso
+
         pagina = b'<html><head><meta property="og:title" content="Willy busca hogar"></head><body></body></html>'
-        respuesta = {"choices": [{"message": {"content": '{"nombre": "Willy", "tipo": "gato"}'}}]}
+        parche, cliente = openai_falso('{"nombre": "Willy", "tipo": "gato"}')
 
         request = self.factory.get("/animal/pulldatafromig/", {"url": "https://www.instagram.com/p/abc/"})
         request.user = user
 
-        with mock.patch("catus.services.gpt.descargar", return_value=pagina):
-            with mock.patch("catus.services.gpt.openai.ChatCompletion.create", return_value=respuesta) as create:
-                response = PullDataFromIg.as_view()(request)
+        with mock.patch("catus.services.gpt.descargar", return_value=pagina), parche:
+            response = PullDataFromIg.as_view()(request)
 
-        return response, create
+        return response, cliente.chat.completions.create
 
     @override_settings(GPT_IG_MAX_POR_DIA=5, GPT_IG_MAX_TOTAL_POR_DIA=3)
     def test_cada_lectura_cuenta_una_sola_vez_en_el_tope_total(self):

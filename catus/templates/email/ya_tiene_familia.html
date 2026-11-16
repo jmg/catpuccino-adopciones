@@ -1,0 +1,44 @@
+{% extends "email/base.html" %}
+{% comment %}
+A quien se postuló para un animal que ya se adoptó (services/aviso_candidatos.py). El texto
+es neutro: lo puede leer quien adoptó (el rescatista no siempre dice quién fue). No lleva
+nada de quien adoptó. Los nombres los escribe el rescatista: salen escapados.
+{% endcomment %}
+{% block preheader %}Gracias por querer adoptar. Estos {{ especie }} siguen buscando familia.{% endblock %}
+{% block content %}
+{% if varios %}
+{% include "email/_titulo.html" with antetitulo="Novedades de tu postulación" titulo="¡"|add:nombres|add:" ya tienen familia!" %}
+{% else %}
+{% include "email/_titulo.html" with antetitulo="Novedades de tu postulación" titulo="¡"|add:nombres|add:" ya tiene familia!" %}
+{% endif %}
+<p style="margin:0 0 14px;">Te escribimos porque completaste el formulario de pre-adopción para <b>{{ nombres }}</b>. {% if varios %}Si una de esas familias sos vos{% else %}Si esa familia sos vos{% endif %}, ¡felicitaciones! No hace falta que hagas nada.</p>
+<p style="margin:0 0 20px;">Si no, gracias por querer adoptar. {% if sugeridos %}Estos {{ especie }} siguen buscando familia:{% else %}Hay muchos {{ especie }} que siguen buscando familia.{% endif %}</p>
+
+{% if sugeridos %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;">
+  <tr>
+  {% for animal in sugeridos %}
+    <td class="mail-foto" width="50%" style="padding:0 {% if forloop.counter|divisibleby:2 %}0{% else %}8px{% endif %} 14px 0;vertical-align:top;">
+      <a href="{{ animal.link }}" style="text-decoration:none;color:#2d3748;">
+        {% if animal.foto_url %}<img src="{{ animal.foto_url }}" width="264" alt="Foto de {{ animal.nombre }}" style="display:block;width:100%;max-width:264px;height:auto;border:0;border-radius:8px;margin:0 0 6px;">{% endif %}
+        <span style="display:block;font-size:16px;font-weight:700;color:#7020a0;word-break:break-word;">{{ animal.nombre }}</span>
+        {% if animal.datos_cortos %}<span style="display:block;font-size:13px;color:#6b6f80;word-break:break-word;">{{ animal.datos_cortos }}</span>{% endif %}
+      </a>
+    </td>
+    {% if forloop.counter|divisibleby:2 and not forloop.last %}</tr><tr>{% endif %}
+  {% endfor %}
+  </tr>
+</table>
+{% endif %}
+
+{% if url_postularme %}
+{% comment %}El link privado para postularse con las mismas respuestas (services/postulacion.py).{% endcomment %}
+<p style="margin:8px 0 0;">Podés postularte a otro con las mismas respuestas, sin completar el formulario de nuevo (hasta {{ maximo_por_dia }} por día).</p>
+{% include "email/_boton.html" with url=url_postularme texto="Postularme a otro animal" margen="16px 0 8px" %}
+<p style="margin:0;font-size:13px;color:#6b6f80;">Este link es solo tuyo: no lo reenvíes.</p>
+{% else %}
+{% include "email/_boton.html" with url=settings.SSL_HOST|add:"/adopciones/" texto="Ver los animales en adopción" margen="16px 0 8px" %}
+{% endif %}
+
+<p style="margin:24px 0 0;">¡Gracias por querer adoptar!<br><b>Equipo de Catpuccino Adopciones</b></p>
+{% endblock %}

@@ -9,7 +9,7 @@ debería cambiar ninguna de las reglas de acá abajo, que son las que hoy evitan
 un post de más o de menos en la cuenta real de la organización. Quedan escritas antes de
 tocar nada: el día que la marca se ponga sola, lo que se rompa se ve acá.
 
-Nada de esto habla con la API. `catus.services.facebook.Pyfb` es lo único que llega a
+Nada de esto habla con la API. `catus.services.facebook.ClienteGraph` es lo único que llega a
 Graph y está reemplazado entero, así que cada pedido que la publicación hubiera mandado
 queda anotado en `self.graph.pedidos` y se puede contar.
 """
@@ -172,7 +172,7 @@ class GraphFalso:
 
 @override_settings(ENV="TEST")
 class PipelineDeInstagram(TestCase):
-    """Base: cuenta vinculada, MEDIA_ROOT descartable y pyfb reemplazado."""
+    """Base: cuenta vinculada, MEDIA_ROOT descartable y el cliente de Graph reemplazado."""
 
     def setUp(self):
 
@@ -184,9 +184,9 @@ class PipelineDeInstagram(TestCase):
         self.usuario = make_user()
 
         self.graph = GraphFalso()
-        self.patcher = mock.patch("catus.services.facebook.Pyfb")
-        self.Pyfb = self.patcher.start()
-        self.Pyfb.return_value.request.side_effect = self.graph.request
+        self.patcher = mock.patch("catus.services.facebook.ClienteGraph")
+        self.ClienteGraph = self.patcher.start()
+        self.ClienteGraph.return_value.request.side_effect = self.graph.request
 
     def tearDown(self):
 
@@ -483,7 +483,7 @@ class PublishCommandTest(PipelineDeInstagram):
 
         salida = self.correr_publish()
 
-        self.Pyfb.assert_not_called()
+        self.ClienteGraph.assert_not_called()
         self.assertEqual(self.graph.pedidos, [])
         self.assertIn("LOCAL", salida)
 
@@ -629,7 +629,7 @@ class ComentarioAdoptadoTest(PipelineDeInstagram):
 
         self.correr_comentarios()
 
-        self.Pyfb.assert_not_called()
+        self.ClienteGraph.assert_not_called()
         self.assertEqual(self.graph.pedidos, [])
 
         animal.refresh_from_db()

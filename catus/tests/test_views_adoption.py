@@ -96,6 +96,42 @@ class EnviarFormularioTest(TestCase):
         destinatarios = [dest for m in mail.outbox for dest in m.to]
         self.assertIn("ana@ejemplo.test", destinatarios)
 
+    def test_responder_el_mail_le_escribe_a_quien_se_postulo(self):
+        """El Reply-To eran los mismos destinatarios: "Responder" le escribía al propio
+        rescatista y al equipo, nunca al candidato."""
+
+        from catus.services.adoption import AdoptionService
+
+        entry = self.build_entry(str(self.animal.id))
+        self.enviar(entry, self.animal, AdoptionService().get_animal(entry))
+
+        aviso = next(m for m in mail.outbox if self.rescatista.email in m.to)
+        self.assertEqual(aviso.reply_to, ["ana@ejemplo.test"])
+
+    def test_el_mail_trae_el_boton_de_whatsapp(self):
+
+        from catus.services.adoption import AdoptionService
+
+        campo_celular = make_field(self.form, "Celular")
+        entry = self.build_entry(str(self.animal.id))
+        FieldEntry.objects.create(entry=entry, field_id=campo_celular.id, value="11 5555-4444")
+        self.enviar(entry, self.animal, AdoptionService().get_animal(entry))
+
+        aviso = next(m for m in mail.outbox if self.rescatista.email in m.to)
+        html = aviso.alternatives[0][0]
+        self.assertIn("https://wa.me/5491155554444", html)
+        self.assertIn("Escribirle por WhatsApp", html)
+
+    def test_sin_mail_valido_responder_queda_como_antes(self):
+
+        from catus.services.adoption import AdoptionService
+
+        entry = self.build_entry(str(self.animal.id), email="no tengo")
+        self.enviar(entry, self.animal, AdoptionService().get_animal(entry))
+
+        aviso = next(m for m in mail.outbox if self.rescatista.email in m.to)
+        self.assertNotIn("no tengo", aviso.reply_to)
+
     def test_sin_mail_de_contacto_igual_avisa_al_equipo(self):
 
         entry = self.build_entry(str(self.animal.id), email="")
@@ -153,3 +189,50 @@ class ElegirFormularioTest(TestCase):
         self.transito.delete()
 
         self.assertEqual(PreAdoptionView()._get_form(), self.gatos)
+
+
+class AnimalDelLinkTest(TestCase):
+    """El animal que trae el link (?id=) en la página del formulario.
+
+    Antes se buscaba sin mirar si estaba aprobado (los ids son correlativos: cualquiera veía
+    nombre y foto de uno sin aprobar), y si ya no estaba en adopción la página decía igual
+    "Formulario para adoptar a X" con el desplegable sin él: la persona se enteraba al
+    final, al enviar, después de unas 40 preguntas.
+    """
+
+    def setUp(self):
+        Form.objects.create(title="Adopción gatos", slug="formulario-de-pre-adopcion", intro="<p>Requisitos</p>")
+        Form.objects.create(title="Adopción perros", slug="formulario-de-pre-adopcion-para-perros", intro="<p>Requisitos</p>")
+
+    def test_un_animal_en_adopcion_encabeza_el_formulario(self):
+        animal = make_animal(nombre="Michi")
+        response = self.client.get(f"/pre-adopcion/?id={animal.id}")
+        self.assertContains(response, "Formulario para adoptar a <b>Michi</b>", html=False)
+        self.assertNotContains(response, "aviso-no-disponible\"")
+
+    def test_uno_adoptado_avisa_arriba_que_ya_no_esta(self):
+        animal = make_animal(nombre="Michi", estado="A")
+        response = self.client.get(f"/pre-adopcion/?id={animal.id}")
+        self.assertNotContains(response, "Formulario para adoptar a")
+        self.assertContains(response, "Michi ya no está en adopción")
+
+    def test_uno_sin_aprobar_no_se_muestra(self):
+        animal = make_animal(nombre="Secreto", aprobado=False)
+        response = self.client.get(f"/pre-adopcion/?id={animal.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Secreto")
+
+    def test_el_link_de_un_perro_en_el_formulario_de_gatos_lleva_al_de_perros(self):
+        perro = make_animal(nombre="Toby", tipo="P")
+        response = self.client.get(f"/pre-adopcion/?id={perro.id}")
+        self.assertRedirects(response, f"/pre-adopcion/perros/?id={perro.id}", fetch_redirect_response=False)
+
+    def test_un_id_que_no_es_un_numero_no_rompe(self):
+        response = self.client.get("/pre-adopcion/?id=abc")
+        self.assertEqual(response.status_code, 200)
+
+    def test_el_desplegable_obliga_a_elegir(self):
+        """Sin opción vacía quedaba elegido el primero de la lista sin que nadie lo eligiera."""
+        response = self.client.get("/pre-adopcion/")
+        self.assertContains(response, 'vacia.text = isDog ? "Elegí un perro" : "Elegí un gato";')
+        self.assertContains(response, "select.required = true;")

@@ -75,34 +75,79 @@
                     </div>
                 </div>
 
-                <!-- Animales Pendientes -->
+                {% comment %}
+                La cola de aprobacion lleva su numero por lo mismo que la de Instagram: los
+                que esperaban aprobacion no los miraba nadie (58, 41 con mas de seis meses).
+                Ahora la pantalla lista solo eso; lo aprobado sin posteo tiene la suya, abajo.
+                {% endcomment %}
+                <!-- Esperando aprobación -->
                 <div class="tool-card card-pending">
                     <div class="card-header">
                         <div class="card-icon">
                             <i class="fas fa-clock"></i>
                         </div>
                         <div class="card-badge">
-                            <span class="badge badge-warning">Pendientes</span>
+                            {% if esperando %}
+                                <span class="badge badge-warning">{{ esperando }} esperando</span>
+                            {% else %}
+                                <span class="badge badge-queue-vacio">Al día</span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="card-body">
-                        <h4 class="card-title">Animales Pendientes</h4>
+                        <h4 class="card-title">Esperando aprobación</h4>
                         <p class="card-description">
-                            Gestiona animales que necesitan aprobación o preparación de imágenes para publicación
+                            Los animales que nadie aprobó todavía: aprobarlos o no publicarlos
                         </p>
                         <div class="card-features">
                             <div class="feature-item">
                                 <i class="fas fa-check-circle"></i>
-                                <span>Sin aprobar</span>
+                                <span>
+                                    {% if esperando %}
+                                        {{ esperando }} animal{{ esperando|pluralize:"es" }} sin aprobar
+                                    {% else %}
+                                        Nada sin aprobar
+                                    {% endif %}
+                                </span>
                             </div>
                             <div class="feature-item">
-                                <i class="fas fa-image"></i>
-                                <span>Imágenes pendientes</span>
+                                <i class="fas fa-ban"></i>
+                                <span>No publicar, con aviso a quien lo cargó</span>
                             </div>
                         </div>
                     </div>
                     <div class="card-footer">
                         <a href="/tools/animalespendientes/" class="btn btn-tool btn-pending">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span>Acceder</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Aprobados sin posteo -->
+                <div class="tool-card card-ready">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-image"></i>
+                        </div>
+                        <div class="card-badge">
+                            <span class="badge badge-success">{{ sin_posteo }} sin posteo</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="card-title">Aprobados sin posteo</h4>
+                        <p class="card-description">
+                            Publicados en el sitio que no salieron en Instagram ni están en la cola
+                        </p>
+                        <div class="card-features">
+                            <div class="feature-item">
+                                <i class="fas fa-magic"></i>
+                                <span>Armar las imágenes a mano</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/tools/animalessinposteo/" class="btn btn-tool btn-ready">
                             <i class="fas fa-external-link-alt"></i>
                             <span>Acceder</span>
                         </a>

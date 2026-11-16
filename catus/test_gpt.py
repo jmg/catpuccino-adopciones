@@ -47,11 +47,12 @@ class PullDataFromIgTest(TestCase):
 
     def test_asks_a_current_model(self):
         from catus.services.gpt import GPTService
+        from catus.tests.test_gpt import openai_falso
 
-        respuesta = {"choices": [{"message": {"content": '{"nombre": "Pancho", "tipo": "gato"}'}}]}
+        parche, cliente = openai_falso('{"nombre": "Pancho", "tipo": "gato"}')
+        create = cliente.chat.completions.create
 
-        with mock.patch.object(GPTService, "_get_html_title_and_images", return_value=("Pancho, gato naranja", [])), \
-                mock.patch("catus.services.gpt.openai.ChatCompletion.create", return_value=respuesta) as create:
+        with mock.patch.object(GPTService, "_get_html_title_and_images", return_value=("Pancho, gato naranja", [])), parche:
             data = GPTService().pull_data_from_ig("https://www.instagram.com/p/DfayZB7FjpP/")
 
         self.assertEqual(create.call_args.kwargs["model"], "gpt-4o-mini")

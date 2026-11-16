@@ -36,11 +36,22 @@ if ENV != "LOCAL":
     # Configure Sentry for production only. The DSN is the platform's Jentry
     # project's (SENTRY_DSN); the config's, a sentry.io project from the
     # droplet, only counts without it.
+    #Sin datos personales: los formularios del sitio los tienen (el de pre-adopción, el
+    #contrato con el DNI) y con send_default_pii=True cada error se llevaba el cuerpo del
+    #POST, la cookie de sesión y el mail del usuario. Tampoco las variables locales de cada
+    #línea del stack trace, que en esas vistas son las respuestas del formulario.
+    #catus_project/sentry.py limpia lo que quede, también en las transacciones.
+    from .sentry import sin_datos_personales
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN") or app_config.get("SENTRY_DSN"),
         integrations=[DjangoIntegration()],
         traces_sample_rate=0.1,  # Capture 10% of transactions for performance monitoring
-        send_default_pii=True,   # Send personally identifiable information
+        send_default_pii=False,
+        max_request_body_size="never",
+        include_local_variables=False,
+        before_send=sin_datos_personales,
+        before_send_transaction=sin_datos_personales,
         environment="production" if ENV == "PROD" else ENV.lower(),
     )
 else:
@@ -208,7 +219,9 @@ USE_I18N = True
 
 USE_TZ = True
 
-FILE_UPLOAD_PERMISSIONS = 0o777
+#Las fotos que sube cualquiera no tienen por qué ser ejecutables ni escribibles por otros
+#usuarios del sistema (eran 0o777): las lee nginx y las escribe solo la app.
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 SEND_MAIL = app_config.get("SEND_MAIL")
 
@@ -328,8 +341,22 @@ try:
 except (TypeError, ValueError):
     INSTAGRAM_AUTO_DEMORA_MINUTOS = 30
 
-EMAIL_BACKEND = "sgbackend.SendGridBackend"
+#Aviso "ya tiene familia" a los demás candidatos de un animal adoptado
+#(catus/services/aviso_candidatos.py): solo por adopciones con fecha desde este dia,
+#"AAAA-MM-DD". Sin la clave no se avisa a nadie: el corte es para que el primer dia no
+#salgan mails por adopciones de hace meses.
+AVISO_CANDIDATOS_DESDE = app_config.get("AVISO_CANDIDATOS_DESDE") or None
+
+#La API v3 de SendGrid con requests (catus/mail_backend.py), en lugar de sendgrid-django,
+#que no se mantiene más y ataba a sendgrid 3.x.
+EMAIL_BACKEND = "catus.mail_backend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
+
+#El remitente de lo que manda Django por su cuenta, sin decir desde dónde: el mail para
+#cambiar la contraseña. Sin esto salía de "webmaster@localhost", que SendGrid no acepta
+#porque no es un remitente verificado de la cuenta.
+if SEND_MAIL:
+    DEFAULT_FROM_EMAIL = SEND_MAIL
 
 ADMIN_URL = app_config.get("ADMIN_URL")
 PROXY_USER = app_config.get("PROXY_USER")

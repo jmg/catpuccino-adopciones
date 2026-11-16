@@ -7,50 +7,54 @@
 # Dockerfile), newest versions except where noted. Releases less than 14 days
 # old were skipped (except certifi, and pypdf 6.21.4, which fixes seven CVEs of
 # 6.21.1), and gunicorn stays on 23, as in pingbird.
-# Held back by the code, not by choice: openai 0.28 (the 0.x API) and
-# sendgrid 3.6 (what sendgrid-django 4.2, the last, speaks).
+# 2026-11-16: sendgrid, sendgrid-django, pyfb and instaloader are gone, and
+# with them aiohttp and its dependencies, python-http-client and simplejson.
+# openai went from 0.28.1 to 1.109.1, and its new dependencies (anyio, distro,
+# httpx, httpcore, h11, jiter, pydantic, sniffio...) were resolved with the
+# other pins fixed and --exclude-newer 2026-11-02. packaging (gunicorn's) was
+# installed unpinned: now pinned, at the version the image already had.
+# Held back by the code, not by choice: openai 1.x (2.x and 3.x are out; the
+# code uses the 1.x client and is not ported).
 #
 # To update: resolve requirements.txt on that base, skipping recent releases
 # (e.g. uv pip compile requirements.txt --python-version 3.12
 # --exclude-newer <14 days ago>), run the tests and the local comparison,
 # then catpuccino/deploycloud/scan.sh.
 
-aiohappyeyeballs==2.7.1
-aiohttp==3.14.5
-aiosignal==1.4.0
+annotated-types==0.8.0
+anyio==4.16.0
 asgiref==3.12.1
-attrs==26.1.0
 beautifulsoup4==4.15.0
 certifi==2026.10.23
 charset-normalizer==3.5.2
 crispy-bootstrap4==2026.2
+distro==1.9.0
 django==5.2.18
 django-bootstrap4==26.3
 django-crispy-forms==2.7
-frozenlist==1.8.0
 gunicorn==23.0.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
 idna==3.20
-instaloader==4.15.4
-multidict==7.1.0
+jiter==0.18.0
 mysqlclient==2.3.0
-openai==0.28.1
+openai==1.109.1
+packaging==26.3
 pillow==13.0.0
-propcache==0.5.4
-pyfb==0.6.0
+pydantic==2.14.2
+pydantic-core==2.50.2
 pymemcache==4.0.0
 pypdf==6.21.4
-python-http-client==3.3.7
 reportlab==5.0.1
 requests==2.34.2
-sendgrid==3.6.5
-sendgrid-django==4.2.0
 sentry-sdk==2.72.0
-simplejson==4.2.0
+sniffio==1.3.1
 soupsieve==4.0.0
 sqlparse==0.6.0
 supervisor==4.3.0
 tqdm==4.70.1
 typing-extensions==4.16.0
+typing-inspection==0.4.4
 unidecode==1.4.0
 urllib3==2.8.0
-yarl==1.25.1

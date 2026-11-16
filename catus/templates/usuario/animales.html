@@ -4,6 +4,10 @@
 
 {% block title %}{{user.title|default:"Animales en adopción"}} | Catpuccino Adopciones{% endblock %}
 
+{# los de la portada no sirven acá: esta página es la del rescatista #}
+{% block descripcion %}{% if user.description %}{{user.description|texto_para_meta}}{% else %}Gatos y perros en adopción{% if user.title %} de {{user.title}}{% endif %} en Catpuccino Adopciones.{% endif %}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{url_canonica}}">{% endblock %}
+
 {% block header %}
 {% endblock %}
 
@@ -19,7 +23,7 @@
 </div>
 {% endif %}
 
-<div class="container-md mx-md-auto profile-header">
+<div class="profile-header">
   <div class="profile-header-inner">
     <div class="profile-logo-wrapper">
       {% if user.logo_img %}

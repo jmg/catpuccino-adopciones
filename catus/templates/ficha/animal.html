@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% load catus_html %}
+
+{% comment %}
+La ficha de un animal (views/ficha.py): lo que se abre al compartir su link. Las fotos usan
+el carrusel de la tarjeta (.animalCarrousel, que index.js arma sin que pasen solas y con su
+contador) y se agrandan al tocarlas. En el celular "Quiero adoptar" queda pegado abajo
+mientras se lee (position: sticky dentro de .ficha, así no tapa el pie). Si el animal ya no
+está en adopción no hay formulario ni botones para compartir: se dice por qué y se muestran
+otros de la misma especie.
+{% endcomment %}
+
+{% block title %}{{titulo}} | Catpuccino Adopciones{% endblock %}
+{% block descripcion %}{{descripcion_meta}}{% endblock %}
+{% block robots %}{% if not en_adopcion %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{url_canonica}}">{% endblock %}
+{% block og_titulo %}{{titulo}}{% endblock %}
+{% block og_descripcion %}{{descripcion_meta}}{% endblock %}
+{% block og_url %}{{url_canonica}}{% endblock %}
+{% block og_imagen %}{% if imagen_para_compartir %}
+    <meta property="og:image" content="{{imagen_para_compartir}}">
+    <meta property="og:image:alt" content="Foto de {{animal.nombre}}">
+{% endif %}{% endblock %}
+{% block twitter_card %}<meta name="twitter:card" content="{% if imagen_para_compartir %}summary_large_image{% else %}summary{% endif %}">{% endblock %}
+
+{% block content %}
+<article class="ficha{% if not en_adopcion %} ficha-no-disponible{% endif %}" data-id="{{animal.id}}">
+
+  {% if not en_adopcion %}
+  <div class="ficha-aviso">
+    <i class="fa fa-paw" aria-hidden="true"></i>
+    <div>
+      <p class="ficha-aviso-titulo">{{animal.nombre}} ya no {% if plural %}están{% else %}está{% endif %} en adopción</p>
+      <p>
+        {% if animal.estado == "R" %}{% if plural %}Están{% else %}Está{% endif %} reservad{{terminacion}}: ya {% if plural %}tienen{% else %}tiene{% endif %} una familia en camino.
+        {% elif animal.estado == "A" %}Ya {% if plural %}encontraron{% else %}encontró{% endif %} una familia.
+        {% else %}Su publicación terminó.{% endif %}
+        {% if otros %}Más abajo hay otros {{especie_en_plural}} que buscan familia.{% endif %}
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="ficha-fotos">
+    {% if fotos %}
+    <div id="animalCarrousel-{{animal.id}}" class="animalCarrousel carousel slide">
+      <div class="carousel-inner">
+        {% for foto in fotos %}
+        <div class="carousel-item{% if forloop.first %} active{% endif %}">
+          <div class="carousel-image">
+            <img {% if forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} data-enlargable="1" class="post-image" src="{{foto.image.url}}" alt="{{animal.nombre}}{% if fotos|length > 1 %}, foto {{forloop.counter}} de {{fotos|length}}{% endif %}"{% with posicion=foto.get_object_position %}{% if posicion %} style="object-position: {{posicion}}"{% endif %}{% endwith %}>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if fotos|length > 1 %}
+      <span class="fotos-cuenta" aria-hidden="true">1 / {{fotos|length}}</span>
+      <a class="carousel-control-prev" href="#animalCarrousel-{{animal.id}}" role="button" data-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="sr-only">Foto anterior</span>
+      </a>
+      <a class="carousel-control-next" href="#animalCarrousel-{{animal.id}}" role="button" data-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="sr-only">Foto siguiente</span>
+      </a>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="ficha-sin-foto" aria-hidden="true"><i class="fa fa-{% if animal.tipo == 'P' %}dog{% else %}cat{% endif %}"></i></div>
+    {% endif %}
+  </div>
+
+  <div class="ficha-cuerpo">
+    <h1 class="ficha-nombre">{{animal.nombre}}</h1>
+
+    <ul class="animal-datos">
+      <li><i class="fa fa-{% if animal.tipo == 'P' %}dog{% else %}cat{% endif %}" aria-hidden="true"></i>{{animal.get_tipo_display}}</li>
+      {% if animal.sexo != "D" %}
+      <li><i class="fa fa-venus-mars" aria-hidden="true"></i><span class="sr-only">Sexo: </span>{{animal.get_sexo_display}}</li>
+      {% endif %}
+      {% if animal.edad %}
+      <li><i class="fa fa-birthday-cake" aria-hidden="true"></i><span class="sr-only">Edad: </span>{{animal.edad}}</li>
+      {% endif %}
+      {% if animal.zona %}
+      <li><i class="fa fa-map-marker-alt" aria-hidden="true"></i><span class="sr-only">Zona: </span>{{animal.zona}}</li>
+      {% endif %}
+    </ul>
+
+    {% if animal.datos and animal.datos.strip %}
+    <div class="ficha-descripcion">{{animal.get_datos|html_seguro}}</div>
+    {% endif %}
+
+    {% if rescatista %}
+    <p class="ficha-rescatista">
+      Rescatad{{terminacion}} por
+      <a href="{{url_rescatista}}">{% if nombre_rescatista %}{{nombre_rescatista}}{% else %}su rescatista{% endif %}</a>
+      {% if rescatista.get_instagram and rescatista.get_instagram != nombre_rescatista %}
+      <span class="ficha-rescatista-ig">
+        <i class="fab fa-instagram" aria-hidden="true"></i>
+        <a target="_blank" rel="noopener" href="{{rescatista.get_instagram_link}}">{{rescatista.get_instagram}}</a>
+      </span>
+      {% endif %}
+    </p>
+    {% endif %}
+  </div>
+
+  {% if en_adopcion %}
+  <div class="ficha-accion">
+    <a class="btn btn-primary btn-lg btn-quiero-adoptar" href="{{url_formulario}}">
+      <i class="fa fa-paw" aria-hidden="true"></i>
+      <span class="btn-quiero-adoptar-texto">Quiero adoptar a {{animal.nombre}}</span>
+    </a>
+  </div>
+
+  <div class="ficha-compartir">
+    <p class="ficha-compartir-titulo">¿Conocés a alguien que {% if plural %}los{% elif animal.sexo == "H" %}la{% else %}lo{% endif %} pueda adoptar?</p>
+    <div class="ficha-compartir-botones">
+      <a class="btn btn-secondary" href="{{link_whatsapp}}" target="_blank" rel="noopener">
+        <i class="fab fa-whatsapp" aria-hidden="true"></i> Compartir por WhatsApp
+      </a>
+      <button type="button" class="btn btn-secondary" id="copiar-link" data-url="{{url_canonica}}">
+        <i class="fa fa-link" aria-hidden="true"></i> Copiar link
+      </button>
+    </div>
+    <p id="copiar-link-aviso" class="ficha-compartir-aviso" role="status" aria-live="polite"></p>
+  </div>
+  {% endif %}
+
+</article>
+
+{% if not en_adopcion %}
+<section class="ficha-otros" aria-labelledby="ficha-otros-titulo">
+  {% if otros %}
+  <h2 id="ficha-otros-titulo">Estos {{especie_en_plural}} siguen buscando familia</h2>
+  <ul class="ficha-otros-lista">
+    {% for otro in otros %}
+    <li>
+      <a class="ficha-otro" href="{{otro.get_ficha_url}}">
+        {% with foto=otro.animalimage_set.all.0 %}
+        {% if foto %}
+        <img class="ficha-otro-foto" src="{{foto.image.url}}" alt="" loading="lazy"{% with posicion=foto.get_object_position %}{% if posicion %} style="object-position: {{posicion}}"{% endif %}{% endwith %}>
+        {% else %}
+        <span class="ficha-otro-foto ficha-sin-foto" aria-hidden="true"><i class="fa fa-{% if otro.tipo == 'P' %}dog{% else %}cat{% endif %}"></i></span>
+        {% endif %}
+        {% endwith %}
+        <span class="ficha-otro-nombre">{{otro.nombre}}</span>
+        <span class="ficha-otro-datos">{% if otro.sexo != "D" %}{{otro.get_sexo_display}}{% endif %}{% if otro.sexo != "D" and otro.edad %} · {% endif %}{{otro.edad|default_if_none:""}}</span>
+        {% if otro.zona %}<span class="ficha-otro-datos">{{otro.zona}}</span>{% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <h2 id="ficha-otros-titulo">Otros animales que buscan familia</h2>
+  {% endif %}
+  <p class="ficha-otros-todos"><a class="btn btn-secondary" href="/?tipo={{especie_en_plural}}">Ver todos los {{especie_en_plural}} en adopción</a></p>
+</section>
+{% else %}
+<p class="ficha-otros-todos"><a class="btn btn-link" href="/?tipo={{especie_en_plural}}"><i class="fa fa-arrow-left" aria-hidden="true"></i> Ver todos los {{especie_en_plural}} en adopción</a></p>
+{% endif %}
+{% endblock %}
+
+{% block css %}
+<style>
+  /* en el celular la foto arranca pegada a la barra de arriba, como en Instagram */
+  main {
+    margin-top: 0;
+  }
+
+  @media (min-width: 768px) {
+    main {
+      margin-top: 32px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block js %}
+<script>
+  // "Copiar link": con el portapapeles del navegador, o seleccionando el texto en los que
+  // no lo dejan usar (el navegador de Instagram en algunos Android)
+  document.addEventListener("DOMContentLoaded", function() {
+    var boton = document.getElementById("copiar-link");
+    var aviso = document.getElementById("copiar-link-aviso");
+    if (!boton) {
+      return;
+    }
+
+    function avisar(texto) {
+      aviso.textContent = texto;
+    }
+
+    function copiarAMano(url) {
+      var campo = document.createElement("textarea");
+      campo.value = url;
+      campo.setAttribute("readonly", "");
+      campo.style.position = "fixed";
+      campo.style.opacity = "0";
+      document.body.appendChild(campo);
+      campo.select();
+      var copiado = false;
+      try {
+        copiado = document.execCommand("copy");
+      } catch (e) {
+        copiado = false;
+      }
+      document.body.removeChild(campo);
+      return copiado;
+    }
+
+    boton.addEventListener("click", function() {
+      var url = boton.getAttribute("data-url");
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(function() {
+          avisar("¡Listo! Copiamos el link.");
+        }, function() {
+          avisar(copiarAMano(url) ? "¡Listo! Copiamos el link." : "No pudimos copiarlo. El link es: " + url);
+        });
+      } else {
+        avisar(copiarAMano(url) ? "¡Listo! Copiamos el link." : "No pudimos copiarlo. El link es: " + url);
+      }
+    });
+  });
+</script>
+{% endblock %}
