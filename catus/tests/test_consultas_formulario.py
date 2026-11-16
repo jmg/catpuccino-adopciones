@@ -130,6 +130,12 @@ class EnvioDelFormularioTest(TestCase):
 
         self.animal = make_animal(nombre="Willy", cargado_por=make_user())
 
+        #el contador del embudo (services/embudo.py) crea su fila del día con el primer
+        #envío (3 consultas) y después la actualiza (1): no depende de las preguntas, pero
+        #corriéndolo antes los dos envíos que se comparan hacen lo mismo
+        from catus.services import embudo
+        embudo.contar("G", "enviado")
+
     def enviar(self, preguntas, visitante):
         Form.objects.all().delete()
         form = Form.objects.create(title="Pre adopción", slug="formulario-de-pre-adopcion", response="Recibido, gracias")
