@@ -59,10 +59,14 @@ class FormViewPostTest(TestCase):
         self.assertIsNotNone(self.animal.fecha_adopcion)
 
     def test_marcar_adoptado_no_pisa_una_fecha_existente(self):
+        """La fecha es la de la adopción en curso: si el animal ya estaba adoptado, marcar
+        a otro candidato no la cambia. (Desde services/estados.py, salir de "Adoptado" la
+        borra, así que un animal en adopción ya no arrastra la fecha de una adopción vieja.)"""
 
         from django.utils import timezone
 
         fecha = timezone.now() - timezone.timedelta(days=5)
+        self.animal.estado = "A"
         self.animal.fecha_adopcion = fecha
         self.animal.save()
 

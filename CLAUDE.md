@@ -69,7 +69,9 @@ Custom management commands in `catus/management/commands/` are the cron/batch su
 `publish` (post queued animals to Instagram), `update_post_id`, `update_status_in_ig`
 (comment "adoptado" on published posts), `refresh_token` (renew the long-lived Facebook
 token before expiry), `pull_from_ig`, `automatic_approve`, `optimize_images`,
-`update_estado_form`, plus several `test_*` scratch commands.
+`update_estado_form`, `expirar_animales` (daily: expires listings, mails the rescuers and runs
+the candidates' notice), `avisar_candidatos` and `completar_fecha_adopcion` (both only count
+without `--aplicar`), plus several `test_*` scratch commands.
 
 ## Configuration — nothing runs without it
 
@@ -292,6 +294,28 @@ is off — the default; production sets `"0"` explicitly — or when there is no
 per person, `GPT_IG_MAX_TOTAL_POR_DIA` 30 site-wide). Production pins openai 0.28.1 (the 0.x API);
 both SDK generations are supported.
 
+**Changing an animal's state goes through `services/estados.py`**, from every screen:
+`marcar_adoptado(animal, formulario=None)`, `republicar`, `reservar`, `expirar` (by hand) and
+`cambiar_estado(animal, estado, guardar=True)`, plus `formulario_del_adoptante(animal, id)`
+to validate the "who adopted it" pick (a pre-adoption form of the same rescuer, not `B`/`U`).
+The edit form's selector used to write `estado` straight onto the model: "Adoptado" left no
+`fecha_adopcion` (15 of 35 adoptions in 90 days, so the panel never asked who adopted them and
+nothing reached BuenAdoptante) and "Expirado" → "En adopción" kept the old `fecha_ingreso`, so
+the cron expired it again the next morning. Now `AnimalForm` shows `estado` but leaves it out of
+`Meta.fields` (optional; no value means no change), and `EditView.cambiar_estado` calls the
+service before saving; a new animal always starts in `D`. The selector keeps all four options
+on purpose: the edit redirects to the panel, which asks "¿Quién lo adoptó?" right away now
+that there is a date. The rules: adopting sets `fecha_adopcion` (not overwritten if already
+`A`); with the adopter's form it links it, marks it `A` and queues the BuenAdoptante adoption
+(the "adoptado" Instagram comment is the `update_status_in_ig` cron's, from the state alone).
+Any return to `D` from `E`, `R` or `A` restarts the month (`fecha_ingreso`), and from `E` or `A`
+also clears `pregunta_adopcion_hasta`. Leaving `A` clears `fecha_adopcion`. Only republishing
+and expiring by hand clear `expiro_el`; adopted and reserved keep it as the record that the
+cron had expired them. `Animal.set_estado` is older and only sets the adoption date; the form
+page (`views/forms.py`) still uses it. `completar_fecha_adopcion` counts the adopted animals
+without a date by age of `updated_at`, and with `--aplicar --desde` copies `updated_at` into
+`fecha_adopcion` for those touched since then.
+
 **Listings expire after a month** (`management/commands/expirar_animales.py`, a daily cron).
 An approved animal in `D` whose `fecha_ingreso` is over 30 days old goes to `E` and gets
 `expiro_el`; reserved ones are left alone. It uses one `UPDATE` plus a single dropdown sync
@@ -300,6 +324,41 @@ rather than `save()` per animal. The rescuer's panel then asks "¿Siguen en adop
 expired by hand — and republishing (`MarcarEnAdopcion`) is one click per animal on purpose,
 restarting the month by resetting `fecha_ingreso`. Almost nobody marks adoptions on the site:
 when this shipped, 262 of 309 public animals were over a month old and 218 over a year.
+
+Almost nobody opens the panel either (8 people in the first week, ~6 of 254 republished), so
+after each run the command mails every active rescuer with an address the animals that expired
+*in that run* (`services/expiracion.py`, `email/expirados.html`, at most 20 per mail): photo,
+name, and "Sigue en adopción" / "Ya se adoptó". The buttons work without logging in: a token
+signed with its own salt (`django.core.signing`, 30 days) carrying the animal, its rescuer and
+`expiro_el` in seconds, so it dies when the animal changes state, moves to another account or
+expires again, or when the account is deactivated. They open `/sigue-en-adopcion/<token>/`
+(`views/expirados.py`), which **only shows on GET** — mail link scanners open every link — and
+acts on POST through `services/estados.py`; after "Ya se adoptó" it points to the panel to say
+who. It never shows anything about the candidates. `Animal.expiro_avisado_el` (≥ `expiro_el`)
+keeps it to one mail per expiry. `--avisar-ya-expirados --desde AAAA-MM-DD` sends the same mail
+for animals that expired earlier (skipping "No republicar"), and without `--aplicar` only counts
+per rescuer id. A failed mail logs a `warning` and never undoes the expiry, and three failures
+in a row stop the loop (`send_html_email` waits 6 s per failed mail; the same cutoff applies to
+the candidates' notice); `--simular` sends nothing; under `ENV=LOCAL` no mail leaves (a local copy of the production database has real
+addresses).
+
+**The other candidates hear when an animal finds a family** (`services/aviso_candidatos.py`,
+`email/ya_tiene_familia.html`); 67 people in 90 days had applied for animals already adopted and
+never heard back. `expirar_animales` runs it at the end (no cron of its own); `avisar_candidatos`
+runs it by hand and only counts without `--aplicar`. It mails the pre-adoption forms (`A`/`AP`)
+still `N` or `P` of animals in `A` — never the form linked as the adopter's, nor a mailbox equal
+to the adopter's — once the adopter is known or three days after `fecha_adopcion`, and only for
+adoptions dated from the optional `AVISO_CANDIDATOS_DESDE` config key (`"AAAA-MM-DD"`; without it,
+or malformed, nobody is mailed, so the first day doesn't reach back months). One mail per mailbox
+per run, grouped by address; it reads the "Email" answer of all forms in two queries and
+validates it with `contacto.mail_valido`. The text is neutral ("si esa familia sos vos,
+¡felicitaciones!") because the reader may be the adopter, names nobody, and offers up to four
+animals of the same species with the `postulacion.link()` of the newest form. It shares the
+receipt's daily cap per mailbox (`throttle` scope `adoption-receipt`, `RECEIPTS_MAX_PER_DAY`): a
+capped mailbox waits for the next day. `EstadoFormulario.aviso_cierre_el` is set on the mailed
+forms and on those skipped for good (no valid address, the adopter's); a failed send stays unset
+and is retried the next day. `completar_fecha_adopcion` dates old adoptions, so run it with a
+`--desde` before `AVISO_CANDIDATOS_DESDE`, or their candidates get the notice.
 
 **Duplicate listings** (`services/duplicados.py`). On create only, before anything is saved,
 `EditView` checks the account's own `D`/`R` animals from the last 90 days and, on a match,
@@ -396,11 +455,13 @@ permission** — an attacker gets an account for free. Two rules carry the model
   views predate the mixin and inline the same check, returning plain text instead of a
   redirect; match whichever style the file already uses.
 
-Three endpoints are deliberately open and must stay that way: `/contrato/<hash>/`, where the
+Four endpoints are deliberately open and must stay that way: `/contrato/<hash>/`, where the
 adopter fills in their half without an account, `/animal/photos/`, used by the public
-pre-adoption form (it only serves approved animals), and `/postularme/<token>/`, where
+pre-adoption form (it only serves approved animals), `/postularme/<token>/`, where
 someone who already sent a form applies for another animal (the signed token is the
-permission; the page must never show the form's answers or contact details).
+permission; the page must never show the form's answers or contact details), and
+`/sigue-en-adopcion/<token>/`, the buttons of the expiry mail (signed token; GET only shows,
+POST acts; nothing about the candidates).
 
 Anything reached by a sequential id (`/formulario/<id>/…`, `/contrato_adopcion/<id>/…`) is
 enumerable, so it needs an ownership check, not just a login.

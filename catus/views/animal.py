@@ -16,7 +16,8 @@ from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
 
 from catus.models import Animal, AnimalImage, CatusUser, ChatGTPResponse, EstadoFormulario
-from catus.services.buenadoptante import TIPOS_PREADOPCION, BuenAdoptanteService
+from catus.services import estados
+from catus.services.buenadoptante import TIPOS_PREADOPCION
 from catus.forms import AnimalImageForm, CatusUserForm, RequiredImageInlineFormset
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -174,6 +175,15 @@ class EditView(LoginRequiredMixin, BaseView):
         animal.instagram_listo_para_publicar = False
 
         InstagramAutoService().agendar(animal)
+
+    def cambiar_estado(self, animal, estado):
+        """El estado que eligió en el selector, si cambió. No guarda: el animal se guarda
+        enseguida, junto con el resto del formulario."""
+
+        if not estado or estado == animal.estado:
+            return
+
+        estados.cambiar_estado(animal, estado, guardar=False)
 
     def avisar_del_animal_nuevo(self, animal):
         """Le avisa al equipo del alta. Un fallo del mail no puede voltear el alta.
@@ -369,6 +379,13 @@ class EditView(LoginRequiredMixin, BaseView):
                 #no vuelven atrás, pero no queda nada en la base que apunte a ellos.
                 with transaction.atomic():
                     animal = animal_form.save(commit=False)
+
+                    #el estado no lo escribe el form: va por el mismo camino que los botones
+                    #del panel (services/estados.py), así "Adoptado" lleva su fecha y "En
+                    #adopción" le arranca de nuevo el mes. Un alta siempre arranca en
+                    #adopción: el selector ni se muestra.
+                    if not is_new_animal:
+                        self.cambiar_estado(animal, animal_form.cleaned_data.get("estado"))
 
                     #el animal sigue siendo de quien lo cargó: si alguien del equipo entra a
                     #corregirle un dato no se lo queda, ni lo saca del listado del rescatista
@@ -722,6 +739,14 @@ class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
 
         pass
 
+    def aplicar(self, animal, post_data=None):
+        """Lo que hace la vista con cada animal. Las que cambian el estado lo reemplazan
+        por una llamada a services/estados.py, que es el único camino para eso."""
+
+        self.update(animal, post_data=post_data)
+        animal.save()
+        self.after_save(animal, post_data=post_data)
+
     def post(self, *a, **k):
 
         animal_id = self.request.POST.get("animal_id")
@@ -740,9 +765,7 @@ class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
         animals = list(animals)
 
         for animal in animals:
-            self.update(animal, post_data=self.request.POST)
-            animal.save()
-            self.after_save(animal, post_data=self.request.POST)
+            self.aplicar(animal, post_data=self.request.POST)
 
         if not animal_id:
             return self.response("Animales marcados como {}!".format(self.response_status))
@@ -761,44 +784,12 @@ class MarcarAdoptado(UpdateAnimal):
 
     response_status = "adoptados"
 
-    def formulario_elegido(self, animal, post_data):
+    def aplicar(self, animal, post_data=None):
 
-        elegido = (post_data or {}).get("estado_formulario_id")
-        if not elegido or not str(elegido).isdigit():
-            return None
-
-        #un formulario de pre-adopción del mismo rescatista: quien pidió un gato a veces
-        #termina adoptando otro. UpdateAnimal ya dejó afuera los animales de otra persona, y
-        #así no se puede vincular el formulario de un rescatista ajeno.
-        return (EstadoFormulario.objects
-                .filter(id=elegido, gato__cargado_por_id=animal.cargado_por_id, tipo__in=TIPOS_PREADOPCION)
-                .exclude(estado__in=["B", "U"]).first())
-
-    def update(self, animal, post_data=None):
-
-        #a un animal ya adoptado se le puede decir después quién lo adoptó: no se le pisa
-        #la fecha de adopción
-        if animal.estado != "A" or animal.fecha_adopcion is None:
-            animal.fecha_adopcion = timezone.now()
-        animal.estado = "A"
-
-        elegido = self.formulario_elegido(animal, post_data)
-        animal._formulario_adoptante = elegido
-        if elegido is not None:
-            animal.estado_formulario = elegido
-            animal.adoptante = (elegido.get_persona() or "")[:255] or None
-
-    def after_save(self, animal, post_data=None):
-
-        elegido = getattr(animal, "_formulario_adoptante", None)
-        if elegido is None:
-            return
-
-        if elegido.estado != "A":
-            elegido.estado = "A"
-            elegido.save(update_fields=["estado"])
-
-        BuenAdoptanteService().registrar_adopcion(elegido, animal)
+        #UpdateAnimal ya dejó afuera los animales de otra persona, y el servicio solo acepta
+        #formularios de este mismo rescatista
+        elegido = estados.formulario_del_adoptante(animal, (post_data or {}).get("estado_formulario_id"))
+        estados.marcar_adoptado(animal, formulario=elegido)
 
 
 class PosponerPreguntaAdopcion(UpdateAnimal):
@@ -853,31 +844,24 @@ class BuscarFormularios(LoginRequiredMixin, BaseView):
 
 
 class MarcarEnAdopcion(UpdateAnimal):
-    """Volver a publicar. A uno expirado le arranca de nuevo el mes (fecha_ingreso): si
-    no, expirar_animales lo volvía a sacar en la corrida siguiente."""
+    """Volver a publicar. A uno que no estaba en adopción le arranca de nuevo el mes
+    (fecha_ingreso): si no, expirar_animales lo volvía a sacar en la corrida siguiente."""
 
     response_status = "en adopción"
 
-    def update(self, animal, post_data=None):
+    def aplicar(self, animal, post_data=None):
 
-        if animal.estado == "E":
-            animal.fecha_ingreso = timezone.now()
-            animal.pregunta_adopcion_hasta = None
-
-        animal.estado = "D"
-        animal.fecha_adopcion = None
-        animal.expiro_el = None
+        estados.republicar(animal)
 
 
 class MarcarExpirado(UpdateAnimal):
 
     response_status = "expirados"
 
-    def update(self, animal, post_data=None):
+    def aplicar(self, animal, post_data=None):
 
         #a mano: sin expiro_el, el panel no pregunta si sigue en adopción
-        animal.estado = "E"
-        animal.expiro_el = None
+        estados.expirar(animal)
 
 
 class ActualizarFechaIngreso(UpdateAnimal):

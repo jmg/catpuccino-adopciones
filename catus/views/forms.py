@@ -1,4 +1,5 @@
 from catus.models import ActividadBuenAdoptante, EstadoFormulario
+from catus.services import estados
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService, descripcion_alerta, descripcion_marca
 from catus.forms import EstadoFormularioForm
 from catus.utils import *
@@ -230,8 +231,15 @@ class FormView(LoginRequiredMixin, BaseView):
                     "error": "Este animal lo cargó otra persona: no podés cambiarle el estado.",
                 })
 
-            gato.set_estado(nuevo_estado)
-            gato.save()
+            #por el mismo camino que el panel y la edición (services/estados.py)
+            if nuevo_estado == "R":
+                estados.reservar(gato)
+            elif gato.estado_formulario_id:
+                estados.marcar_adoptado(gato)
+            else:
+                #este formulario es el de quien lo adoptó: queda vinculado y va a BuenAdoptante
+                estados.marcar_adoptado(gato, formulario=estado_form)
+                return self.json_response({"status": "ok", "estado": estado_form.estado})
 
         #el rescatista dice que esta persona adoptó: el animal queda vinculado a su
         #formulario y la adopción va a BuenAdoptante (la manda el cron)

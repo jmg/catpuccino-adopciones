@@ -328,6 +328,12 @@ try:
 except (TypeError, ValueError):
     INSTAGRAM_AUTO_DEMORA_MINUTOS = 30
 
+#Aviso "ya tiene familia" a los demás candidatos de un animal adoptado
+#(catus/services/aviso_candidatos.py): solo por adopciones con fecha desde este dia,
+#"AAAA-MM-DD". Sin la clave no se avisa a nadie: el corte es para que el primer dia no
+#salgan mails por adopciones de hace meses.
+AVISO_CANDIDATOS_DESDE = app_config.get("AVISO_CANDIDATOS_DESDE") or None
+
 EMAIL_BACKEND = "sgbackend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
 

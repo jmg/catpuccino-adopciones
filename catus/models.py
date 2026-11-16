@@ -121,6 +121,11 @@ class Animal(BaseEntity):
     #lo tienen ("¿siguen en adopción?") y republicarlo lo vacía.
     expiro_el = models.DateTimeField(null=True, blank=True)
 
+    #cuándo se le mandó al rescatista el mail "¿Siguen en adopción?" de esa expiración
+    #(services/expiracion.py). Vale para el expiro_el de ese momento: si después se lo
+    #republica y vuelve a expirar, expiro_el es más nuevo y corresponde otro mail.
+    expiro_avisado_el = models.DateTimeField(null=True, blank=True)
+
     custom_link = models.CharField(max_length=255, null=True, blank=True)
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
@@ -341,6 +346,11 @@ class EstadoFormulario(BaseEntity):
     #formulario que la persona completó a mano y del que salió esta copia. Las copias
     #apuntan siempre al original, nunca a otra copia.
     copiado_de = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="copias")
+
+    #cuándo se resolvió el aviso "ya tiene familia" a quien mandó este formulario
+    #(services/aviso_candidatos.py): se mandó, o se salteó para siempre (mail inválido, era
+    #el formulario de quien adoptó). Vacío es que todavía no le corresponde o no se pudo.
+    aviso_cierre_el = models.DateTimeField(null=True, blank=True)
     _gato = None
 
     def get_fecha_ingreso(self):

@@ -69,7 +69,15 @@ ANIMAL_LAST_FIELDS = ['datos']
 
 class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 
-    estado = ChoiceField(choices=settings.ANIMAL_ESTADO_CHOICES)
+    #El estado está en la pantalla pero el form no lo escribe en el animal (no está en
+    #Meta.fields): EditView lo lee de cleaned_data y lo cambia con services/estados.py,
+    #como el panel. Escrito directo, "Adoptado" quedaba sin fecha de adopción y "En
+    #adopción" no le renovaba el mes a uno expirado. Opcional: sin valor, no cambia.
+    estado = ChoiceField(
+        choices=settings.ANIMAL_ESTADO_CHOICES, required=False,
+        help_text="Si lo marcás como adoptado, en tu panel te preguntamos quién lo adoptó. "
+                  "Si lo volvés a poner en adopción, se publica por otro mes.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -88,9 +96,6 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 
         self.helper.layout = layout
 
-    #def clean_estado(self):
-    #    self.instance.set_estado(self.cleaned_data.get("estado"))
-
     def clean_datos(self):
         """La descripción se guarda ya limpia, no solo se limpia al mostrarla.
 
@@ -103,7 +108,7 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 
     class Meta:
         model = Animal
-        fields = ANIMAL_BASIC_FIELDS + ANIMAL_LAST_FIELDS
+        fields = [campo for campo in ANIMAL_BASIC_FIELDS if campo != 'estado'] + ANIMAL_LAST_FIELDS
 
         labels = {
             'Estado': "Publicado en adopción",

@@ -6,7 +6,7 @@ class Migration(migrations.Migration):
     paso (services/embudo.py). Una tabla nueva, sin tocar las demás."""
 
     dependencies = [
-        ("catus", "0041_copiado_de"),
+        ("catus", "0042_avisos_de_estado"),
     ]
 
     operations = [
