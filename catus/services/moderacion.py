@@ -73,8 +73,9 @@ class ModeracionService():
     TIMEOUT = 8
     REINTENTOS = 0
 
-    #El SDK viejo (openai<1) es el que corre en producción y reintenta la conexión por
-    #su cuenta, sin forma de apagarlo: por eso el timeout va como tupla (conexión,
+    #El SDK viejo (openai<1, el de producción hasta noviembre de 2026; requirements.txt
+    #fija el 1.x) reintenta la conexión por su cuenta, sin forma de apagarlo: con él el
+    #timeout va como tupla (conexión,
     #lectura). Con la conexión corta sus tres intentos entran holgados en los 30s del
     #worker, en vez de sumar 24s de espera adentro del POST del alta.
     TIMEOUT_CONEXION = 2

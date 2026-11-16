@@ -560,17 +560,18 @@ class TopeDePedidosAInstagramTest(AnimalViewTestCase):
 
         from catus.views.animal import PullDataFromIg
 
+        from catus.tests.test_gpt import openai_falso
+
         pagina = b'<html><head><meta property="og:title" content="Willy busca hogar"></head><body></body></html>'
-        respuesta = {"choices": [{"message": {"content": '{"nombre": "Willy", "tipo": "gato"}'}}]}
+        parche, cliente = openai_falso('{"nombre": "Willy", "tipo": "gato"}')
 
         request = self.factory.get("/animal/pulldatafromig/", {"url": "https://www.instagram.com/p/abc/"})
         request.user = user
 
-        with mock.patch("catus.services.gpt.descargar", return_value=pagina):
-            with mock.patch("catus.services.gpt.openai.ChatCompletion.create", return_value=respuesta) as create:
-                response = PullDataFromIg.as_view()(request)
+        with mock.patch("catus.services.gpt.descargar", return_value=pagina), parche:
+            response = PullDataFromIg.as_view()(request)
 
-        return response, create
+        return response, cliente.chat.completions.create
 
     @override_settings(GPT_IG_MAX_POR_DIA=5, GPT_IG_MAX_TOTAL_POR_DIA=3)
     def test_cada_lectura_cuenta_una_sola_vez_en_el_tope_total(self):
