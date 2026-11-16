@@ -124,11 +124,18 @@ class PreAdoptionView(BaseView):
                 context["post_url"] = "/transito/perros/"
 
         if animal_id:
-            try:
-                animal = Animal.objects.filter(id=animal_id)
-                context["animal"] = animal[0]
-            except:
-                pass
+            #Solo animales aprobados: los ids son correlativos y antes cualquiera veía nombre y
+            #foto de uno sin aprobar. Y solo uno en adopción encabeza el formulario: si ya no
+            #lo está, se avisa arriba en vez de dejar que se entere al final, al enviar.
+            animal = Animal.objects.filter(id=animal_id, aprobado=True).first() if animal_id.isdigit() else None
+            if animal is not None and animal.tipo != tipo and self.form_type == "preadoption":
+                #el link de un perro en el formulario de gatos (o al revés): al que corresponde
+                destino = "/pre-adopcion/perros/" if animal.tipo == "P" else "/pre-adopcion/"
+                return self.redirect("{}?id={}".format(destino, animal.id))
+            if animal is not None and animal.estado == "D":
+                context["animal"] = animal
+            elif animal is not None:
+                context["animal_no_disponible"] = animal
 
         return BaseView.render_to_response(self, context)
 
