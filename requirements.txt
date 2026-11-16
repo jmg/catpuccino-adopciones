@@ -18,12 +18,8 @@ beautifulsoup4
 pymemcache
 # forms_builder's slugs.
 Unidecode
-# catus/services/gpt.py uses the 0.x API (openai.ChatCompletion).
-openai<1
-instaloader
-# catus/services/facebook.py.
-pyfb
-# EMAIL_BACKEND = "sgbackend.SendGridBackend": sendgrid-django 4.2.0 (the
-# last) speaks SendGrid's v3 API through sendgrid 3.x.
-sendgrid-django==4.2.0
-sendgrid<4
+# catus/services/gpt.py and moderacion.py: the 1.x client (openai.OpenAI).
+# 2.x and later are not ported to.
+openai>=1,<2
+# Mail (catus/mail_backend.py) and Graph (catus/services/facebook.py) go
+# through requests: no sendgrid, sendgrid-django or pyfb.
