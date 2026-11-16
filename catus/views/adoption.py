@@ -7,7 +7,7 @@ import re
 import uuid
 from forms_builder.forms import fields as campos_forms_builder
 from forms_builder.forms.forms import FormForForm
-from forms_builder.forms.models import Form, Field, FieldEntry
+from forms_builder.forms.models import Form, FieldEntry
 
 from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
@@ -444,8 +444,8 @@ class PreAdoptionView(BaseView):
         try:
             send_html_email(subject, content, settings.SEND_MAIL, list(set(to_emails)),
                             reply_to=[responder_a] if responder_a else None)
-        except Exception:
-            logger.exception("No se pudo avisar del formulario %s", estado.hash)
+        except Exception as e:
+            logger.warning("No se pudo avisar del formulario %s: %s", estado.id, type(e).__name__)
 
         # The receipt goes to the one address the candidate gave, if it is an address:
         # on the cats' form that field is free text. And since nothing proves it is
@@ -473,8 +473,9 @@ class PreAdoptionView(BaseView):
 
         try:
             send_html_email(subject, content, settings.SEND_MAIL, email)
-        except Exception:
-            logger.exception("No se pudo confirmarle el formulario %s a %s", estado.hash, email)
+        except Exception as e:
+            #sin el mail ni el hash: Sentry adjunta el log, y el hash abre el formulario
+            logger.warning("No se pudo confirmarle el formulario %s: %s", estado.id, type(e).__name__)
 
 
 class PreAdoptionPerrosView(PreAdoptionView):
