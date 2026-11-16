@@ -219,7 +219,9 @@ USE_I18N = True
 
 USE_TZ = True
 
-FILE_UPLOAD_PERMISSIONS = 0o777
+#Las fotos que sube cualquiera no tienen por qué ser ejecutables ni escribibles por otros
+#usuarios del sistema (eran 0o777): las lee nginx y las escribe solo la app.
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 SEND_MAIL = app_config.get("SEND_MAIL")
 

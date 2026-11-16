@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.http import Http404
 from django.shortcuts import render, redirect
 from catus.forms import SignupForm
 from catus.models import CatusUser
@@ -8,6 +9,7 @@ from catus.services.validation import ValidationService
 from django.conf import settings
 from django.contrib.auth import login, authenticate
 
+from catus.views import tools
 from catus.views.base import BaseView
 
 #El registro es abierto, y cada cuenta trae su propio cupo de revisiones con IA y de
@@ -87,7 +89,10 @@ class SettingsLoginView(BaseView):
         if not self.request.user.is_superuser:
             return redirect('/accounts/login/')
 
-        user = CatusUser.objects.get(id=self.request.GET.get("user_id"))
+        #sin user_id, con uno que no es un número o que no existe era un 500
+        user = tools.por_id(CatusUser, self.request.GET.get("user_id"))
+        if user is None:
+            raise Http404("No hay ninguna cuenta con ese id.")
 
         user = authenticate(email=user.email, password=settings.ADMIN_PASSWORD)
         login(self.request, user, backend='catus.auth.SettingsBackend')
