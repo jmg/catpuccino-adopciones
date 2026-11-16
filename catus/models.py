@@ -8,12 +8,19 @@ import random
 from django.db.models import F
 
 import json
+import logging
 import os
 import pathlib
 import re
 import uuid
 import requests
 from django.conf import settings
+from django.utils.text import slugify
+
+logger = logging.getLogger(__name__)
+
+#la edad de un animal leído de la base todavía no se conoce (ver Animal.from_db)
+_EDAD_SIN_LEER = object()
 
 
 def ruta_de_imagen(instance, filename):
@@ -159,15 +166,64 @@ class Animal(BaseEntity):
             self.REVISION_ERROR: "secondary",
         }.get(self.revision_ia_estado, "light")
 
+    #el texto de la edad como estaba en la base, para saber en save() si cambió
+    _edad_guardada = _EDAD_SIN_LEER
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+
+        animal = super().from_db(db, field_names, values)
+        #con only()/defer() la edad puede no estar leída: ahí queda sin leer
+        animal._edad_guardada = animal.__dict__.get("edad", _EDAD_SIN_LEER)
+        return animal
+
     def save(self, *args, **kwargs):
         from catus.services.cache import CacheService
 
         if not self.fecha_ingreso:
             self.fecha_ingreso = timezone.now()
 
+        if "update_fields" in kwargs:
+            kwargs["update_fields"] = self._completar_edad_en_meses(kwargs["update_fields"])
+        else:
+            self._completar_edad_en_meses(None)
+
         result = super(Animal, self).save(*args, **kwargs)
+        self._edad_guardada = self.__dict__.get("edad", _EDAD_SIN_LEER)
         #CacheService().set("animals-for-adoption", self.get_all_for_adoption(destacado=True, sort="-fecha_ingreso"))
         return result
+
+    def _completar_edad_en_meses(self, update_fields):
+        """Estima edad_en_meses del texto de la edad, que es lo que filtra la portada por
+        Cachorros y Adultos (services/edad.py).
+
+        Se calcula cuando no hay un valor o cuando cambió el texto: uno puesto a mano en el
+        admin se respeta mientras la edad siga diciendo lo mismo. Un save con update_fields
+        que no incluye la edad no la toca. Y nunca hace fallar el guardado: lo peor que
+        puede pasar es que el animal quede sin edad en meses, como estaban casi todos.
+        Devuelve update_fields, con edad_en_meses agregado si hace falta guardarlo.
+        """
+        from catus.services.edad import estimar_meses
+
+        if "edad" not in self.__dict__:
+            return update_fields
+
+        if update_fields is not None and "edad" not in update_fields:
+            return update_fields
+
+        try:
+            guardada = self._edad_guardada
+            cambio = guardada is not _EDAD_SIN_LEER and guardada != self.edad
+
+            if self.edad_en_meses is None or cambio:
+                self.edad_en_meses = estimar_meses(self.edad)
+                if update_fields is not None and "edad_en_meses" not in update_fields:
+                    update_fields = list(update_fields) + ["edad_en_meses"]
+
+        except Exception:
+            logger.exception("No se pudo estimar la edad en meses del animal %s", self.pk)
+
+        return update_fields
 
     def __str__(self, *a, **k):
 
