@@ -73,7 +73,7 @@
                     <input type="hidden" name="volver" value="1">
                     <input type="hidden" name="estado" value="A">
                     <input type="hidden" name="confirmo_adopcion" value="1">
-                    <p><b>¿{{persona_nombre|default:"Esta persona"}} adoptó a {{confirmar_adopcion.nombre}}?</b> {{confirmar_adopcion.nombre}} deja de verse en el sitio y la adopción se registra en BuenAdoptante.</p>
+                    <p><b>¿{{persona_nombre|default:"Esta persona"}} adoptó a {{confirmar_adopcion.nombre}}?</b> {{confirmar_adopcion.nombre}} deja de verse en el sitio.</p>
                     {% if confirmar_adopcion.otros %}
                     <label class="aviso-candidatos">
                         <input type="checkbox" name="avisar_candidatos" value="1" checked>
