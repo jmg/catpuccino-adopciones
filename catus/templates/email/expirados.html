@@ -1,0 +1,57 @@
+{% extends "email/base.html" %}
+{% comment %}
+Al rescatista, cuando expirar_animales le saca del sitio animales que llevan un mes
+publicados (services/expiracion.py). Por cada animal, dos botones que funcionan sin login:
+abren una página que pide confirmar (views/expirados.py), así que abrir el link no cambia
+nada. El nombre lo escribió el rescatista: sale escapado.
+{% endcomment %}
+{% block preheader %}Pasó un mes y {% if cantidad == 1 %}{{ animales.0.nombre }} dejó{% else %}{{ cantidad }} de tus animales dejaron{% endif %} de verse en el sitio. Contanos cómo sigue{{ cantidad|pluralize:"n" }}.{% endblock %}
+{% block content %}
+{% if cantidad == 1 %}
+{% include "email/_titulo.html" with antetitulo="Pasó un mes" titulo="¿"|add:animales.0.nombre|add:" sigue en adopción?" %}
+{% else %}
+{% include "email/_titulo.html" with antetitulo="Pasó un mes" titulo="¿Siguen en adopción?" %}
+{% endif %}
+<p style="margin:0 0 14px;">Los animales se ven en el sitio durante un mes desde que se publican. {% if cantidad == 1 %}Este cumplió el mes y ya no aparece{% else %}Estos cumplieron el mes y ya no aparecen{% endif %} en adopciones.catpuccino.org.</p>
+<p style="margin:0 0 20px;">Contanos cómo sigue{{ cantidad|pluralize:"n" }}: si sigue en adopción, vuelve a publicarse por otro mes; si ya se adoptó, lo sacamos de la lista.</p>
+
+{% for animal in animales %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2d3fa;border-radius:10px;margin:0 0 12px;">
+  <tr><td style="padding:14px 16px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        {% if animal.foto_url %}
+        <td width="72" style="vertical-align:middle;padding-right:14px;">
+          <img src="{{ animal.foto_url }}" width="72" alt="Foto de {{ animal.nombre }}" style="display:block;width:72px;max-width:72px;height:auto;border:0;border-radius:8px;">
+        </td>
+        {% endif %}
+        <td style="vertical-align:middle;">
+          <p style="margin:0;font-size:17px;font-weight:700;line-height:1.3;color:#2d3748;word-break:break-word;">{{ animal.nombre }}</p>
+          {% if animal.fecha_ingreso %}<p style="margin:2px 0 0;font-size:13px;color:#6b6f80;">Publicado el {{ animal.fecha_ingreso|date:"d/m/Y" }}</p>{% endif %}
+        </td>
+      </tr>
+    </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 0;">
+      <tr>
+        <td style="border-radius:8px;background-color:#8a2be2;">
+          <a href="{{ animal.link_sigue }}" style="display:inline-block;padding:11px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:8px;">Sigue en adopción</a>
+        </td>
+        <td width="8" style="width:8px;font-size:0;line-height:0;">&nbsp;</td>
+        <td style="border-radius:8px;background-color:#ffffff;border:1px solid #8a2be2;">
+          <a href="{{ animal.link_adoptado }}" style="display:inline-block;padding:10px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;line-height:1.2;color:#7020a0;text-decoration:none;border-radius:8px;">Ya se adoptó</a>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+{% endfor %}
+
+{% if resto %}
+<p style="margin:4px 0 0;">Y {{ resto }} más: {{ resto|pluralize:"lo,los" }} ves en tu panel, en «¿Siguen en adopción?».</p>
+{% endif %}
+
+<p style="margin:20px 0 0;color:#4a5568;">Los botones te llevan a una página donde confirmás. También podés hacerlo desde tu panel:</p>
+{% include "email/_boton.html" with url=link_panel texto="Ir a mi panel" margen="12px 0 8px" %}
+
+<p style="margin:24px 0 0;">¡Gracias por cuidarlos!<br><b>Equipo de Catpuccino Adopciones</b></p>
+{% endblock %}

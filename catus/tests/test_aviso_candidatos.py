@@ -344,3 +344,32 @@ class ComandosTest(AvisoCandidatosBase):
 
         self.assertIn("1 mails enviados", salida)
         self.assertEqual(self.destinatarios(), ["ana@ejemplo.test"])
+
+    def test_el_cron_de_expiracion_tambien_avisa(self):
+        """No hace falta otro cron: corre al final de expirar_animales."""
+
+        self.formulario(self.michi, "Ana Gómez", "ana@ejemplo.test")
+
+        self.correr("expirar_animales")
+
+        self.assertEqual(self.destinatarios(), ["ana@ejemplo.test"])
+
+    def test_si_el_aviso_explota_la_expiracion_igual_queda(self):
+
+        viejo = make_animal(nombre="Viejo", fecha_ingreso=hace(40), cargado_por=self.rescatista)
+
+        with mock.patch.object(aviso_candidatos, "avisar", side_effect=RuntimeError("boom")), \
+                self.assertLogs("catus.management.commands.expirar_animales", "WARNING"):
+            self.correr("expirar_animales")
+
+        viejo.refresh_from_db()
+        self.assertEqual(viejo.estado, "E")
+
+    def test_la_simulacion_de_la_expiracion_no_manda(self):
+
+        self.formulario(self.michi, "Ana Gómez", "ana@ejemplo.test")
+
+        salida = self.correr("expirar_animales", "--simular")
+
+        self.assertIn("simulación", salida)
+        self.assertEqual(mail.outbox, [])

@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% comment %}
+Los botones del mail "¿Siguen en adopción?" (RespuestaView). Con GET solo se muestra: los
+escáneres de links del correo abren los GET. La acción es el POST de cada botón. No muestra
+nada de los formularios ni de los candidatos.
+{% endcomment %}
+
+{% block title %}{% if invalido %}Este link ya no sirve{% elif vigente %}¿{{animal.nombre}} sigue en adopción?{% else %}{{animal.nombre}}{% endif %} | Catpuccino Adopciones{% endblock %}
+
+{% block css %}
+<style>
+    .respuesta-expirado {
+        background-color: #fff;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
+        box-shadow: var(--card-shadow);
+        padding: 28px;
+        margin: 8px auto 32px;
+        max-width: 640px;
+    }
+
+    .respuesta-expirado h1 {
+        font-size: 1.6rem;
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--text-color);
+        margin: 0 0 12px;
+        overflow-wrap: anywhere;
+    }
+
+    .respuesta-expirado p {
+        margin: 0 0 12px;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--text-color);
+    }
+
+    .respuesta-expirado .nota {
+        color: var(--text-muted);
+        font-size: 15px;
+    }
+
+    .respuesta-animal {
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        border: 1px solid var(--lavanda-borde);
+        border-radius: var(--radio);
+        padding: 16px;
+        margin: 4px 0 18px;
+    }
+
+    .respuesta-animal img,
+    .respuesta-animal .sin-foto {
+        display: block;
+        width: 112px;
+        height: 112px;
+        border-radius: 12px;
+        object-fit: cover;
+        background: var(--lavanda);
+    }
+
+    .respuesta-expirado .respuesta-animal-nombre {
+        font-size: 1.3rem;
+        font-weight: 800;
+        line-height: 1.2;
+        color: var(--primary-color);
+        margin: 0 0 4px;
+        overflow-wrap: anywhere;
+    }
+
+    .respuesta-expirado .respuesta-animal-dato {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin: 0;
+    }
+
+    .respuesta-acciones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 0 0 16px;
+    }
+
+    .respuesta-acciones form {
+        margin: 0;
+    }
+
+    .respuesta-aviso {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        background: #e3f4e8;
+        border: 1px solid #bfe3cb;
+        color: #14532d;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin: 0 0 18px;
+        font-size: 16px;
+        line-height: 1.5;
+    }
+
+    @media (max-width: 768px) {
+        .respuesta-expirado {
+            padding: 18px 16px;
+            margin: 0 0 16px;
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
+        }
+
+        .respuesta-expirado h1 {
+            font-size: 1.4rem;
+        }
+
+        .respuesta-animal {
+            grid-template-columns: 88px minmax(0, 1fr);
+        }
+
+        .respuesta-animal img,
+        .respuesta-animal .sin-foto {
+            width: 88px;
+            height: 88px;
+        }
+
+        .respuesta-acciones form,
+        .respuesta-acciones .btn {
+            flex: 1 1 100%;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="respuesta-expirado">
+
+{% if invalido %}
+
+    <h1>Este link ya no sirve</h1>
+    <p>Los botones del mail duran {{vigencia_dias}} días. Desde tu panel podés volver a publicar a los animales que siguen en adopción y marcar los que ya se adoptaron.</p>
+    <a class="btn btn-primary" href="/accounts/profile/"><i class="fa fa-user mr-2" aria-hidden="true"></i> Ir a mi panel</a>
+
+{% else %}
+
+    {% if vigente %}
+    <h1>¿{{animal.nombre}} sigue en adopción?</h1>
+    <p>Pasó un mes desde que {{lo}} publicaste y dejó de verse en el sitio.</p>
+    {% elif recien_republicado %}
+    <h1>¡Listo! {{animal.nombre}} vuelve a estar en adopción</h1>
+    {% elif recien_adoptado %}
+    <h1>¡Qué buena noticia!</h1>
+    {% elif animal.estado == "D" %}
+    <h1>{{animal.nombre}} ya está en adopción</h1>
+    {% elif animal.estado == "A" %}
+    <h1>{{animal.nombre}} ya figura como adoptad{{o}}</h1>
+    {% else %}
+    <h1>Este link ya no sirve</h1>
+    {% endif %}
+
+    <div class="respuesta-animal">
+        {% if foto %}<img src="{{foto.url}}" alt="Foto de {{animal.nombre}}">{% else %}<div class="sin-foto"></div>{% endif %}
+        <div>
+            <p class="respuesta-animal-nombre">{{animal.nombre}}</p>
+            {% if animal.fecha_ingreso %}<p class="respuesta-animal-dato">Publicad{{o}} el {{animal.fecha_ingreso|date:"d/m/Y"}}</p>{% endif %}
+        </div>
+    </div>
+
+    {% if vigente %}
+
+    <div class="respuesta-acciones">
+        {% if primero == "adoptado" %}
+        <form method="post" action="/sigue-en-adopcion/{{token}}/">
+            {% csrf_token %}
+            <input type="hidden" name="respuesta" value="adoptado">
+            <button type="submit" class="btn btn-primary btn-block"><i class="fa fa-heart mr-2" aria-hidden="true"></i> Ya se adoptó</button>
+        </form>
+        <form method="post" action="/sigue-en-adopcion/{{token}}/">
+            {% csrf_token %}
+            <input type="hidden" name="respuesta" value="sigue">
+            <button type="submit" class="btn btn-secondary btn-block"><i class="fa fa-sync mr-2" aria-hidden="true"></i> Sigue en adopción</button>
+        </form>
+        {% else %}
+        <form method="post" action="/sigue-en-adopcion/{{token}}/">
+            {% csrf_token %}
+            <input type="hidden" name="respuesta" value="sigue">
+            <button type="submit" class="btn btn-primary btn-block"><i class="fa fa-sync mr-2" aria-hidden="true"></i> Sigue en adopción</button>
+        </form>
+        <form method="post" action="/sigue-en-adopcion/{{token}}/">
+            {% csrf_token %}
+            <input type="hidden" name="respuesta" value="adoptado">
+            <button type="submit" class="btn btn-secondary btn-block"><i class="fa fa-heart mr-2" aria-hidden="true"></i> Ya se adoptó</button>
+        </form>
+        {% endif %}
+    </div>
+    <p class="nota">Si sigue en adopción, vuelve a verse en el sitio por otro mes, hasta el {{visible_hasta|date:"d/m/Y"}}. Si ya se adoptó, l{{o}} sacamos de la lista.</p>
+
+    {% elif recien_republicado or animal.estado == "D" %}
+
+    <p>Se ve en el sitio hasta el {{visible_hasta|date:"d/m/Y"}}. Si para entonces sigue buscando familia, te volvemos a preguntar.</p>
+    <a class="btn btn-secondary" href="/accounts/profile/"><i class="fa fa-user mr-2" aria-hidden="true"></i> Ir a mi panel</a>
+
+    {% elif animal.estado == "A" %}
+
+    {% if recien_adoptado %}
+    <div class="respuesta-aviso" role="status">
+        <i class="fa fa-check-circle" aria-hidden="true"></i>
+        <div>Marcamos a <b>{{animal.nombre}}</b> como adoptad{{o}}: ya no aparece en el sitio.</div>
+    </div>
+    {% endif %}
+    <p><b>¿Quién {{lo}} adoptó?</b> Si fue alguien que te mandó el formulario por el sitio, elegilo en tu panel: así la adopción queda registrada.</p>
+    <a class="btn btn-primary" href="/accounts/profile/"><i class="fa fa-user mr-2" aria-hidden="true"></i> Ir a mi panel</a>
+
+    {% else %}
+
+    <p>{{animal.nombre}} cambió desde que te mandamos el mail: ahora figura como «{{animal.get_estado_display}}». Para cambiarlo, entrá a tu panel.</p>
+    <a class="btn btn-primary" href="/accounts/profile/"><i class="fa fa-user mr-2" aria-hidden="true"></i> Ir a mi panel</a>
+
+    {% endif %}
+
+{% endif %}
+
+</div>
+{% endblock %}
