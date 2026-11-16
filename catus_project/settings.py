@@ -341,8 +341,16 @@ try:
 except (TypeError, ValueError):
     INSTAGRAM_AUTO_DEMORA_MINUTOS = 30
 
-EMAIL_BACKEND = "sgbackend.SendGridBackend"
+#La API v3 de SendGrid con requests (catus/mail_backend.py), en lugar de sendgrid-django,
+#que no se mantiene más y ataba a sendgrid 3.x.
+EMAIL_BACKEND = "catus.mail_backend.SendGridBackend"
 SENDGRID_API_KEY = app_config.get("SENDGRID_API_KEY")
+
+#El remitente de lo que manda Django por su cuenta, sin decir desde dónde: el mail para
+#cambiar la contraseña. Sin esto salía de "webmaster@localhost", que SendGrid no acepta
+#porque no es un remitente verificado de la cuenta.
+if SEND_MAIL:
+    DEFAULT_FROM_EMAIL = SEND_MAIL
 
 ADMIN_URL = app_config.get("ADMIN_URL")
 PROXY_USER = app_config.get("PROXY_USER")
