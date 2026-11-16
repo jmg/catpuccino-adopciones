@@ -352,16 +352,13 @@ class PreAdoptionView(BaseView):
 
     def set_animal_name_otro(self, form_entry, value):
 
-        for form_field in form_entry.fields.all():
+        #sobre las respuestas que ya leyó el servicio (dos consultas, no una por pregunta),
+        #y cambiando esos mismos objetos: lo que se lea después en este envío ve el valor nuevo
+        for form_field, field in AdoptionService().respuestas(form_entry):
 
-            try:
-                field = Field.objects.get(id=form_field.field_id)
-            except:
-                continue
-
-            if "Nombre del gato a adoptar" in field.label:
+            if field is not None and "Nombre del gato a adoptar" in field.label:
                 form_field.value = value
-                form_field.save()
+                form_field.save(update_fields=["value"])
 
     #los datos de contacto van juntos, en una ficha, arriba de las respuestas del mail
     DATOS_DE_LA_PERSONA = ("Nombre y Apellido", "Edad", "Profesión", "Celular", "Email", "Direccion",

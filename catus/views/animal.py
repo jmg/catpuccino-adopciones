@@ -12,6 +12,7 @@ from catus.services.instagram_auto import InstagramAutoService
 from catus.services.mail import MailService
 from catus.services.moderacion import ModeracionService
 from catus.services.pendientes import AVISO_EN_SESION, URL_COLA
+from catus.views import tools
 from catus.views.base import BaseView, SoloPostMixin, SuperuserRequiredMixin, puede_editar_animal
 from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
@@ -724,8 +725,9 @@ class PhotosView(SoloPostMixin, BaseView):
         if not animal_id:
             return self.json_response({"photos_count": 0, "html": "" })
 
-        animal = Animal.objects.filter(id=animal_id, aprobado=True).first()
-        if animal is None:
+        #un id que no es un número (un bot, un fetch a mano) daba 500: ahora es "no hay"
+        animal = tools.por_id(Animal, animal_id)
+        if animal is None or not animal.aprobado:
             return self.json_response({"photos_count": 0, "html": "" })
 
         html = self.render("animal/photos.html", {"animal": animal})
@@ -842,7 +844,8 @@ class UpdateAnimal(SoloPostMixin, LoginRequiredMixin, BaseView):
         else:
             animal_ids = [animal_id]
 
-        animals = Animal.objects.filter(id__in=animal_ids)
+        #un id que no es un número levantaba ValueError en el filtro: 500 en vez de "no se encontró"
+        animals = Animal.objects.filter(id__in=[i for i in animal_ids if str(i).strip().isdigit()])
 
         #cada quien maneja sus animales; el equipo maneja todos. Sin esto cualquier cuenta
         #marcaba como adoptado (y sacaba del sitio) el animal de otra persona
@@ -971,7 +974,7 @@ class AddComment(SoloPostMixin, SuperuserRequiredMixin, BaseView):
         user_id = self.request.POST.get("user_id")
         comment = self.request.POST.get("comment")
 
-        user = CatusUser.objects.filter(id=user_id).first()
+        user = tools.por_id(CatusUser, user_id)
         if user is None:
             return self.response("No se encontró el usuario.")
 

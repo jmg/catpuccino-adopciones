@@ -764,7 +764,7 @@ select.filtro-orden:focus {
   }
 }
 
-/* bootstrap 4.3 no trae .container-md, así que el <main> no tiene márgenes propios */
+/* el <main> no es un .container: no tiene márgenes ni ancho propios, los trae cada página */
 .lista-animales {
   max-width: 1320px;
   margin: 0 auto;

@@ -347,7 +347,9 @@ class EstadoFormulario(BaseEntity):
 
     estado = models.CharField(max_length=1, choices=choices, default="N")
 
-    hash = models.CharField(max_length=255)
+    #cada /formularios/<hash>/ busca por acá: sin índice recorría la tabla entera. No es
+    #unique porque no está verificado que no haya repetidos en producción (migración 0042)
+    hash = models.CharField(max_length=255, db_index=True)
 
     form_entry = models.ForeignKey(FormEntry, null=True, blank=True, on_delete=models.SET_NULL)
     gato = models.ForeignKey("animal", null=True, blank=True, on_delete=models.SET_NULL)
@@ -424,7 +426,9 @@ class CatusUser(AbstractUser):
 
     title = models.CharField(max_length=500, null=True, blank=True, default="")
     description = models.TextField(null=True, blank=True, default="")
-    handle = models.CharField(max_length=255, null=True, blank=True)
+    #/<handle>/ busca por acá. Índice y no unique: hay cuentas viejas que lo comparten
+    #(views/usuario.py::get_user_por_handle)
+    handle = models.CharField(max_length=255, null=True, blank=True, db_index=True)
 
     instagram = models.CharField(max_length=255, null=True, blank=True)
     facebook = models.CharField(max_length=255, null=True, blank=True)
@@ -592,7 +596,8 @@ class Contrato(BaseEntity):
     contrato_aceptado = models.BooleanField(default=False)
 
     miembro_adopcion_nombre = models.CharField(max_length=255, null=True, blank=True)
-    hash = models.CharField(max_length=255)
+    #cada /contrato/<hash>/ busca por acá (migración 0042, ver EstadoFormulario.hash)
+    hash = models.CharField(max_length=255, db_index=True)
 
     email_enviado = models.BooleanField(default=False)
 
