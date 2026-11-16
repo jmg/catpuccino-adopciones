@@ -307,6 +307,21 @@ class Animal(BaseEntity):
 
         return "/pre-adopcion/?id={}".format(self.id)
 
+    def get_slug(self):
+        """El nombre como va en la URL de la ficha. Es decorativo: la ficha se busca por id."""
+
+        return slugify(self.nombre or "")[:60].strip("-")
+
+    def get_ficha_url(self):
+        """La página pública del animal (views/ficha.py), la que se comparte."""
+
+        slug = self.get_slug()
+        if slug:
+            return "/adoptar/{}-{}/".format(self.id, slug)
+
+        #un nombre sin letras ni números ("🐱") no deja nada para la URL
+        return "/adoptar/{}/".format(self.id)
+
     def get_images(self):
 
         #el desempate por id importa: posicion no se escribe en ningún lado, así que sin
@@ -357,6 +372,18 @@ class AnimalImage(BaseEntity):
             self.crop_x = self.crop_y = self.crop_w = self.crop_h = None
         else:
             self.crop_x, self.crop_y, self.crop_w, self.crop_h = crop
+
+    def get_object_position(self):
+        """El object-position que centra la foto en el recorte elegido para Instagram, o None.
+
+        Las tarjetas y la ficha muestran las fotos en un cuadrado (object-fit: cover), y sin
+        esto el cuadrado era siempre el del medio: en una foto apaisada con el gato en una
+        punta se veía la pared. El recorte ya es la parte que el rescatista eligió.
+        """
+        from catus.services.ficha import posicion_del_recorte
+        from catus.utils import clean_crop
+
+        return posicion_del_recorte(clean_crop(self.get_crop()))
 
 
 class EstadoFormulario(BaseEntity):

@@ -95,6 +95,22 @@ $(document).on("slid.bs.carousel", ".animalCarrousel", function(e) {
   }
 })
 
+// La foto de la tarjeta es un link a la ficha: deslizarla para pasar a la siguiente no es
+// tocarla. Si entre que se apoyó y se soltó el dedo (o el mouse) se movió, no se abre.
+var inicioSobreLaFoto = null;
+
+$(document).on("pointerdown", ".animalCarrousel", function(e) {
+  inicioSobreLaFoto = {x: e.clientX, y: e.clientY}
+})
+
+$(document).on("click", ".animalCarrousel a.foto-ficha", function(e) {
+  var inicio = inicioSobreLaFoto
+  inicioSobreLaFoto = null
+  if (inicio && typeof e.clientX === "number" && Math.abs(e.clientX - inicio.x) > 10) {
+    e.preventDefault()
+  }
+})
+
 // Las flechas del carrusel y el desplegable del menú son <a role="button">: un botón se
 // activa también con la barra espaciadora, que en un link solo baja la página.
 $(document).on("keydown", "a[role=button]", function(e) {

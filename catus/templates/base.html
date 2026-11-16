@@ -1,5 +1,6 @@
 {% load static %}
 {% load bootstrap4 %}
+{% load catus_html %}
 <!DOCTYPE html>
 <html lang="es">
 
@@ -8,18 +9,25 @@
   <meta charset="utf-8">
   <link rel="icon" type="image/png" href="{% static 'favicon.png' %}" sizes="64x64">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
-  <meta name="description" content="Catpuccino Adopciones | Adopción responsable de gatos y perros">
-
-  <meta name="keywords" content="Adopción responsable, Adopción de gatitos, Adopción de gatos, Adopción de perros, Adopción de perritos, Gatos, Perros, Gatos en adopción, Perros en adopción, Adopción de animales, Adopciones, Perros y gatos, Animales, Gatos y perros, Gatos y perros en adopción, Rescate de gatos, Rescate de perros, Publicar animales en adopción, Publicar gatos en adopción, Publicar perros en adopción, Argentina, GBA, CABA">
-  <meta http-equiv="keywords" content="Adopción responsable, Adopción de gatitos, Adopción de gatos, Adopción de perros, Adopción de perritos, Gatos, Perros, Gatos en adopción, Perros en adopción, Adopción de animales, Adopciones, Perros y gatos, Animales, Gatos y perros, Gatos y perros en adopción, Rescate de gatos, Rescate de perros, Publicar animales en adopción, Publicar gatos en adopción, Publicar perros en adopción, Argentina, GBA, CABA">
+  {% comment %}
+  Cada página puede pisar lo que dice de sí misma a los buscadores y a WhatsApp: la
+  descripción, la URL canónica, robots y, abajo, og:url, og:image y twitter:card. Los
+  valores de acá son los de siempre. Sin meta keywords: los buscadores la ignoran.
+  {% endcomment %}
+  <meta name="description" content="{% block descripcion %}Catpuccino Adopciones | Adopción responsable de gatos y perros{% endblock %}">
+  {% block robots %}{% endblock %}
+  {% block canonical %}{% endblock %}
 
   {% if not is_user %}
 
-    <meta property="og:title" content="Catpuccino Adopciones | Adopción responsable de gatos y perros.">
+    <meta property="og:title" content="{% block og_titulo %}Catpuccino Adopciones | Adopción responsable de gatos y perros.{% endblock %}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://adopciones.catpuccino.org/">
+    <meta property="og:url" content="{% block og_url %}https://adopciones.catpuccino.org/{% endblock %}">
     <meta property="og:site_name" content="adopciones.catpuccino.org">
-    <meta property="og:description" content="Catpuccino Adopciones | Adopción responsable de gatos y perros.">
+    <meta property="og:description" content="{% block og_descripcion %}Catpuccino Adopciones | Adopción responsable de gatos y perros.{% endblock %}">
+    <meta property="og:locale" content="es_AR">
+    {% block og_imagen %}{% endblock %}
+    {% block twitter_card %}<meta name="twitter:card" content="summary">{% endblock %}
 
   {% else %}
 
@@ -29,14 +37,15 @@
     <meta property="og:image" content="{{SSL_HOST}}/{{user.logo_img}}">
     {% endif %}
 
-    <meta property="og:url" content="{{SSL_HOST}}{{user.get_handle_url}}">
+    <meta property="og:url" content="{% if url_canonica %}{{url_canonica}}{% else %}{{SSL_HOST}}{{user.get_handle_url}}{% endif %}">
     <meta property="og:type" content="website">
     <meta property="og:image:width" content="1024">
     <meta property="og:image:height" content="1024">
     <meta property="og:image:type" content="image/png">
 
     {% if user.description %}
-    <meta property="og:description" content="{{user.description}}">
+    {# la descripción del perfil es HTML: escapada tal cual, WhatsApp mostraba las etiquetas #}
+    <meta property="og:description" content="{{user.description|texto_para_meta}}">
     {% endif %}
     {% if user.title %}
     <meta property="og:title" content="{{user.title}}">
@@ -62,7 +71,7 @@
 
   <link href="/static/css/bootstrap.min.css" rel="stylesheet" type="text/css">
   <link href="/static/css/base.css?v=11" rel="stylesheet" type="text/css">
-  <link href="/static/css/modern.css?v=5" rel="stylesheet" type="text/css">
+  <link href="/static/css/modern.css?v=6" rel="stylesheet" type="text/css">
 
   {% block css %}
   {% endblock %}
@@ -224,7 +233,7 @@
 
   {% block js %}{% endblock %}
 
-  <script src='/static/js/index.js?v=17'></script>
+  <script src='/static/js/index.js?v=18'></script>
 
   <!-- JavaScript -->
   <script src="{% static 'alertify/alertify.min.js' %}"></script>
@@ -238,7 +247,7 @@
   <link rel="stylesheet" href="{% static 'alertify/css/themes/bootstrap.min.css' %}"/>
 
   <!-- Efectos modernos -->
-  <script src='{% static "js/modern-effects.js" %}?v=2'></script>
+  <script src='{% static "js/modern-effects.js" %}?v=3'></script>
 
 </body>
 
