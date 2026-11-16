@@ -3,6 +3,7 @@ import unicodedata
 import uuid
 from catus.models import Animal, AnimalImage, CatusUser, Contrato, ContratoPersona, EstadoFormulario
 from catus.utils import clean_crop
+from catus.services.images import FotoDemasiadoGrande, MENSAJE_FOTO_GRANDE, abrir_foto_subida
 from django.core.files.uploadedfile import UploadedFile
 from django.forms import ModelForm, Form, ChoiceField, ImageField, PasswordInput, CharField, DateField, EmailField
 from crispy_forms.helper import FormHelper
@@ -170,7 +171,6 @@ class AnimalImageForm(ModelForm):
         Se valida acá para que el aviso salga por get_error_messages, junto con el resto
         de los errores del formulario, y sin dejar nada a medio guardar.
         """
-        from PIL import Image
 
         foto = self.cleaned_data.get("image")
 
@@ -182,9 +182,13 @@ class AnimalImageForm(ModelForm):
         if not foto or not isinstance(foto, UploadedFile):
             return foto
 
+        #Sin decodificar más de lo necesario: una foto que declara demasiados píxeles se
+        #rechaza por el encabezado, antes de ocupar memoria (services/images.py).
         try:
             foto.file.seek(0)
-            Image.open(foto.file).load()
+            abrir_foto_subida(foto.file)
+        except FotoDemasiadoGrande:
+            raise forms.ValidationError(MENSAJE_FOTO_GRANDE)
         except Exception:
             raise forms.ValidationError(
                 "Esa foto llegó cortada o no se puede abrir. Volvé a subirla."

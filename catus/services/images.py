@@ -653,10 +653,53 @@ UPLOAD_MAX_SIDE = 1920
 UPLOAD_JPEG_QUALITY = 82
 UPLOAD_MIN_SAVING = 0.10
 
+# How many pixels a photo that comes from outside may declare. The header says it before
+# anything is decoded, and decoding is what costs: a palette PNG of a couple of hundred KB
+# can declare 13000×13000 and take close to 1 GB once loaded and turned into RGBA, and the
+# public form shrank every file in the POST before validating anything. A JPEG is decoded
+# already reduced (draft), so it may be as big as a 108 Mpx phone photo; PNG and WEBP have
+# no such shortcut. Pillow's own limit (MAX_IMAGE_PIXELS, set from this in CatusConfig)
+# only warns below twice its value, so it is not the check: these are.
+MAX_PIXELES = 110_000_000
+MAX_PIXELES_SIN_REDUCIR = 40_000_000
+MENSAJE_FOTO_GRANDE = ("Una de las fotos es demasiado grande para procesarla. "
+                       "Probá con otra foto o con una captura de pantalla.")
+
+
+class FotoDemasiadoGrande(Exception):
+    """The photo declares more pixels than we are willing to decode."""
+
+
+def revisar_pixeles(image):
+    """Raise FotoDemasiadoGrande when an opened (not yet loaded) image is too big."""
+    width, height = image.size
+    limite = MAX_PIXELES if image.format in ("JPEG", "MPO") else MAX_PIXELES_SIN_REDUCIR
+    if width * height > limite:
+        raise FotoDemasiadoGrande()
+
+
+def abrir_foto_subida(archivo, lado=UPLOAD_MAX_SIDE):
+    """An uploaded photo, opened and loaded without decoding more than it needs.
+
+    A JPEG is decoded at the smallest scale (1/2, 1/4, 1/8) that still leaves both sides
+    at least `lado`. FotoDemasiadoGrande if it declares too many pixels; whatever else
+    Pillow raises (not an image, truncated) goes up as is.
+    """
+    try:
+        image = Image.open(archivo)
+    except Image.DecompressionBombError:
+        raise FotoDemasiadoGrande()
+    revisar_pixeles(image)
+    if image.format in ("JPEG", "MPO"):
+        image.draft(None, (lado, lado))
+    image.load()
+    return image
+
 
 def shrink_uploaded_image(upload):
     """A smaller copy of an uploaded photo, or the upload itself when it is not
-    a photo Pillow can read (HEIC, video, PDF) or would not get smaller."""
+    a photo Pillow can read (HEIC, video, PDF) or would not get smaller.
+    FotoDemasiadoGrande when it declares more pixels than we decode."""
     from django.core.files.uploadedfile import InMemoryUploadedFile
 
     try:
@@ -666,6 +709,16 @@ def shrink_uploaded_image(upload):
         if fmt not in ("JPEG", "MPO", "PNG", "WEBP"):
             upload.seek(0)
             return upload
+    except Image.DecompressionBombError:
+        raise FotoDemasiadoGrande()
+    except Exception:
+        upload.seek(0)
+        return upload
+
+    revisar_pixeles(image)
+    try:
+        if fmt in ("JPEG", "MPO"):
+            image.draft(None, (UPLOAD_MAX_SIDE, UPLOAD_MAX_SIDE))
         image.load()
     except Exception:
         upload.seek(0)
@@ -701,13 +754,19 @@ def shrink_uploaded_image(upload):
     return InMemoryUploadedFile(output, getattr(upload, "field_name", None), upload.name, content_type, size, None)
 
 
-def shrink_uploads(files):
-    """request.FILES with every photo in it shrunk; anything else untouched."""
+def shrink_uploads(files, claves=None):
+    """request.FILES with every photo in it shrunk; anything else untouched.
+
+    With `claves`, only those keys are kept: the form's own file fields. Anything else in
+    the POST is dropped without being opened, since nobody reads it and every file costs a
+    decode. FotoDemasiadoGrande goes up to the caller."""
     if not files:
         return files
     from django.utils.datastructures import MultiValueDict
 
     shrunk = MultiValueDict()
     for key in files:
+        if claves is not None and key not in claves:
+            continue
         shrunk.setlist(key, [shrink_uploaded_image(f) for f in files.getlist(key)])
     return shrunk

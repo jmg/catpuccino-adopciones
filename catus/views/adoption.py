@@ -5,6 +5,7 @@ import logging
 import random
 import re
 import uuid
+from forms_builder.forms import fields as campos_forms_builder
 from forms_builder.forms.forms import FormForForm
 from forms_builder.forms.models import Form, Field, FieldEntry
 
@@ -12,7 +13,7 @@ from catus.models import Animal, CatusUser, EstadoFormulario
 from catus.utils import send_html_email
 from catus.services.adoption import AdoptionService
 from catus.services.buenadoptante import CALIFICACIONES, BuenAdoptanteService
-from catus.services.images import shrink_uploads
+from catus.services.images import FotoDemasiadoGrande, MENSAJE_FOTO_GRANDE, shrink_uploads
 from catus.services import postulacion, throttle
 from catus.views.contrato import mail_del_adoptante
 
@@ -206,8 +207,15 @@ class PreAdoptionView(BaseView):
             return self._post_response({"form": form, "is_post": True, "success": False, "errors": rejected})
 
         post = getattr(self.request, "POST", None)
-        # Phone photos are shrunk before they are stored; see shrink_uploads.
-        files = shrink_uploads(getattr(self.request, "FILES", None))
+        # Phone photos are shrunk before they are stored; see shrink_uploads. Only the
+        # form's own file fields: anything else in the POST is not even opened.
+        # (FormForForm names each input after its field's slug.)
+        claves = {campo.slug for campo in form.fields.all()
+                  if campo.field_type == campos_forms_builder.FILE}
+        try:
+            files = shrink_uploads(getattr(self.request, "FILES", None), claves)
+        except FotoDemasiadoGrande:
+            return self._post_response({"form": form, "is_post": True, "success": False, "errors": MENSAJE_FOTO_GRANDE})
 
         animal_id = self.request.GET.get("id")
 
