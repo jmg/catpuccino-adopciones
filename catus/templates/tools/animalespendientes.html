@@ -234,7 +234,12 @@ previa que abriera el link.
         min-height: 44px;
     }
 
+    /* cerrado va al lado de "Aprobar"; abierto, el formulario ocupa el ancho entero */
     .no-publicar {
+        flex: 0 1 auto;
+    }
+
+    .no-publicar[open] {
         flex: 1 1 100%;
     }
 
