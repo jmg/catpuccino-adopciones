@@ -152,6 +152,30 @@ a uuid hash, and emails both the rescuer and the applicant. `AdoptionService` re
 out of the `FieldEntry` rows **by Spanish label** ("Nombre y Apellido", "Email", …), so
 renaming a field label in the admin silently breaks parsing.
 
+Before anything is stored, `shrink_uploads` re-encodes the photos — only the form's own FILE
+fields (by slug), the rest of the POST is not opened — and refuses one that *declares* too many
+pixels (`MAX_PIXELES` 110 Mpx for JPEG, decoded already reduced with `draft()`;
+`MAX_PIXELES_SIN_REDUCIR` 40 Mpx for PNG/WEBP): a palette PNG of a few hundred KB declaring
+13000×13000 took ~1 GB to load, from an anonymous POST. `AnimalImageForm.clean_image` does the
+same for rescuers, and `CatusConfig.ready` sets Pillow's own limit from it. The rescuer's mail
+has the candidate's address as Reply-To and the WhatsApp/call buttons of `services/contacto.py`
+(most rescuers work from the mail). The animal of `?id=` must be approved; one no longer in
+adoption gets a notice at the top (`adoption/no_disponible.html`) instead of being found out
+after 40 questions, and a dog's id on the cats' form redirects to the dogs' one.
+
+**The form's funnel** (`services/embudo.py`, `PasoFormulario`, `/tools/embudo/`): daily
+counters per species and step, no cookies and nothing about anyone. The browser sends
+opened / accepted the requirements / started / tried with missing answers / sent, once per tab,
+with `sendBeacon` to `/pre-adopcion/paso/` (throttled per IP); the view counts stored, stopped
+by BuenAdoptante and rejected (not the honeypot's). Counting never makes the form fail.
+
+**What happened with a candidate** (`views/forms.py::botones_de_estado`): `/formularios/<hash>/`
+has "¿En qué quedó?" — Contacted, Reserve for this person, Adopted, Discard (Transiting for
+transit forms) — as a plain form without JS that comes back with `?hecho=`; Reserve and
+Adopted move the animal through the existing logic and ask first. Before, no screen could
+change it and 99.8% of the forms stayed "No asignado". `B` and `U` are the team's: a rescuer
+can't post them, and the team releases a blocked one from the same buttons.
+
 **Applying for another animal with the same answers** (`services/postulacion.py`,
 `views/postulacion.py`). There are no adopter accounts: the person's "profile" is the
 pre-adoption form they already sent, opened with a private link, `/postularme/<token>/`,
@@ -344,7 +368,10 @@ the native bubble is suppressed in the `invalid` handler. And a small inline scr
 (`requisitosAlCargar`) sets a class on `<html>` before the first paint so that a returning
 visitor sees the form straight away instead of a jump once the JS loads. `prepararCampos`
 sets the phone/mail keyboards and autocomplete by the question's label, and marks optional
-questions; it must run before the `initForm…` functions hide the conditional ones.
+questions; it must run before the `initForm…` functions hide the conditional ones. The
+animal dropdown starts with an empty "Elegí un gato/perro" and is required: without it the
+first animal of the list was preselected, and people who came from the menu applied for
+"Alma" without choosing her. The closing note names whoever is selected.
 
 Django's own messages are in Spanish because `USE_I18N` is on (it was off, and validation
 errors, password rules and the admin came out in English). The site's own strings are written
@@ -400,7 +427,15 @@ enumerable, so it needs an ownership check, not just a login.
 - Rich text written by users (`Animal.datos`, `CatusUser.description`) goes through the
   `|html_seguro` filter, backed by `services/html_seguro.py` — an allowlist sanitizer built
   on stdlib. Don't swap it for `|safe`. A sanitizer library would be a new dependency, which
-  has to go into `requirements.txt` and `constraints.prod.txt` and pass the image scan.
+  has to go into `requirements.txt` and `constraints.prod.txt` and pass the image scan. It is
+  also applied **on save** (`AnimalForm.clean_datos`, `CatusUserForm.clean_description`): the
+  edit page loads the text into TinyMCE 5, unmaintained and with load-time XSS, and the team
+  opens other people's animals there. `manage.py sanear_textos [--aplicar]` cleans what was
+  stored before. Blocks it drops (`<div>`, …) leave a `<br>`, or pasted paragraphs ran together.
+- No third-party JS from npm CDNs (unpkg, jsDelivr, cdnjs): an unversioned URL there serves
+  whatever was published last, and one was on the page where the adopter types their ID.
+  Libraries live in `static/vendor/<name>-<version>/`; the contract's dates use the
+  browser's `<input type="date">`. `test_textos_y_scripts` fails if a template goes back.
 - Decimal values written into HTML inputs need `{% localize off %}`. With `LANGUAGE_CODE`
   `es-ar` Django renders `0.25` as `0,25`, which no longer parses as a number on the way
   back — that silently wiped saved Instagram crops.
