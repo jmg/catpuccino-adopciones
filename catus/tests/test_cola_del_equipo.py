@@ -574,6 +574,132 @@ class PanelDelRescatistaTest(TestCase):
         self.assertNotIn("No se publicó", self.panel())
 
 
+@override_settings(**SITIO)
+class ArchivarPendientesTest(TestCase):
+
+    def setUp(self):
+        self.rescatista = make_user(email="rescatista@catpuccino.test", handle="refugio")
+        self.otra = make_user(email="otra@catpuccino.test")
+
+    def correr(self, *args):
+
+        salida = StringIO()
+        call_command("archivar_pendientes", *args, stdout=salida, stderr=StringIO())
+        return salida.getvalue()
+
+    def esperando(self, nombre, dias, **kwargs):
+
+        kwargs.setdefault("cargado_por", self.rescatista)
+        kwargs.setdefault("aprobado", False)
+        return make_animal(nombre=nombre, fecha_ingreso=hace(dias), **kwargs)
+
+    def test_sin_aplicar_no_toca_nada_ni_nombra_a_nadie(self):
+        """Lo que imprime queda en el log de la corrida: cuántos, por antigüedad y por
+        número de cuenta, sin nombres de animales ni mails."""
+
+        viejo = self.esperando("Willy", 200)
+        self.esperando("Michi", 40, cargado_por=self.otra)
+        self.esperando("Nuevo", 3)
+
+        salida = self.correr()
+
+        viejo.refresh_from_db()
+        self.assertEqual(viejo.estado, "D")
+        self.assertIsNone(viejo.no_publicar_el)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertIn("3 esperan aprobación; 2 con más de 30 días", salida)
+        self.assertIn("180 a 364 días: 1", salida)
+        self.assertIn("cuenta {}: 1".format(self.rescatista.id), salida)
+        for dato in ("Willy", "Michi", "rescatista@catpuccino.test", "refugio"):
+            self.assertNotIn(dato, salida)
+
+    def test_aplicar_marca_los_viejos_y_deja_los_nuevos(self):
+
+        viejo = self.esperando("Willy", 200)
+        nuevo = self.esperando("Nuevo", 3)
+
+        self.correr("--aplicar", "--sin-mail")
+
+        viejo.refresh_from_db()
+        nuevo.refresh_from_db()
+        self.assertTrue(viejo.no_se_publico())
+        self.assertEqual(viejo.no_publicar_motivo, MOTIVO_SIN_REVISION)
+        self.assertIsNone(viejo.expiro_el, "el panel le preguntaría si sigue en adopción")
+        self.assertEqual(nuevo.estado, "D")
+        self.assertIsNone(nuevo.no_publicar_el)
+
+    def test_dias_cambia_el_corte(self):
+
+        medio = self.esperando("Medio", 90)
+        viejo = self.esperando("Viejo", 200)
+
+        self.correr("--dias", "180", "--aplicar", "--sin-mail")
+
+        medio.refresh_from_db()
+        viejo.refresh_from_db()
+        self.assertFalse(medio.no_se_publico())
+        self.assertTrue(viejo.no_se_publico())
+
+    def test_no_toca_lo_aprobado_ni_lo_adoptado(self):
+
+        aprobado = self.esperando("Aprobado", 200, aprobado=True)
+        adoptado = self.esperando("Adoptado", 200, estado="A")
+
+        self.correr("--aplicar", "--sin-mail")
+
+        aprobado.refresh_from_db()
+        adoptado.refresh_from_db()
+        self.assertEqual(aprobado.estado, "D")
+        self.assertEqual(adoptado.estado, "A")
+        self.assertIsNone(aprobado.no_publicar_el)
+        self.assertIsNone(adoptado.no_publicar_el)
+
+    def test_avisa_con_un_mail_por_cuenta(self):
+        """Una cuenta con varios animales esperando recibía un mail por animal."""
+
+        self.esperando("Willy", 200)
+        self.esperando("Michi", 100)
+        self.esperando("Toto", 60, cargado_por=self.otra)
+
+        salida = self.correr("--aplicar")
+
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox), ["otra@catpuccino.test", "rescatista@catpuccino.test"])
+        del_rescatista = [m for m in mail.outbox if m.to == ["rescatista@catpuccino.test"]][0]
+        self.assertEqual(del_rescatista.subject, "Catpuccino Adopciones - 2 animales no se publicaron")
+        self.assertIn("Pasó mucho tiempo sin revisión", del_rescatista.alternatives[0][0])
+        self.assertIn("2 cuentas avisadas", salida)
+
+    def test_sin_mail_no_avisa(self):
+
+        self.esperando("Willy", 200)
+
+        self.correr("--aplicar", "--sin-mail")
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_no_guarda_animal_por_animal(self):
+        """Un UPDATE, no un save() por animal: cada save reescribe el desplegable del
+        formulario público, y estos no están ahí porque no están aprobados."""
+
+        for i in range(5):
+            self.esperando("Viejo{}".format(i), 200)
+
+        with mock.patch("catus.signals._update_form_field") as sincronizar:
+            self.correr("--aplicar", "--sin-mail")
+
+        sincronizar.assert_not_called()
+        self.assertEqual(Animal.objects.filter(no_publicar_el__isnull=False).count(), 5)
+
+    def test_la_simulacion_dice_lo_mismo_que_despues_hace(self):
+
+        self.esperando("Willy", 31)
+        self.esperando("Michi", 29)
+
+        self.assertIn("1 con más de 30 días", self.correr())
+
+        self.assertIn("1 animal marcado como no publicado", self.correr("--aplicar", "--sin-mail"))
+
+
 class IndiceDeHerramientasTest(TestCase):
 
     def setUp(self):
