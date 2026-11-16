@@ -1218,8 +1218,8 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
 {{ candidatos_json|json_script:"candidatos-por-animal" }}
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
 <!-- Agregar la librería Tippy.js -->
-<script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
-<script src="https://unpkg.com/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js"></script>
+<script src="/static/vendor/popper-2.11.8/popper.min.js"></script>
+<script src="/static/vendor/tippy-6.3.7/tippy-bundle.umd.min.js"></script>
 
 <script type="text/javascript">
 $(document).ready(function () {
@@ -1277,7 +1277,7 @@ $(document).ready(function () {
     // dedo) llega al botón. Antes se creaban todos al cargar, y dos veces para los botones
     // de acción: con todos los formularios del equipo eran ~28.000 tooltips y la página
     // quedaba congelada unos segundos en la compu y más de diez en un celular.
-    // sin unpkg no hay tooltips, pero el resto de la página (filas clickeables) sigue
+    // sin tippy no hay tooltips, pero el resto de la página (filas clickeables) sigue
     if (window.tippy) tippy.delegate('body', {
         target: '[data-tippy-content]',
         placement: 'top',

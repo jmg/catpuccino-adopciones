@@ -145,4 +145,4 @@ class TooltipsDelPerfilTest(TestCase):
         self.assertIn("tippy.delegate(", html)
         #la única llamada directa que queda es el aviso de "link copiado", sobre un div
         self.assertIsNone(re.search(r"""tippy\(\s*['"]""", html), "volvió una llamada a tippy() sobre todos los botones")
-        self.assertIn("tippy.js@6.3.7", html, "la versión de tippy tiene que ser fija: delegate y el resto dependen de ella")
+        self.assertIn("/static/vendor/tippy-6.3.7/", html, "la versión de tippy tiene que ser fija: delegate y el resto dependen de ella")

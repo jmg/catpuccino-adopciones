@@ -15,17 +15,6 @@
       alertify.success(message);
   };
 
-  var picker = [];
-  var currentYear = new Date().getFullYear();
-
-  $('.date-picker').each(function(idx) {
-      picker[idx] = new Pikaday({
-        field: $(this)[0],
-        yearRange: [1920, currentYear+1],
-        format: 'DD/MM/YYYY',
-      });
-  });
-
   $('input').not('.form-input').removeAttr('placeholder');
   $('textarea').removeAttr('placeholder');
 

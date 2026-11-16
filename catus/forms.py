@@ -4,6 +4,7 @@ import uuid
 from catus.models import Animal, AnimalImage, CatusUser, Contrato, ContratoPersona, EstadoFormulario
 from catus.utils import clean_crop
 from catus.services.images import FotoDemasiadoGrande, MENSAJE_FOTO_GRANDE, abrir_foto_subida
+from catus.services.html_seguro import sanitizar_html
 from django.core.files.uploadedfile import UploadedFile
 from django.forms import ModelForm, Form, ChoiceField, ImageField, PasswordInput, CharField, DateField, EmailField
 from crispy_forms.helper import FormHelper
@@ -33,6 +34,13 @@ class RequiredFieldsMixin():
 
 
 class DatePickerClassFieldsMixin():
+    """Las fechas del contrato con el selector de fecha del navegador.
+
+    Antes era Pikaday, cargado de jsDelivr sin versión fija (la última que se publicara
+    en npm) en la página donde el adoptante escribe su DNI, junto con moment.js. El
+    navegador manda la fecha como AAAA-MM-DD, que Django acepta siempre además del
+    formato local, y hay que dársela en ese formato para que la muestre.
+    """
 
     def __init__(self, *args, **kwargs):
 
@@ -41,8 +49,8 @@ class DatePickerClassFieldsMixin():
 
         for key in self.fields:
             if key in fields_date_picker:
-                self.fields[key].widget.attrs['class'] = 'date-picker'
-                self.fields[key].widget.attrs['autocomplete'] = 'off'
+                anterior = self.fields[key].widget
+                self.fields[key].widget = forms.DateInput(attrs=dict(anterior.attrs, type="date"), format="%Y-%m-%d")
 
 
 class EstadoFormularioForm(ModelForm):
@@ -82,6 +90,16 @@ class AnimalForm(DatePickerClassFieldsMixin, ModelForm):
 
     #def clean_estado(self):
     #    self.instance.set_estado(self.cleaned_data.get("estado"))
+
+    def clean_datos(self):
+        """La descripción se guarda ya limpia, no solo se limpia al mostrarla.
+
+        |html_seguro la limpiaba en las páginas, pero se guardaba tal como llegaba en el
+        POST y la pantalla de edición la carga en TinyMCE 5 (sin arreglos desde 2023), que
+        tiene XSS al cargar contenido. El equipo abre esa pantalla con su sesión para los
+        animales de cualquiera: un rescatista podía hacerle correr un script.
+        """
+        return sanitizar_html(self.cleaned_data.get("datos"))
 
     class Meta:
         model = Animal
@@ -357,6 +375,10 @@ class CatusUserForm(ModelForm):
         for campo in ("logo_img", "banner_img"):
             self.fields[campo].max_length = None
 
+    def clean_description(self):
+        """Limpia al guardar, como la descripción del animal (AnimalForm.clean_datos)."""
+        return sanitizar_html(self.cleaned_data.get("description"))
+
     def clean_handle(self):
         """El handle es la URL pública del perfil, así que no puede repetirse.
 
@@ -402,18 +424,18 @@ class ContratoForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, ModelForm):
             'gato_nombre': 'Nombre del animal',
             'gato_color': 'Color',
             'gato_sexo': 'Sexo',
-            'gato_fecha_nacimiento': 'Fecha de nacimiento (dd/mm/yyyy)',
+            'gato_fecha_nacimiento': 'Fecha de nacimiento',
             'gato_edad': 'Edad aproximada',
             'gato_vacunacion_antirabica': 'Vacunación antirrábica',
-            'gato_vacunacion_antirabica_fecha': 'Fecha vacunación antirrábica (dd/mm/yyyy)',
+            'gato_vacunacion_antirabica_fecha': 'Fecha vacunación antirrábica',
             'gato_vacunacion_antirabica_notas': '(Opcional) Notas sobre vacunación antirrábica.',
 
             #SOLO GATOS
             'gato_vacunacion_triple_1_dosis': 'Vacunación triple felina 1era dosis',
-            'gato_vacunacion_triple_1_dosis_fecha': 'Fecha vacunación triple felina 1era dosis (dd/mm/yyyy)',
+            'gato_vacunacion_triple_1_dosis_fecha': 'Fecha vacunación triple felina 1era dosis',
             'gato_vacunacion_triple_1_dosis_notas': '(Opcional) Notas sobre vacunación triple felina 1era dosis.',
             'gato_vacunacion_triple_2_dosis': 'Vacunación triple felina 2da dosis',
-            'gato_vacunacion_triple_2_dosis_fecha': 'Fecha vacunación triple felina 2da dosis (dd/mm/yyyy)',
+            'gato_vacunacion_triple_2_dosis_fecha': 'Fecha vacunación triple felina 2da dosis',
             'gato_vacunacion_triple_2_dosis_notas': '(Opcional) Notas sobre vacunación triple felina 2da dosis.',
             #ENDGATOS
 
@@ -432,16 +454,16 @@ class ContratoForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, ModelForm):
             #END PERROS
 
             'gato_castrado': 'Castrado',
-            'gato_castrado_fecha': 'Fecha castración (dd/mm/yyyy)',
-            'gato_castracion_fecha_futura': 'Fecha estimativa de castración en caso de no estar castrado (dd/mm/yyyy)',
+            'gato_castrado_fecha': 'Fecha castración',
+            'gato_castracion_fecha_futura': 'Fecha estimativa de castración en caso de no estar castrado',
             'gato_castrado_notas': '(Opcional) Notas sobre castración.',
             'gato_desparasitado': 'Desparasitado 1era dosis',
-            'gato_desparasitado_fecha': 'Fecha desparasitación 1era (dd/mm/yyyy)',
+            'gato_desparasitado_fecha': 'Fecha desparasitación 1era',
             'gato_desparasitado_2': 'Desparasitado 2da dosis',
-            'gato_desparasitado_fecha_2': 'Fecha desparasitación 2da dosis (dd/mm/yyyy)',
+            'gato_desparasitado_fecha_2': 'Fecha desparasitación 2da dosis',
             'gato_desparasitado_notas': '(Opcional) Notas sobre desparasitación.',
             'gato_pipeta_antipulgas': 'Pipeta antipulgas',
-            'gato_pipeta_antipulgas_fecha': 'Fecha pipeta antipulgas (dd/mm/yyyy)',
+            'gato_pipeta_antipulgas_fecha': 'Fecha pipeta antipulgas',
             'gato_pipeta_antipulgas_notas': '(Opcional) Notas sobre pipeta antipulgas.',
             'gato_cuidados_especiales': 'Cuidados especiales',
 
@@ -489,7 +511,7 @@ class ContratoPersonaForm(RequiredFieldsMixin, DatePickerClassFieldsMixin, Model
         labels = {
             'persona_nombre': 'Nombre y Apellido',
             'persona_dni': 'DNI',
-            'persona_fecha_nacimiento': 'Fecha de nacimiento (dd/mm/yyyy)',
+            'persona_fecha_nacimiento': 'Fecha de nacimiento',
             'persona_ocupacion': 'Ocupación',
             'persona_celular': 'Celular',
             'persona_direccion': 'Dirección',
