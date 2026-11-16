@@ -49,6 +49,12 @@ which needs the whole project booted.
 Most tests double as a record of a bug that reached production: their docstring says what
 used to break and for whom. When touching that code, keep the assertion.
 
+`jstests/` runs the real JS and CSS in Chromium (Playwright, desktop and iPhone profiles)
+against copied HTML harnesses in `jstests/fixtures/`: the crop selector, the save guard, the
+homepage carousels and sort (`portada.spec.js`), the zone suggestions (`buscador.spec.js`),
+the search and filters (`filtros.spec.js`) and "Mostrar más" (`mostrar-mas.spec.js`). If
+`card.html` or `home/index.html` change their ids, classes or `data-*`, update the harnesses.
+
 `./dev_tools.sh <shell|migrate|makemigrations|createsuperuser|collectstatic|test|check|clean|requirements|backup|reset_db>`
 wraps the same commands behind the author's venv. `./start.sh [port]` and `./run_dev.sh`
 start the server the same way.
@@ -132,7 +138,11 @@ render HTML cells.
   `destacado` gates the homepage. Instagram state lives here too
   (`instagram_listo_para_publicar` → `instagram_publicado` → `instagram_post_id` →
   `instagram_comment_id`). Use `Animal.get_all_for_adoption(...)`, which already filters
-  `aprobado=True, estado="D"` and prefetches images.
+  `aprobado=True, estado="D"` and prefetches images. `edad` is free text ("6/7 meses",
+  "bebés"); `save()` fills `edad_en_meses` from it with `services/edad.py::estimar_meses`
+  when it is empty or the text changed (a hand-set value survives other edits; a parser
+  failure is logged and never stops the save). `None` means unknown. Migration
+  `0042_edad_en_meses` filled the existing rows with a frozen copy of the parser.
 - `AnimalImage` — gallery photo plus a separately generated `image_for_instagram` and its
   layout parameters (font size, name/age placement).
 - `EstadoFormulario` — a submitted adoption form's pipeline state, keyed by a uuid `hash`
@@ -294,6 +304,25 @@ stopped by the save-button guard in `animal/edit.html`. It runs on attacker-cont
 on every create, so `normalizar()` must stay linear (the tag regex), must not raise (huge
 `&#…;` references) and must not grow the text (NFC, not NFKC).
 
+**Each animal's public page** (`views/ficha.py`, `services/ficha.py`, `ficha/animal.html`):
+`/adoptar/<id>-<slug>/`, from `Animal.get_ficha_url()`. It is the link to share, and what the
+card's name and photo open; "Quiero adoptar" still goes straight to the form
+(`get_adoption_url()`, which honours `custom_link`). Looked up by id, approved only (404
+otherwise); the slug is decorative and any other spelling 301s to the current one, keeping
+the query string. An animal not in `D` says so calmly (reserved / found a family / listing
+ended), has no form button or share buttons, is `noindex`, and lists up to six others of its
+species. The meta (title, description, `og:*`, `twitter:card`, canonical) are absolute URLs
+built on `settings.SSL_HOST`; `og:image` prefers the `image_for_instagram` that carries the
+name. `base.html` exposes blocks for `descripcion`, `robots`, `canonical`, `og_titulo`,
+`og_descripcion`, `og_url`, `og_imagen` and `twitter_card` with the old values as defaults;
+`home/index.html` sets the homepage's (it counts the cats and dogs) behind `{% if main %}`
+because `usuario/animales.html` extends it and sets its own canonical
+(`ficha.url_del_perfil`: `/<handle>/`, or by id when the handle is shared or not `\w+`).
+`/robots.txt` (`home.py::RobotsView`) never names the admin URL, which is secret.
+`/sitemap.xml` is built from the database: homepage, forms, help and legal pages, profiles
+with animals in adoption and every approved `D` animal, `lastmod` from `fecha_ingreso`
+(`updated_at` is not written on save).
+
 ## Front end
 
 Bootstrap 4.3.1 + jQuery, server-rendered. Three layers of CSS, in load order:
@@ -311,6 +340,17 @@ no `.container-md`, so `<main class="container-md">` has no padding of its own �
 like `.lista-animales` bring theirs. `adoption/card.html` is the animal card used by the
 homepage and by each rescuer's public page; `index.js` and `modern-effects.js` find things in
 it by class (`.post-preview` and its `data-*`, `.animalCarrousel`, `.show-more-text`).
+
+The homepage search (`index.js`, `_filter` and neighbours) ignores accents and case
+(`normalizarTexto`, NFD), matches every word against name, zone, sex and age text, and has
+Machos/Hembras and Cachorros/Adultos toggles (`.filtro-opciones`, `aria-pressed`, none pressed
+is "all"): a litter (`A`) counts as both sexes, puppies are `data-meses` < 12, and unknown ages
+only show with the age toggles off. The state lives in the URL (`?buscar=`, `?tipo=gatos|perros`,
+`?sexo=`, `?edad=`) through a debounced `replaceState` (Safari throttles it), keeping other
+params such as `fbclid`; a link with them opens already filtered. "Mostrar más" is decided by
+`revisarMostrarMas()` only for visible cards, again from `paginar()` and from a
+`ResizeObserver`: deciding once on load, when cards 11+ are hidden and measure 0, left every
+card revealed by "Cargar más" or a search clipped with no way to open it.
 
 Titles, buttons, fields and dialogs are the site's, not each page's. The panel, the animal
 form, the contract and the form page used to redefine them (violet centred titles with a
@@ -376,7 +416,9 @@ someone who already sent a form applies for another animal (the signed token is 
 permission; the page must never show the form's answers or contact details).
 
 Anything reached by a sequential id (`/formulario/<id>/…`, `/contrato_adopcion/<id>/…`) is
-enumerable, so it needs an ownership check, not just a login.
+enumerable, so it needs an ownership check, not just a login. The animal pages
+(`/adoptar/<id>-…/`) are enumerable too, and public on purpose, which is why they only exist
+for approved animals and show only what the card already showed.
 
 ## Known rough edges
 

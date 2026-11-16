@@ -175,3 +175,21 @@ Tampoco se prueba acá el `{% localize off %}` de los templates: eso es del lado
 —es el valor que el server **escribe** en el input— y vive en la suite de Python. Lo que
 sí se prueba acá es la otra mitad: que el JS escriba las fracciones con punto y no con
 coma.
+
+## La portada
+
+Además del recorte, acá se prueba el JS de la portada (`catus/static/js/index.js` y
+`modern-effects.js`), cada uno sobre su harness con el HTML copiado de
+`catus/templates/home/index.html` y `adoption/card.html` (si cambian sus ids, clases o
+`data-*`, hay que actualizarlos):
+
+- `portada.spec.js` (`harness-portada.html`): los carruseles de las tarjetas y el orden.
+- `buscador.spec.js` (`harness-buscador.html`): las zonas sugeridas, escapadas.
+- `filtros.spec.js` (`harness-filtros.html`): la búsqueda sin tildes ni mayúsculas y en el
+  sexo y la edad, los botones Machos/Hembras y Cachorros/Adultos, la búsqueda en la URL
+  (`?buscar=`, `?tipo=`, `?sexo=`, `?edad=`) y el "sin resultados".
+- `mostrar-mas.spec.js` (`harness-mostrar-mas.html`, con el CSS del sitio): que las tarjetas
+  que aparecen después de "Cargar más" o de una búsqueda tengan su "Mostrar más". Con el
+  JS de antes (medir una sola vez, al cargar) fallan los 6 tests de tarjetas que aparecen
+  después, en los dos perfiles: la 17 arranca oculta también en la compu, donde el CSS
+  oculta recién de la 16 en adelante.
