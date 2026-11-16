@@ -126,6 +126,15 @@ class Animal(BaseEntity):
     #republica y vuelve a expirar, expiro_el es más nuevo y corresponde otro mail.
     expiro_avisado_el = models.DateTimeField(null=True, blank=True)
 
+    #El equipo decidió no publicarlo: "No publicar" en /tools/animalespendientes/, o el
+    #comando archivar_pendientes con lo que esperó demasiado sin que nadie lo mirara. Queda
+    #en "E", sin aprobar y sin expiro_el (así el panel no pregunta "¿siguen en adopción?"),
+    #y el panel lo muestra como "No se publicó" con el motivo. Si el dueño lo edita, vuelve a
+    #la cola (EditView). Antes no había forma de decir que no: quedaba "En revisión" para
+    #siempre y tapaba la cola del equipo.
+    no_publicar_el = models.DateTimeField(null=True, blank=True)
+    no_publicar_motivo = models.TextField(null=True, blank=True)
+
     custom_link = models.CharField(max_length=255, null=True, blank=True)
 
     ig_url_for_chatgpt = models.CharField(max_length=255, null=True, blank=True)
@@ -155,6 +164,17 @@ class Animal(BaseEntity):
     def necesita_revision_humana(self):
 
         return self.revision_ia_estado == self.REVISION_REVISAR
+
+    def no_se_publico(self):
+        """Si el equipo decidió no publicarlo y sigue así.
+
+        Se pregunta también por el estado y la aprobación, y no sólo por no_publicar_el:
+        si alguien lo vuelve a poner en adopción o lo aprueba por otro camino (el tilde del
+        admin, "Republicar" del panel) la fecha puede quedar puesta, y el panel le seguiría
+        diciendo al rescatista que no se publicó un animal que está en la cola o en el sitio.
+        """
+
+        return self.no_publicar_el is not None and self.estado == "E" and not self.aprobado
 
     def get_revision_ia_badge(self):
 

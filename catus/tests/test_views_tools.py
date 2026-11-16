@@ -377,7 +377,7 @@ class ComentarioDeAdoptadoEnInstagramTest(TestCase):
 class AnimalesPendientesViewTest(ToolsViewTestCase):
     """La pantalla donde el equipo revisa lo que falta aprobar."""
 
-    def abrir(self, user):
+    def abrir(self, user, sesion=None):
         """django-conventions deriva template_name del módulo+clase al armar el urlconf;
         acá las vistas se llaman directo, así que hay que pasárselo."""
 
@@ -385,6 +385,8 @@ class AnimalesPendientesViewTest(ToolsViewTestCase):
 
         request = self.factory.get("/tools/animalespendientes/")
         request.user = user
+        #el aviso de lo que se acaba de hacer viene en la sesión; un dict alcanza
+        request.session = {} if sesion is None else sesion
         response = AnimalesPendientesView.as_view(
             template_name="tools/animalespendientes.html",
         )(request)
@@ -421,16 +423,16 @@ class AnimalesPendientesViewTest(ToolsViewTestCase):
 
         from catus.models import Animal
 
-        #el marcado va primero en el tiempo a propósito: como created_at se sella al
-        #instanciar, si se creaba último el "-created_at" solo ya lo ponía adelante y el
-        #test pasaba igual aunque el orden por revisión de IA no hiciera nada
+        #el marcado es el que menos espera a propósito: la cola va del que más espera al
+        #más nuevo, así que si fuera el más viejo quedaría primero aunque el orden por
+        #revisión de IA no hiciera nada
+        make_animal(nombre="Comun", cargado_por=self.rescatista, aprobado=False)
+        make_animal(nombre="Tranquilo", cargado_por=self.rescatista, aprobado=False)
         make_animal(
             nombre="Sospechoso", cargado_por=self.rescatista, aprobado=False,
             revision_ia_estado=Animal.REVISION_REVISAR,
             revision_ia_motivo="No se ve ningún animal en las fotos.",
         )
-        make_animal(nombre="Comun", cargado_por=self.rescatista, aprobado=False)
-        make_animal(nombre="Tranquilo", cargado_por=self.rescatista, aprobado=False)
 
         cuerpo = self.abrir(self.admin).content.decode()
 

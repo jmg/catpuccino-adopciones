@@ -11,6 +11,7 @@ from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
 from catus.services.mail import MailService
 from catus.services.moderacion import ModeracionService
+from catus.services.pendientes import AVISO_EN_SESION, URL_COLA
 from catus.views.base import BaseView, SoloPostMixin, SuperuserRequiredMixin, puede_editar_animal
 from catus.services.gpt import GPTService
 from django.forms import inlineformset_factory
@@ -26,7 +27,7 @@ from django.core.files import File
 from django.core.files.uploadedfile import UploadedFile
 from tempfile import NamedTemporaryFile
 from django.utils import timezone
-from django.utils.html import escape, format_html
+from django.utils.html import format_html
 import os
 
 from catus.forms import AnimalForm
@@ -185,21 +186,53 @@ class EditView(LoginRequiredMixin, BaseView):
 
         estados.cambiar_estado(animal, estado, guardar=False)
 
-    def avisar_del_animal_nuevo(self, animal):
-        """Le avisa al equipo del alta. Un fallo del mail no puede voltear el alta.
+    def avisar_del_animal_nuevo(self, animal, **datos):
+        """Le avisa al equipo que un animal espera su aprobación. Un fallo del mail no
+        puede voltear el alta.
 
         `send_html_email` reintenta tres veces y después vuelve a lanzar (utils.py), así
         que una API key vencida de SendGrid o un 429 le devolvían un 500 al rescatista con
-        el animal YA guardado, ya revisado, ya aprobado y ya agendado para Instagram: la
-        persona ve un error, no sabe que quedó cargado, y si vuelve a intentar carga un
-        duplicado. Es el mismo criterio que `aprobar_animales` en admin.py y que
-        `AprobarView`, que ya lo tenían.
+        el animal YA guardado y ya revisado: la persona ve un error, no sabe que quedó
+        cargado, y si vuelve a intentar carga un duplicado. Es el mismo criterio que
+        `aprobar_animales` en admin.py y que `AprobarView`, que ya lo tenían.
         """
 
         try:
-            MailService().send_new_animal_mail(animal)
+            MailService().send_new_animal_mail(animal, **datos)
         except Exception:
             logger.exception("No se pudo avisar del alta de %s", animal.id)
+
+    def no_se_publico_y_lo_edita_su_duenio(self, animal):
+        """Si este guardado es el dueño editando un animal que el equipo decidió no publicar.
+
+        Es el camino de vuelta que le indican el mail y el panel ("si sigue en adopción,
+        editalo y lo volvemos a mirar"). Sólo el dueño: si alguien del equipo entra a
+        corregirle un dato, la decisión de no publicarlo no se deshace por eso.
+        """
+
+        return (
+            animal is not None
+            and animal.no_se_publico()
+            and animal.cargado_por_id == self.request.user.id
+        )
+
+    def volver_a_la_cola(self, animal):
+        """Lo deja otra vez esperando la aprobación del equipo, desde ahora.
+
+        fecha_ingreso es desde cuándo espera en la cola y desde cuándo corre el mes de
+        publicado (expirar_animales): las dos cosas arrancan de nuevo. El "Expirado" que le
+        dejó "No publicar" vuelve a "En adopción", que es lo que el dueño vino a decir; si en
+        el form lo marcó reservado o adoptado, eso se respeta.
+        """
+
+        if animal.estado == "E":
+            animal.estado = "D"
+
+        animal.aprobado = False
+        animal.no_publicar_el = None
+        animal.no_publicar_motivo = None
+        animal.expiro_el = None
+        animal.fecha_ingreso = timezone.now()
 
     def get_error_messages(self, animal_form, image_form_set):
         """Arma la lista de errores que ve el rescatista cuando no se puede guardar.
@@ -337,6 +370,11 @@ class EditView(LoginRequiredMixin, BaseView):
 
         if is_post:
 
+            #antes de armar el form: al validarlo, el form le escribe al animal lo que llegó
+            #en el POST, y el estado que trae puede no ser ya el "E" de "No publicar"
+            vuelve_a_la_cola = self.no_se_publico_y_lo_edita_su_duenio(animal)
+            motivo_anterior = animal.no_publicar_motivo if vuelve_a_la_cola else None
+
             animal_form = AnimalForm(self.request.POST, instance=animal)
             image_form_set = ImageFormSet(self.request.POST, self.request.FILES, instance=animal)
             instagram_images = self.get_instagram_images()
@@ -396,6 +434,9 @@ class EditView(LoginRequiredMixin, BaseView):
                         animal.ig_url_for_chatgpt = self.request.POST.get("ig_url_for_chatgpt")
                     if self.request.POST.get("chatgpt_response"):
                         animal.chatgpt_response = self.request.POST.get("chatgpt_response")
+
+                    if vuelve_a_la_cola:
+                        self.volver_a_la_cola(animal)
 
                     animal.save()
 
@@ -484,6 +525,15 @@ class EditView(LoginRequiredMixin, BaseView):
                 if cambio_lo_revisable and not is_new_animal:
                     ModeracionService().revisar_y_guardar(animal)
 
+                #El dueño editó uno que el equipo no publicó: vuelve a la cola y el equipo se
+                #entera como de un alta, después de la revisión para que el mail diga lo que
+                #vio. No se auto-aprueba aunque la IA diga OK: una persona ya decidió una vez
+                #que no, así que lo vuelve a mirar una persona. Si lo marcó adoptado no espera
+                #nada.
+                if vuelve_a_la_cola and animal.estado in ("D", "R"):
+                    self.avisar_del_animal_nuevo(animal, vuelve=True, motivo_anterior=motivo_anterior)
+                    self.request.session["is_new_animal"] = True
+
                 if is_new_animal:
 
                     #Revisión automática de la publicación. Es una ayuda para el equipo:
@@ -532,7 +582,10 @@ class EditView(LoginRequiredMixin, BaseView):
                         #que tiene el equipo para frenarlo.
                         InstagramAutoService().agendar(animal)
 
-                        self.avisar_del_animal_nuevo(animal)
+                        #sin mail al equipo: ya está en el sitio y no espera a nadie. El
+                        #mail decía "espera la aprobación del equipo" de cada alta que la
+                        #IA había aprobado sola. Lo que queda por frenar es el posteo, y
+                        #eso se ve en /tools/colainstagram/.
                         self.request.session["is_new_animal_approved"] = True
                     else:
                         self.avisar_del_animal_nuevo(animal)
@@ -577,44 +630,78 @@ class EditView(LoginRequiredMixin, BaseView):
 
 
 class AprobarView(SuperuserRequiredMixin, BaseView):
-    """Publica un animal en el sitio y le avisa a quien lo cargó. Es del equipo: el
-    link va en el mail de "Nuevo Ingreso", y no pedía ni login."""
+    """Publica un animal en el sitio y le avisa a quien lo cargó. Es del equipo.
+
+    Por POST con el token, desde la cola del equipo (/tools/animalespendientes/), y de vuelta
+    a la cola con el aviso. Era un GET con el id en la URL, y ese link iba en el mail de
+    "Nuevo Ingreso": aprobar —que publica el animal, le escribe a quien lo cargó y agenda el
+    posteo en Instagram— lo disparaba cualquier cosa que abriera el link, como la vista previa
+    del cliente de mail, el antivirus que revisa los links o un prefetch del navegador.
+
+    El GET quedó, sin aprobar nada, para los mails que ya están en las bandejas: lleva a la
+    cola, que es donde ahora se aprueba.
+    """
 
     def get(self, *a, **k):
 
-        animal = Animal.objects.filter(id=self.request.GET.get("id")).first()
+        return self.redirect(URL_COLA)
+
+    def post(self, *a, **k):
+
+        #con un id que no es un número el filter levantaba ValueError: un 500 en vez del
+        #mensaje de abajo
+        animal_id = self.request.POST.get("id")
+        animal = Animal.objects.filter(id=animal_id).first() if str(animal_id or "").isdigit() else None
         if animal is None:
             return self.response("No se encontró el animal.")
 
-        if not animal.aprobado:
-            animal.aprobado = True
+        if animal.aprobado:
+            return self.volver_a_la_cola("{} ya estaba aprobado.".format(animal.nombre))
 
-            #acá hay una persona del equipo mirando: es lo que cuenta el cron
-            #automatic_approve para dar el "historial". Antes contaba cualquier animal
-            #aprobado, y como la revisión automática aprueba sola, el historial se lo
-            #fabricaba el propio rescatista con cinco altas que la IA dejó pasar.
-            animal.aprobado_por_persona = True
-            animal.save()
+        animal.aprobado = True
 
-            #aprobar es lo que agenda el posteo en Instagram. Agendar no puede hacer
-            #fallar la aprobación: el servicio se traga sus propios errores, igual que
-            #el mail de acá abajo.
-            InstagramAutoService().agendar(animal)
+        #acá hay una persona del equipo mirando: es lo que cuenta el cron
+        #automatic_approve para dar el "historial". Antes contaba cualquier animal
+        #aprobado, y como la revisión automática aprueba sola, el historial se lo
+        #fabricaba el propio rescatista con cinco altas que la IA dejó pasar.
+        animal.aprobado_por_persona = True
 
-            #un problema mandando el mail no puede perder la aprobación: se mandaba
-            #antes de guardar y, cuando el proveedor fallaba, el animal quedaba sin
-            #aprobar y quien apretó "Aprobar!" en el mail veía un 500
-            try:
-                MailService().send_mail_aprobacion(animal)
-            except Exception:
-                logger.exception("No se pudo avisar de la aprobación de %s", animal.nombre)
+        #si alguna vez se decidió no publicarlo, aprobarlo deshace esa decisión: sin esto
+        #el panel del rescatista podía seguir mostrando el motivo de algo que ya está en
+        #el sitio
+        animal.no_publicar_el = None
+        animal.no_publicar_motivo = None
+        animal.save()
 
-            #el nombre lo escribe cualquiera que se registre y esto sale como text/html
-            #en la sesión de quien aprueba, que es del equipo: sin escapar, un animal
-            #llamado "<script>..." corría en su navegador
-            return self.response("{} aprobado!".format(escape(animal.nombre)))
+        #aprobar es lo que agenda el posteo en Instagram. Agendar no puede hacer
+        #fallar la aprobación: el servicio se traga sus propios errores, igual que
+        #el mail de acá abajo.
+        InstagramAutoService().agendar(animal)
 
-        return self.response("{} ya habia sido aprobado".format(escape(animal.nombre)))
+        #un problema mandando el mail no puede perder la aprobación: se mandaba
+        #antes de guardar y, cuando el proveedor fallaba, el animal quedaba sin
+        #aprobar y quien apretó "Aprobar" veía un 500
+        try:
+            MailService().send_mail_aprobacion(animal)
+        except Exception:
+            logger.exception("No se pudo avisar de la aprobación de %s", animal.nombre)
+            return self.volver_a_la_cola(
+                "{} quedó aprobado, pero no se pudo mandar el mail a quien lo cargó.".format(animal.nombre),
+            )
+
+        return self.volver_a_la_cola("{} quedó aprobado y ya está en el sitio.".format(animal.nombre))
+
+    def volver_a_la_cola(self, aviso):
+        """De vuelta a la cola con el aviso de lo que pasó.
+
+        El nombre lo escribe cualquiera que se registre: el aviso va como texto y lo escapa
+        la plantilla de la cola. Antes la respuesta era el texto suelto, como text/html en
+        la sesión de quien aprueba, y por eso había que escaparlo acá a mano.
+        """
+
+        self.request.session[AVISO_EN_SESION] = aviso
+
+        return self.redirect(URL_COLA)
 
 
 class ValidateNameView(SoloPostMixin, LoginRequiredMixin, BaseView):

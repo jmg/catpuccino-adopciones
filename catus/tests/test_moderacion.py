@@ -785,10 +785,12 @@ class QuienAproboTest(TestCase):
 
         self.animal.refresh_from_db()
 
-    def test_el_link_del_mail_lo_marca(self):
+    def test_aprobar_desde_la_cola_lo_marca(self):
 
-        request = self.factory.get("/", {"id": self.animal.id})
+        #era el link "Aprobar" del mail, un GET; ahora es un POST desde la cola del equipo
+        request = self.factory.post("/", {"id": self.animal.id})
         request.user = self.equipo
+        request.session = {}
 
         with mock.patch("catus.views.animal.MailService"):
             AprobarView.as_view()(request)

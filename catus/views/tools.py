@@ -14,8 +14,11 @@ from django.core.files import File
 from django.core.files.base import ContentFile
 from datetime import datetime, timedelta
 from catus.services.mail import MailService
+from catus.services.pendientes import (
+    AVISO_EN_SESION, ESTADOS_PENDIENTES, MOTIVOS_NO_PUBLICAR, URL_COLA, PendientesService,
+)
 from catus.utils import rreplace
-from django.db.models import Case, F, IntegerField, Prefetch, Q, Value, When
+from django.db.models import F, Prefetch, Q
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -57,8 +60,12 @@ class ToolsIndexView(BaseView):
         #un posteo automático, así que había que saberse la URL de memoria.
         #Se le pide la cola a la vista de la cola y no una copia del filtro: una copia se
         #despega el día que el criterio cambie, y acá diría que no hay nada por salir.
+        #Y cuántos esperan aprobación, por lo mismo: los 58 que esperaban no los miraba
+        #nadie. También se le piden a quien los lista y no a una copia del filtro.
         return self.render_to_response({
             "agendados": ColaInstagramView().agendados(timezone.now()).count(),
+            "esperando": PendientesService().esperando().count(),
+            "sin_posteo": AnimalesSinPosteoView().sin_posteo().count(),
         })
 
 
@@ -82,7 +89,32 @@ class GenerarImagenView(BaseView):
         return self.render_to_response({"animal": animal, "ig_text": ig_text, "fonts": fonts, "settings": settings})
 
 
+def con_fotos(animales):
+    """El queryset con el rescatista y las fotos ya traídos, en el orden del carrusel.
+
+    Pedir la foto adentro del for de la plantilla es una consulta por animal. El orden es
+    el de Animal.get_images(), para mostrar la misma portada que el sitio.
+    """
+
+    fotos = AnimalImage.objects.order_by(F("posicion").asc(nulls_last=True), "id")
+
+    return animales.select_related("cargado_por").prefetch_related(
+        Prefetch("animalimage_set", queryset=fotos, to_attr="fotos"),
+    )
+
+
 class AnimalesPendientesView(BaseView):
+    """La cola del equipo: lo que espera que una persona lo apruebe, y nada más.
+
+    Listaba también todo lo que no tenía la marca de Instagram, y publicar y expirar apagan
+    esa marca: entraban cientos de animales ya publicados o expirados, y los 58 que de verdad
+    esperaban aprobación quedaban enterrados (41 con más de seis meses). Lo de Instagram ya
+    tiene su pantalla, /tools/colainstagram/, y lo aprobado que todavía no tiene posteo,
+    /tools/animalessinposteo/.
+
+    Dos cosas se le pueden hacer a cada uno: aprobarlo (POST a /animal/aprobar/) o no
+    publicarlo (POST acá), que lo saca de la cola y le avisa a quien lo cargó.
+    """
 
     url = r"^tools/animalespendientes/$"
 
@@ -91,33 +123,123 @@ class AnimalesPendientesView(BaseView):
         if not self.request.user.is_superuser:
             return self.response("No tenes permisos para esto.")
 
-        # Animales que no han sido aprobados O que no tienen imágenes listas para Instagram
-        # O que la revisión automática marcó para mirar
-        # Y que no estén adoptados
-        #lo marcado por la IA entra aunque ya esté aprobado y listo: la re-revisión al editar
-        #existe justamente para el que carga un animal de verdad y después le cambia las fotos
-        #y el texto, y esta pantalla es el único lugar donde se ve ese "R"
-        animals = Animal.objects.filter(
-            (
-                Q(aprobado=False)
-                | Q(instagram_listo_para_publicar=False)
-                | Q(revision_ia_estado=Animal.REVISION_REVISAR)
-            ) & ~Q(estado="A")
-        ).select_related("cargado_por").prefetch_related("animalimage_set")
+        ahora = timezone.now()
+        servicio = PendientesService()
 
-        #las que la revisión automática marcó van primero: son las que hay que mirar
-        animals = animals.annotate(
-            _para_revisar=Case(
-                When(revision_ia_estado=Animal.REVISION_REVISAR, then=Value(0)),
-                default=Value(1),
-                output_field=IntegerField(),
-            )
-        ).order_by("_para_revisar", "-created_at")
+        #Lo que la revisión automática marcó va primero, y después del que más espera al
+        #más nuevo. Con la revisión apagada en producción casi nunca hay marcados, pero
+        #cuando los hay son lo único de la cola que puede ser un problema.
+        esperando = list(con_fotos(servicio.esperando()))
+        esperando.sort(key=lambda animal: not animal.necesita_revision_humana())
+
+        #Lo ya publicado que la revisión marcó al editarlo. No espera aprobación, pero la
+        #re-revisión existe justamente para quien carga un animal de verdad y después le
+        #cambia las fotos y el texto por otra cosa, y este es el único lugar donde se ve.
+        marcados = list(con_fotos(self.publicados_marcados()))
+
+        historial = servicio.aprobados_por_persona(
+            animal.cargado_por_id for animal in esperando + marcados
+        )
+
+        for animal in esperando + marcados:
+            animal.dias_esperando = (ahora - (animal.fecha_ingreso or animal.created_at or ahora)).days
+            animal.aprobados_por_persona = historial.get(animal.cargado_por_id, 0)
 
         return self.render_to_response({
-            "animals": animals,
-            "para_revisar": sum(1 for a in animals if a.necesita_revision_humana()),
+            "esperando": esperando,
+            "marcados": marcados,
+            "para_revisar": sum(1 for animal in esperando if animal.necesita_revision_humana()),
+            "motivos": MOTIVOS_NO_PUBLICAR,
+            "aviso": self.request.session.pop(AVISO_EN_SESION, None),
         })
+
+    def publicados_marcados(self):
+
+        return Animal.objects.filter(
+            aprobado=True, estado__in=ESTADOS_PENDIENTES, revision_ia_estado=Animal.REVISION_REVISAR,
+        ).order_by("-revision_ia_fecha", "-id")
+
+    def post(self, *args, **kwargs):
+        """"No publicar". Por POST con el token, como todo lo que cambia algo en /tools/:
+        un link lo dispara cualquier vista previa o prefetch, sin que nadie apriete nada."""
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        animal = animal_por_id(self.request.POST.get("animal_id"))
+        if animal is None:
+            return self.response("No se encontró el animal.")
+
+        if self.request.POST.get("accion") != "no_publicar":
+            return self.response("No se entendió qué hacer con el animal.")
+
+        #Sólo lo que está en esta pantalla: en adopción o reservado, aprobado o no. Desde
+        #una pestaña vieja se podía mandar uno que mientras tanto alguien marcó adoptado,
+        #y pasarlo a "E" le borraba la adopción.
+        if animal.estado not in ESTADOS_PENDIENTES:
+            return self.volver("{} ya no está en adopción: no se tocó.".format(animal.nombre))
+
+        servicio = PendientesService()
+        motivo = servicio.armar_motivo(self.request.POST.get("motivo"), self.request.POST.get("detalle"))
+        estaba_publicado = animal.aprobado
+
+        servicio.no_publicar(animal, motivo)
+        avisados, sin_aviso = servicio.avisar([animal], motivo, sacado_del_sitio=estaba_publicado)
+
+        if sin_aviso:
+            aviso = "{} no se va a publicar. No se pudo mandar el mail a quien lo cargó.".format(animal.nombre)
+        elif avisados:
+            aviso = "{} no se va a publicar. Le avisamos a quien lo cargó.".format(animal.nombre)
+        else:
+            aviso = "{} no se va a publicar. No tiene a quién avisarle.".format(animal.nombre)
+
+        return self.volver(aviso)
+
+    def volver(self, aviso):
+        """Vuelve a la cola con el aviso: el nombre lo escribió el rescatista, así que va
+        como texto y lo escapa la plantilla."""
+
+        self.request.session[AVISO_EN_SESION] = aviso
+
+        return self.redirect(URL_COLA)
+
+
+class AnimalesSinPosteoView(BaseView):
+    """Lo aprobado y en adopción que no tiene posteo en Instagram ni está en camino.
+
+    Es el flujo a mano, el de siempre cuando el posteo automático está apagado: armar las
+    imágenes en /tools/generarimagen/ y marcarlo como listo. La lista salía de la pantalla
+    de pendientes, que mezclaba esto con lo que espera aprobación; ahora que esa es sólo la
+    cola de aprobación, esto tiene la suya. Lo que ya está en el pipeline (agendado, listo o
+    con un error) está en /tools/colainstagram/ y no se repite acá.
+    """
+
+    url = r"^tools/animalessinposteo/$"
+
+    #los más nuevos primero: son los que se postean. Con cientos de animales publicados la
+    #lista entera no sirve para nada.
+    MAXIMO = 100
+
+    def get(self, *args, **kwargs):
+
+        if not self.request.user.is_superuser:
+            return self.response("No tenes permisos para esto.")
+
+        animales = self.sin_posteo()
+
+        return self.render_to_response({
+            "animales": list(con_fotos(animales)[:self.MAXIMO]),
+            "total": animales.count(),
+            "maximo": self.MAXIMO,
+        })
+
+    def sin_posteo(self):
+
+        return Animal.objects.filter(
+            ColaInstagramView.SIN_ERROR,
+            aprobado=True, estado__in=ESTADOS_PENDIENTES, instagram_publicado=False,
+            instagram_listo_para_publicar=False, instagram_programado_para__isnull=True,
+        ).order_by("-fecha_ingreso", "-id")
 
 
 class AnimalesListosParaPublicarView(BaseView):

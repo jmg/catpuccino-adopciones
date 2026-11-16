@@ -9,18 +9,73 @@ from datetime import datetime, timedelta
 
 class MailService(BaseService):
 
-    def send_new_animal_mail(self, animal):
+    def send_new_animal_mail(self, animal, motivo_anterior=None, vuelve=False):
+        """Al equipo: un animal espera que alguien lo apruebe.
+
+        Sólo para los que esperan: el alta que la revisión aprobó sola ya está en el sitio, y
+        el mail decía "espera la aprobación del equipo" de algo que no esperaba nada. Lleva lo
+        que dijo la revisión con IA, que es lo primero que hay que mirar, y un botón a la cola
+        y no a una acción: antes era un link que aprobaba con un GET, así que lo aprobaba
+        cualquier cosa que lo abriera (un antivirus que revisa los links, una vista previa).
+
+        `vuelve` es el que el equipo había marcado "No publicar" y su dueño editó: vuelve a la
+        cola, y el mail dice por qué no se había publicado.
+        """
 
         if settings.ENV == "LOCAL":
             return
 
-        subject = "Catpuccino Adopciones - Nuevo Ingreso"
+        if vuelve:
+            subject = "Catpuccino Adopciones - Vuelve a revisión: {}".format(animal.nombre)
+        else:
+            subject = "Catpuccino Adopciones - Nuevo Ingreso"
+
         content = self.render("email/new_animal.html", {
             "animal": animal, "settings": settings,
-            "link_aprobar": "{}/animal/aprobar/?id={}".format(settings.SSL_HOST, animal.id),
+            "vuelve": vuelve, "motivo_anterior": motivo_anterior,
+            "link_pendientes": "{}/tools/animalespendientes/#animal-{}".format(settings.SSL_HOST, animal.id),
         })
 
         send_html_email(subject, content, settings.SEND_MAIL, ["catpuccino.ok@gmail.com"])
+
+    def send_mail_no_publicado(self, usuario, animales, motivo=None, sacado_del_sitio=False):
+        """Al rescatista: el equipo decidió no publicar estos animales suyos.
+
+        Le dice cuáles, por qué si el equipo lo escribió, y cómo seguir: si sigue en
+        adopción, que lo edite, que eso lo devuelve a la cola. Uno solo por cuenta aunque
+        sean varios (archivar_pendientes los marca de a muchos).
+        """
+
+        if settings.ENV == "LOCAL":
+            return
+
+        if usuario is None or not usuario.email:
+            return
+
+        animales = list(animales)
+        if not animales:
+            return
+
+        if len(animales) == 1:
+            if sacado_del_sitio:
+                subject = "Catpuccino Adopciones - {} ya no está publicado".format(animales[0].nombre)
+            else:
+                subject = "Catpuccino Adopciones - {} no se publicó".format(animales[0].nombre)
+        else:
+            subject = "Catpuccino Adopciones - {} animales no se publicaron".format(len(animales))
+
+        content = self.render("email/no_publicado.html", {
+            "animales": [
+                {"nombre": animal.nombre, "link_editar": "{}/animales/{}/".format(settings.SSL_HOST, animal.id)}
+                for animal in animales
+            ],
+            "motivo": motivo,
+            "sacado_del_sitio": sacado_del_sitio,
+            "link_panel": settings.SSL_HOST + settings.LOGIN_REDIRECT_URL,
+            "settings": settings,
+        })
+
+        send_html_email(subject, content, settings.SEND_MAIL, usuario.email)
 
     def send_aviso_instagram(self, problemas, link):
         """Le avisa al equipo que hay que volver a conectar Instagram (refresh_token)."""
