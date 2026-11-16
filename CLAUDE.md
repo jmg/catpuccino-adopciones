@@ -69,7 +69,8 @@ Custom management commands in `catus/management/commands/` are the cron/batch su
 `publish` (post queued animals to Instagram), `update_post_id`, `update_status_in_ig`
 (comment "adoptado" on published posts), `refresh_token` (renew the long-lived Facebook
 token before expiry), `pull_from_ig`, `automatic_approve`, `optimize_images`,
-`update_estado_form`, plus several `test_*` scratch commands.
+`update_estado_form`, `archivar_pendientes` (run by hand, not a cron: see "The team's queue"),
+plus several `test_*` scratch commands.
 
 ## Configuration — nothing runs without it
 
@@ -226,7 +227,8 @@ in a way that changes its photos, `nombre`, `datos` or `tipo` — its photos and
 cheap vision model to catch listings that are not an animal in adoption: screenshots,
 landscapes, ads, spam, inappropriate content. The verdict lands in
 `Animal.revision_ia_estado` (`P` sin revisar / `OK` / `R` revisar / `E` no se pudo revisar)
-plus `revision_ia_motivo`, and `/tools/animalespendientes/` sorts flagged listings first.
+plus `revision_ia_motivo`, and `/tools/animalespendientes/` sorts flagged listings first (and
+lists, in a section of its own, published animals that a re-review after an edit flagged).
 
 Two invariants hold the design together, and both have tests that fail if they break:
 
@@ -276,6 +278,49 @@ rather than `save()` per animal. The rescuer's panel then asks "¿Siguen en adop
 expired by hand — and republishing (`MarcarEnAdopcion`) is one click per animal on purpose,
 restarting the month by resetting `fecha_ingreso`. Almost nobody marks adoptions on the site:
 when this shipped, 262 of 309 public animals were over a month old and 218 over a year.
+
+**The team's queue and "No publicar"** (`services/pendientes.py`, `views/tools.py::AnimalesPendientesView`).
+`/tools/animalespendientes/` lists only what waits for a person's approval —
+`PendientesService.esperando()`: `aprobado=False`, estado `D`/`R` — AI-flagged first, then
+oldest to newest by `fecha_ingreso` (falling back to `created_at`), with days waiting, the AI
+verdict and reason, and how many animals a *person* approved for that account (the
+`automatic_approve` history). It used to list everything without the Instagram mark, and
+publishing and expiring clear that mark, so the 58 animals really waiting (41 of them over 180
+days) were buried. The `/tools/` index shows the count. Approved animals with no Instagram post
+that are not in the pipeline (the manual flow: build the images, mark ready) moved to
+`/tools/animalessinposteo/`; the pipeline itself is `/tools/colainstagram/`.
+
+Each card has two forms, both POST with the CSRF token and no JS: **Aprobar** posts to
+`/animal/aprobar/` (`AprobarView`, which used to approve on a GET whose link went out in the
+team's mail, so any link preview or scanner approved; its GET now just redirects to the queue)
+and **No publicar** posts back to the queue with an optional reason from `MOTIVOS_NO_PUBLICAR`
+plus free text. Both redirect to the queue with a notice in the session (`AVISO_EN_SESION`).
+"No publicar" (`PendientesService.no_publicar`) sets `estado="E"`, `aprobado=False`,
+`aprobado_por_persona=False`, `expiro_el=None` (so the panel does not ask "¿Siguen en
+adopción?"), `no_publicar_el`/`no_publicar_motivo`, cancels any Instagram schedule, and mails
+the rescuer (`email/no_publicado.html`, one mail per account). It refuses anything not in
+`D`/`R`, so a stale tab cannot overwrite an adoption. The not-in-adoption filter is what keeps
+these out of the queue — not `no_publicar_el`, which "Republicar" (`MarcarEnAdopcion`) does not
+clear — and `Animal.no_se_publico()` likewise also requires `E` and not approved.
+
+The rescuer's panel shows them as "No se publicó" with the reason, without the one-click
+"Republicar". The way back is editing: when the **owner** saves one (`EditView`,
+`volver_a_la_cola`) it returns to `D` (unless they chose `R`/`A`), unapproved, with
+`fecha_ingreso=now()`, and the team gets the "para revisar" mail as for a new listing
+(`vuelve=True`, with the previous reason). It never auto-approves, even on an AI `OK`: a person
+said no once. A superuser editing it does not undo the decision.
+
+The team's "para revisar" mail (`MailService.send_new_animal_mail`) goes only for listings that
+wait: an upload the AI approved on its own is already on the site and sends nothing. It carries
+the AI verdict and reason, and its button goes to the queue, not to an action.
+
+`archivar_pendientes` marks as not published whatever has waited more than `--dias` (30) days,
+with `MOTIVO_SIN_REVISION`. Without `--aplicar` it only prints counts by age and by account id
+(no names or emails, it lands in the run's log); `--sin-mail` skips the rescuers' mail, meant
+for the old batch. It is one `UPDATE` with the filter repeated and no dropdown sync (unapproved
+animals are not in it), and it recognises what it marked by the exact `no_publicar_el`, so no
+one gets a mail about an animal approved in between. Running it in production is the team's
+call.
 
 **Duplicate listings** (`services/duplicados.py`). On create only, before anything is saved,
 `EditView` checks the account's own `D`/`R` animals from the last 90 days and, on a match,
@@ -368,6 +413,10 @@ permission** — an attacker gets an account for free. Two rules carry the model
   approving an animal, writing internal notes, linking the Instagram account. The `/tools/`
   views predate the mixin and inline the same check, returning plain text instead of a
   redirect; match whichever style the file already uses.
+
+Anything that changes state for the team is a POST with the CSRF token, never a link: a GET
+is fired by mail previews, link scanners and browser prefetch without anyone clicking.
+Approving (`/animal/aprobar/`) was a GET link in the team's mail until 2026-11.
 
 Three endpoints are deliberately open and must stay that way: `/contrato/<hash>/`, where the
 adopter fills in their half without an account, `/animal/photos/`, used by the public
