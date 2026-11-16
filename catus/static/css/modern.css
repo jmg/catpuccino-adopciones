@@ -719,6 +719,54 @@ header.masthead.header-main-page .site-heading .subheading {
   color: #fff;
 }
 
+/* Sexo y edad: el mismo control que el tipo, pero ninguno prendido quiere decir "todos" */
+.filtros-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.filtro-opciones {
+  display: inline-flex;
+  background: var(--lavanda);
+  border: 1px solid var(--lavanda-borde);
+  border-radius: 12px;
+  padding: 3px;
+}
+
+.filtro-opciones button {
+  border: 0;
+  background: transparent;
+  color: var(--text-color);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.filtro-opciones button.activo {
+  background: var(--primary-color);
+  color: #fff;
+}
+
+/* En la compu, todo en un renglón; en una tablet, sexo y edad van abajo */
+@media (min-width: 992px) {
+  .filtros {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .filtros-extra {
+    grid-column: 1 / -1;
+  }
+}
+
 /* arriba de la lista: cuántos hay y, a la derecha, el orden */
 .resultados-barra {
   display: flex;
@@ -797,6 +845,12 @@ select.filtro-orden:focus {
   margin-bottom: 4px;
 }
 
+.sin-resultados p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+  color: var(--text-light);
+}
+
 @media (max-width: 767.98px) {
   .search-container {
     margin: -40px 15px 0;
@@ -816,6 +870,20 @@ select.filtro-orden:focus {
   .filtro-tipo button {
     flex: 1 1 0;
     padding: 0 6px;
+  }
+
+  /* sexo y edad lado a lado, cada uno con la mitad; en los celulares más angostos no
+     entran y van uno abajo del otro */
+  .filtro-opciones {
+    display: flex;
+    flex: 1 1 0;
+    min-width: max-content;
+  }
+
+  .filtro-opciones button {
+    flex: 1 1 0;
+    padding: 0 6px;
+    font-size: 14px;
   }
 
   /* 15px: los que le saca el .row de bootstrap, para que no desborde */
@@ -907,8 +975,19 @@ select.filtro-orden:focus {
   display: block;
 }
 
+/* la foto de la tarjeta es un link a la ficha; en la ficha, se agranda al tocarla */
+a.foto-ficha {
+  cursor: pointer;
+}
+
+.ficha .post-image.img-enlargable {
+  cursor: zoom-in;
+}
+
 .post-preview .carousel-control-prev,
-.post-preview .carousel-control-next {
+.post-preview .carousel-control-next,
+.ficha .carousel-control-prev,
+.ficha .carousel-control-next {
   width: 44px;
   height: 44px;
   top: 50%;
@@ -923,7 +1002,9 @@ select.filtro-orden:focus {
 /* bootstrap les saca el contorno: el anillo va por dentro del círculo blanco, que se
    lee sobre cualquier foto */
 .post-preview .carousel-control-prev:focus-visible,
-.post-preview .carousel-control-next:focus-visible {
+.post-preview .carousel-control-next:focus-visible,
+.ficha .carousel-control-prev:focus-visible,
+.ficha .carousel-control-next:focus-visible {
   outline: 3px solid var(--primary-color);
   outline-offset: -3px;
 }
@@ -946,7 +1027,9 @@ select.filtro-orden:focus {
 }
 
 .post-preview .carousel-control-prev-icon,
-.post-preview .carousel-control-next-icon {
+.post-preview .carousel-control-next-icon,
+.ficha .carousel-control-prev-icon,
+.ficha .carousel-control-next-icon {
   width: 16px;
   height: 16px;
   /* base.css las invierte a negro: sobre el círculo blanco se leen en cualquier foto */
@@ -1124,6 +1207,336 @@ select.filtro-orden:focus {
 
   #animal-list.paginada-inicial > .animal-card.col-xl-3:nth-child(n+21) {
     display: none;
+  }
+}
+
+/* ---- Ficha de un animal (ficha/animal.html) --------------------------------------
+   Lo que se abre al compartir el link de un animal. En el celular, una columna: la foto
+   de borde a borde, los datos y "Quiero adoptar" pegado abajo mientras se lee. Es sticky
+   y no fixed: queda dentro de .ficha, así que al llegar al final se apoya en su lugar y
+   no tapa el pie. En la compu, las fotos a la izquierda y lo demás a la derecha. */
+.ficha {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ficha-aviso {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 16px 0;
+  padding: 14px 16px;
+  background: var(--lavanda);
+  border: 1px solid var(--lavanda-borde);
+  border-radius: var(--radio);
+  color: var(--text-color);
+  line-height: 1.45;
+}
+
+.ficha-aviso > i {
+  color: var(--primary-color);
+  font-size: 20px;
+  margin-top: 2px;
+}
+
+.ficha-aviso p {
+  margin: 0;
+}
+
+.ficha-aviso .ficha-aviso-titulo {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+/* la foto de borde a borde: los 16px que deja .ficha a los costados */
+.ficha-fotos {
+  margin: 0 -16px;
+}
+
+.ficha-sin-foto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  background: var(--lavanda);
+  color: var(--primary-color);
+  font-size: 64px;
+}
+
+.ficha-cuerpo {
+  padding-top: 18px;
+}
+
+.ficha-nombre {
+  font-size: clamp(1.9rem, 7vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--primary-color);
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.ficha .animal-datos {
+  margin-bottom: 18px;
+}
+
+.ficha-descripcion {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-color);
+  max-width: 65ch;
+  overflow-wrap: anywhere;
+}
+
+.ficha-descripcion p {
+  margin: 0 0 0.8em;
+}
+
+.ficha-rescatista {
+  margin: 18px 0 0;
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* 44px para el dedo sin separar los renglones */
+.ficha-rescatista a {
+  display: inline-block;
+  padding: 10px 0;
+  margin: -10px 0;
+  color: var(--primary-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ficha-rescatista a:hover,
+.ficha-rescatista a:focus {
+  text-decoration: underline;
+}
+
+.ficha-rescatista-ig {
+  white-space: nowrap;
+  margin-left: 6px;
+}
+
+.ficha-accion {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin: 22px -16px 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  /* opaco: con transparencia, la descripción de abajo se leía a través de la barra */
+  background: var(--light-bg);
+  border-top: 1px solid var(--lavanda-borde);
+  box-shadow: 0 -6px 18px rgba(45, 26, 77, 0.08);
+}
+
+.btn-quiero-adoptar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+}
+
+/* un nombre largo se corta con "…" en vez de partir el botón en dos renglones */
+.btn-quiero-adoptar-texto {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ficha-compartir {
+  margin: 20px 0 8px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--lavanda-borde);
+  border-radius: var(--radio);
+}
+
+.ficha-compartir .ficha-compartir-titulo {
+  margin: 0 0 12px;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.ficha-compartir-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* sin partir el texto: si no entran lado a lado, van uno abajo del otro */
+.ficha-compartir-botones .btn {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  white-space: nowrap;
+}
+
+/* vacío no ocupa lugar, pero está desde el principio: es el que anuncia "Copiamos el link" */
+.ficha-compartir .ficha-compartir-aviso {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.ficha-compartir .ficha-compartir-aviso:not(:empty) {
+  margin-top: 10px;
+}
+
+.ficha-otros {
+  max-width: 1100px;
+  margin: 28px auto 0;
+  padding: 0 16px;
+}
+
+.ficha-otros h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-color);
+  margin: 0 0 14px;
+}
+
+.ficha-otros-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ficha-otro {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-bottom: 12px;
+  background: #fff;
+  border: 1px solid var(--lavanda-borde);
+  border-radius: var(--radio);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  color: var(--text-color);
+  text-decoration: none;
+}
+
+.ficha-otro:hover,
+.ficha-otro:focus {
+  color: var(--text-color);
+  text-decoration: none;
+}
+
+.ficha-otro .ficha-otro-foto {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: var(--lavanda);
+  font-size: 40px;
+}
+
+.ficha-otro-nombre {
+  padding: 10px 12px 2px;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--primary-color);
+  overflow-wrap: anywhere;
+}
+
+.ficha-otro:hover .ficha-otro-nombre,
+.ficha-otro:focus .ficha-otro-nombre {
+  text-decoration: underline;
+}
+
+.ficha-otro-datos {
+  padding: 0 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.ficha-otros-todos {
+  margin: 20px 0 40px;
+  text-align: center;
+}
+
+/* base.css subraya los links dentro de un párrafo */
+.ficha-otros-todos .btn {
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  .ficha {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "aviso aviso"
+      "fotos cuerpo"
+      "fotos accion"
+      "fotos compartir"
+      "fotos .";
+    grid-template-rows: auto auto auto auto 1fr;
+    column-gap: 40px;
+    align-items: start;
+    padding: 0 24px;
+  }
+
+  .ficha-aviso {
+    grid-area: aviso;
+    margin-top: 0;
+  }
+
+  /* las fotos acompañan mientras se lee una descripción larga */
+  .ficha-fotos {
+    grid-area: fotos;
+    position: sticky;
+    top: calc(var(--navbar-height) + 16px);
+    margin: 0;
+    border-radius: var(--radio);
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+  }
+
+  .ficha-cuerpo {
+    grid-area: cuerpo;
+    padding-top: 0;
+  }
+
+  .ficha-accion {
+    grid-area: accion;
+    position: static;
+    margin: 24px 0 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .ficha-compartir {
+    grid-area: compartir;
+  }
+
+  .ficha-otros {
+    padding: 0 24px;
+  }
+
+  .ficha-otros-lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
   }
 }
 

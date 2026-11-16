@@ -1,10 +1,14 @@
 {% load catus_html %}
 {% comment %}
-La ficha de un animal en la portada y en el perfil de cada rescatista. index.js y
+La tarjeta de un animal en la portada y en el perfil de cada rescatista. index.js y
 modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
 "Mostrar más" (.show-more-text y, en el div de al lado, .show-more-a).
+
+El nombre y la foto llevan a la ficha del animal (/adoptar/<id>-<nombre>/), que es lo que
+se comparte; "Quiero adoptar" sigue yendo derecho al formulario. data-sexo, data-edad y
+data-meses (la edad estimada en meses, vacía si no se sabe) son los que usa el buscador.
 {% endcomment %}
-<div data-id="{{animal.id}}" data-type="{{animal.tipo}}" data-name="{{animal.nombre}}" data-zone="{{animal.zona}}" class="post-preview">
+<div data-id="{{animal.id}}" data-type="{{animal.tipo}}" data-name="{{animal.nombre}}" data-zone="{{animal.zona|default_if_none:''}}" data-sexo="{{animal.sexo}}" data-edad="{{animal.edad|default_if_none:''}}" data-meses="{{animal.edad_en_meses|default_if_none:''}}" class="post-preview">
 
     {% if animal.esta_reservado %}
     <div class="reservado-badge">
@@ -13,16 +17,19 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
     {% endif %}
 
     {% if animal.animalimage_set.count > 0 %}
-    {# sin data-ride: las fotos no pasan solas (initializeImages, en index.js) #}
+    {% comment %}
+    Sin data-ride: las fotos no pasan solas (initializeImages, en index.js). La foto es un
+    link a la ficha que el teclado y el lector se saltean: el nombre lleva al mismo lugar.
+    {% endcomment %}
     <div id="animalCarrousel-{{animal.id}}" class="animalCarrousel carousel slide">
       <div class="carousel-inner">
 
         {% for img in animal.animalimage_set.all %}
             <div class="carousel-item {% if forloop.first %} active {% endif %}">
-              <div class="carousel-image">
+              <a class="carousel-image foto-ficha" href="{{animal.get_ficha_url}}" tabindex="-1" aria-hidden="true">
                 {# la primera foto de la primera ficha es lo más grande de la primera pantalla: no se demora #}
-                <img {% if primera_ficha and forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} data-enlargable="1" class="post-image" src="{{ img.image.url }}" alt="{{animal.nombre}}" style="cursor: zoom-in">
-              </div>
+                <img {% if primera_ficha and forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} class="post-image" src="{{ img.image.url }}" alt="{{animal.nombre}}"{% with posicion=img.get_object_position %}{% if posicion %} style="object-position: {{posicion}}"{% endif %}{% endwith %}>
+              </a>
             </div>
         {% endfor %}
 
@@ -44,7 +51,7 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
     {% endif %}
 
     <div class="post-data">
-      <a class="animal-title" {% if not animal.esta_reservado %}href="{{ animal.get_adoption_url }}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
+      <a class="animal-title" href="{{animal.get_ficha_url}}">
         <h2 class="post-subtitle">{{animal.nombre}}</h2>
       </a>
 
@@ -77,7 +84,7 @@ modern-effects.js buscan .post-preview (con sus data-*), .animalCarrousel y el
 
     <div class="card-action">
       <a class="btn btn-primary btn-preadopcion" {% if not animal.esta_reservado %}href="{% if not is_user %}{{ animal.get_adoption_url }}{% else %}{{ animal.get_adoption_url }}&user_id={{user.id}}{% endif %}"{% else %}style="cursor: pointer;" onclick="showReservadoModal('{{animal.id}}', '{{animal.tipo}}')"{% endif %}>
-        Quiero adoptar <i class="fa fa-paw" aria-hidden="true"></i>
+        Quiero adoptar<span class="sr-only"> a {{animal.nombre}}</span> <i class="fa fa-paw" aria-hidden="true"></i>
       </a>
     </div>
 </div>

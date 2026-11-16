@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness de los filtros de la portada</title>
+<link rel="stylesheet" href="/static/css/bootstrap.min.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/modern.css">
+</head>
+<body>
+
+<!--
+  El buscador de la portada (catus/templates/home/index.html): la caja, los botones del
+  tipo con su <select> oculto, los de sexo y edad, el contador, el "sin resultados" y la
+  paginación; y seis tarjetas con los data-* de catus/templates/adoption/card.html.
+  jQuery, Bootstrap, el plugin de autocompletado e index.js se cargan de catus/static, los
+  mismos archivos que sirve el sitio. Lo que sí es copia es este HTML: si index.html o
+  card.html cambian sus ids, clases o data-*, hay que actualizarlo acá.
+
+  data-meses es la edad en meses que estima el server (services/edad.py): vacía si no se
+  pudo. Firulais tiene 12, el borde entre Cachorros y Adultos.
+-->
+<div id="gatitos-en-adopcion" class="search-container">
+  <form class="filtros" role="search" aria-label="Buscar animales en adopción" onsubmit="return false;">
+    <div class="filtro-buscar">
+      <input data-zones="Lanús||LANUS||Avellaneda||Quilmes||Morón" id="filter-zone" class="form-control form-input" type="search" name="buscar" aria-label="Buscar por nombre, zona, sexo o edad" autocomplete="off">
+    </div>
+
+    <div class="filtro-tipo" role="group" aria-label="Tipo de mascota">
+      <button type="button" class="activo" data-tipo="all" aria-pressed="true">Todos</button>
+      <button type="button" data-tipo="G" aria-pressed="false">Gatos</button>
+      <button type="button" data-tipo="P" aria-pressed="false">Perros</button>
+    </div>
+    <select id="filter-type" class="sr-only" name="type" aria-hidden="true" tabindex="-1">
+      <option value="all">Todos</option>
+      <option value="G">Gatos</option>
+      <option value="P">Perros</option>
+    </select>
+
+    <div class="filtros-extra">
+      <div class="filtro-opciones" role="group" aria-label="Sexo">
+        <button type="button" data-sexo="M" aria-pressed="false">Machos</button>
+        <button type="button" data-sexo="H" aria-pressed="false">Hembras</button>
+      </div>
+      <div class="filtro-opciones" role="group" aria-label="Edad">
+        <button type="button" data-edad="cachorro" aria-pressed="false">Cachorros</button>
+        <button type="button" data-edad="adulto" aria-pressed="false">Adultos</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="lista-animales">
+  <div class="resultados-barra">
+    <p id="resultados-cuenta" class="resultados-cuenta" aria-live="polite">6 en adopción</p>
+    <select id="filter-sort" class="filtro-orden" name="sort" aria-label="Ordenar">
+      <option value="">Más recientes</option>
+      <option value="asc">Más antiguos</option>
+    </select>
+  </div>
+
+  <div id="animal-list" data-cols="12" class="row mt-3 paginada-inicial">
+    <div data-id="1" class="animal-card col-md-12"><div data-id="1" data-type="G" data-name="Michi" data-zone="Lanús" data-sexo="H" data-edad="2 meses" data-meses="2" class="post-preview"><h2>Michi</h2></div></div>
+    <div data-id="2" class="animal-card col-md-12"><div data-id="2" data-type="G" data-name="Tom" data-zone="LANUS" data-sexo="M" data-edad="3 años" data-meses="36" class="post-preview"><h2>Tom</h2></div></div>
+    <div data-id="3" class="animal-card col-md-12"><div data-id="3" data-type="G" data-name="Camada" data-zone="Avellaneda" data-sexo="A" data-edad="45 días" data-meses="1" class="post-preview"><h2>Camada</h2></div></div>
+    <div data-id="4" class="animal-card col-md-12"><div data-id="4" data-type="P" data-name="Firulais" data-zone="Lanus" data-sexo="M" data-edad="1 año" data-meses="12" class="post-preview"><h2>Firulais</h2></div></div>
+    <div data-id="5" class="animal-card col-md-12"><div data-id="5" data-type="P" data-name="Luna" data-zone="Quilmes" data-sexo="H" data-edad="joven" data-meses="" class="post-preview"><h2>Luna</h2></div></div>
+    <div data-id="6" class="animal-card col-md-12"><div data-id="6" data-type="G" data-name="Ñoño" data-zone="Morón" data-sexo="D" data-edad="" data-meses="" class="post-preview"><h2>Ñoño</h2></div></div>
+  </div>
+
+  <div id="sin-resultados" class="sin-resultados" style="display: none">
+    <b>No encontramos animales con esa búsqueda</b>
+    <p>Si buscabas a uno en particular, puede que ya esté reservado o adoptado: cuando encuentran familia dejan de aparecer acá. También podés probar con otro nombre u otra zona.</p>
+    <div class="mt-3"><button id="ver-todos" type="button" class="btn btn-primary">Limpiar la búsqueda</button></div>
+  </div>
+
+  <div id="cargar-mas-container" style="display: none"><button id="cargar-mas" type="button">Cargar más</button><div id="cargar-mas-cuenta"></div></div>
+</div>
+
+<script src="/static/vendor/jquery/jquery.min.js"></script>
+<script src="/static/vendor/bootstrap/js/bootstrap.min.js"></script>
+<script src="/static/js/jquery.autocomplete.min.js"></script>
+<script src="/static/js/index.js"></script>
+</body>
+</html>

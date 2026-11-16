@@ -292,8 +292,8 @@ def contenido(formularios):
         if link_postularme:
             animal.link = "{}{}?id={}".format(settings.SSL_HOST, link_postularme, animal.id)
         else:
-            url = animal.get_adoption_url()
-            animal.link = url if url.startswith(("http://", "https://")) else settings.SSL_HOST + url
+            #la ficha del animal (views/ficha.py): fotos, descripción y el botón al formulario
+            animal.link = settings.SSL_HOST + animal.get_ficha_url()
 
     nombres = [_nombre(animal) for animal in adoptados]
     asunto = "{} ya {} familia".format(_enumerar(nombres), "tienen" if len(nombres) > 1 else "tiene")

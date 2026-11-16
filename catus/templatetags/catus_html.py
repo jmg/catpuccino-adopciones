@@ -17,3 +17,13 @@ def html_seguro(valor):
     """
 
     return mark_safe(sanitizar_html(valor))
+
+
+@register.filter(name="texto_para_meta")
+def texto_para_meta(valor):
+    """Texto enriquecido como una línea de texto plano de hasta ~160 caracteres, para una
+    meta description. Sin |striptags: dejaba "&amp;" escrito en el resumen. El resultado no
+    es seguro, el template lo escapa como a cualquier texto."""
+    from catus.services.ficha import texto_para_meta as resumir
+
+    return resumir(valor)

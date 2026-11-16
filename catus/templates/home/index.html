@@ -1,6 +1,22 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% comment %}
+Lo que la portada dice de sí misma en Google y en WhatsApp. El perfil de cada rescatista
+(usuario/animales.html) extiende esta página: por eso el "if main", y ahí pisa los suyos.
+Con ?buscar= o ?tipo= la canónica sigue siendo la portada.
+{% endcomment %}
+{% block descripcion %}{% if main %}{{descripcion_portada}}{% else %}{{block.super}}{% endif %}{% endblock %}
+{% block canonical %}{% if main %}<link rel="canonical" href="{{url_canonica}}">{% endif %}{% endblock %}
+{% block og_descripcion %}{% if main %}{{descripcion_portada}}{% else %}{{block.super}}{% endif %}{% endblock %}
+{% block og_imagen %}{% if main %}
+    <meta property="og:image" content="{{imagen_para_compartir}}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Catpuccino Adopciones">
+{% endif %}{% endblock %}
+{% block twitter_card %}<meta name="twitter:card" content="{% if main %}summary_large_image{% else %}summary{% endif %}">{% endblock %}
+
 {% block header %}
 {% comment %}El nombre del sitio ya está en la barra de arriba: acá va lo que se viene a hacer.{% endcomment %}
 <div class="site-heading">
@@ -17,13 +33,15 @@
   entra desde Instagram, en el celular, buscando a uno que ya vio.
   Los ids (#filter-zone, #filter-type y, más abajo, #filter-sort) los usa index.js. El tipo
   se elige con tres botones; el <select> sigue estando, oculto, porque es el que lee
-  filterAnimals().
+  filterAnimals(). Sexo y edad son botones que se prenden y se apagan: ninguno prendido
+  es "todos". La búsqueda y los filtros quedan en la URL (?buscar=, ?tipo=, ?sexo=,
+  ?edad=) para poder compartirla.
   {% endcomment %}
   <div id="gatitos-en-adopcion" class="search-container">
-    <form class="filtros" onsubmit="return false;">
+    <form class="filtros" role="search" aria-label="Buscar animales en adopción" onsubmit="return false;">
       <div class="filtro-buscar">
         <i class="fa fa-search" aria-hidden="true"></i>
-        <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="search" name="zone" placeholder="Buscar por nombre o zona" aria-label="Buscar por nombre o zona" autocomplete="off">
+        <input data-zones="{{zones}}" zones id="filter-zone" class="form-control form-input" type="search" name="buscar" placeholder="Buscar por nombre o zona" aria-label="Buscar por nombre, zona, sexo o edad" autocomplete="off">
       </div>
 
       <div class="filtro-tipo" role="group" aria-label="Tipo de mascota">
@@ -36,6 +54,17 @@
         <option value="G">Gatos</option>
         <option value="P">Perros</option>
       </select>
+
+      <div class="filtros-extra">
+        <div class="filtro-opciones" role="group" aria-label="Sexo">
+          <button type="button" data-sexo="M" aria-pressed="false">Machos</button>
+          <button type="button" data-sexo="H" aria-pressed="false">Hembras</button>
+        </div>
+        <div class="filtro-opciones" role="group" aria-label="Edad">
+          <button type="button" data-edad="cachorro" aria-pressed="false" title="Menos de un año">Cachorros</button>
+          <button type="button" data-edad="adulto" aria-pressed="false" title="Un año o más">Adultos</button>
+        </div>
+      </div>
 
     </form>
   </div>
@@ -66,10 +95,11 @@
       {% endfor %}
       </div>
 
+      {# quien busca por nombre suele venir de un posteo viejo: el animal ya no está porque encontró familia #}
       <div id="sin-resultados" class="sin-resultados" style="display: none">
         <b>No encontramos animales con esa búsqueda</b>
-        Probá con otro nombre u otra zona.
-        <div class="mt-3"><button id="ver-todos" type="button" class="btn btn-primary">Ver todos</button></div>
+        <p>Si buscabas a uno en particular, puede que ya esté reservado o adoptado: cuando encuentran familia dejan de aparecer acá. También podés probar con otro nombre u otra zona.</p>
+        <div class="mt-3"><button id="ver-todos" type="button" class="btn btn-primary">Limpiar la búsqueda</button></div>
       </div>
 
       <div id="cargar-mas-container" class="w-100 text-center mt-2 mb-5" style="display: none">
