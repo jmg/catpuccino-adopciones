@@ -65,6 +65,8 @@ def _aplicar(animal, estado):
     else:
         #fuera de A la fecha de adopción no significa nada, y dejarla confunde al panel
         animal.fecha_adopcion = None
+        #ni el aviso a los demás candidatos: si fue un error, no queda nada por mandar
+        animal.avisar_candidatos = None
 
     if estado == EN_ADOPCION:
         if anterior != EN_ADOPCION:
@@ -80,11 +82,15 @@ def _aplicar(animal, estado):
     return animal
 
 
-def cambiar_estado(animal, estado, guardar=True):
+def cambiar_estado(animal, estado, guardar=True, avisar=None):
     """Pasa el animal a `estado` (D, R, A o E) con todo lo que eso implica. Sin formulario
-    de adoptante: para elegirlo, marcar_adoptado."""
+    de adoptante: para elegirlo, marcar_adoptado. `avisar` es lo que eligió el rescatista
+    sobre el aviso a los demás candidatos, si pasa a "Adoptado"."""
 
+    pasa_a_adoptado = estado == ADOPTADO and animal.estado != ADOPTADO
     _aplicar(animal, estado)
+    if pasa_a_adoptado or (estado == ADOPTADO and avisar is not None):
+        animal.avisar_candidatos = avisar
 
     if guardar:
         animal.save()
@@ -92,11 +98,18 @@ def cambiar_estado(animal, estado, guardar=True):
     return animal
 
 
-def marcar_adoptado(animal, formulario=None):
+def marcar_adoptado(animal, formulario=None, avisar=None):
     """Adoptado, con la fecha. `formulario` es el EstadoFormulario de quien lo adoptó, si
-    se sabe: buscalo con formulario_del_adoptante, que controla que sea del rescatista."""
+    se sabe: buscalo con formulario_del_adoptante, que controla que sea del rescatista.
 
+    `avisar` es la casilla "avisarles a los demás que se postularon": True, False, o None
+    si no se le preguntó (no se avisa). Si ya estaba adoptado y no se le pregunta de nuevo
+    (None), queda lo que había elegido."""
+
+    pasa_a_adoptado = animal.estado != ADOPTADO
     _aplicar(animal, ADOPTADO)
+    if pasa_a_adoptado or avisar is not None:
+        animal.avisar_candidatos = avisar
 
     if formulario is not None:
         animal.estado_formulario = formulario

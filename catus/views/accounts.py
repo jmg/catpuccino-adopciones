@@ -2,6 +2,7 @@ import re
 from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
+from catus.services import aviso_candidatos
 from catus.services.adoption import AdoptionService
 from catus.services.validation import ValidationService
 from catus.views.base import BaseView, SoloPostMixin
@@ -51,6 +52,11 @@ class ProfileView(LoginRequiredMixin, BaseView):
         context["candidatos_json"] = {
             str(animal_id): [{"id": c["id"], "persona": c["persona"], "fecha": c["fecha"]} for c in lista]
             for animal_id, lista in candidatos.items()
+        }
+        #a quiénes les llegaría el aviso "ya encontró familia" si lo marca adoptado: el diálogo
+        #los cuenta sin el que elija como adoptante (services/aviso_candidatos.py)
+        context["avisables_json"] = {
+            str(animal_id): ids for animal_id, ids in aviso_candidatos.avisables_por_animal(context["animals"]).items()
         }
 
         return BaseView.render_to_response(self, context)

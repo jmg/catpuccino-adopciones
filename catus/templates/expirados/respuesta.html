@@ -175,6 +175,7 @@ nada de los formularios ni de los candidatos.
         <form method="post" action="/sigue-en-adopcion/{{token}}/">
             {% csrf_token %}
             <input type="hidden" name="respuesta" value="adoptado">
+            {% include "expirados/_avisar.html" %}
             <button type="submit" class="btn btn-primary btn-block"><i class="fa fa-heart mr-2" aria-hidden="true"></i> Ya se adoptó</button>
         </form>
         <form method="post" action="/sigue-en-adopcion/{{token}}/">
@@ -191,6 +192,7 @@ nada de los formularios ni de los candidatos.
         <form method="post" action="/sigue-en-adopcion/{{token}}/">
             {% csrf_token %}
             <input type="hidden" name="respuesta" value="adoptado">
+            {% include "expirados/_avisar.html" %}
             <button type="submit" class="btn btn-secondary btn-block"><i class="fa fa-heart mr-2" aria-hidden="true"></i> Ya se adoptó</button>
         </form>
         {% endif %}

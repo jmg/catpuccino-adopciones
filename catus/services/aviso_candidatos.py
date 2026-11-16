@@ -13,8 +13,12 @@ vinculado como el de quien adoptó, ni a una casilla que es la de quien adoptó.
 texto es neutro ("si sos vos, ¡felicitaciones!"): a veces el rescatista no dice quién fue, o
 la misma persona mandó dos formularios. El mail no dice nada de quien adoptó.
 
-Cuándo: cuando ya se sabe quién adoptó, o a los DIAS_DE_ESPERA de la fecha de adopción,
-para darle tiempo al rescatista a contestar "¿Quién lo adoptó?" en el panel. Y solo por
+Cuándo: solo si el rescatista lo eligió al marcarlo adoptado (la casilla "avisarles a las N
+personas que se postularon", marcada de entrada, en cada lugar donde se marca: el botón
+"Adoptó" del formulario, "¿Quién lo adoptó?" del panel, el selector de la edición y el botón
+del mail de expiración; queda en Animal.avisar_candidatos), y no antes de HORAS_DE_MARGEN
+desde la fecha de adopción: un cambio de estado por error se deshace volviéndolo a "En
+adopción", que borra la elección. Si nadie eligió (el admin), no se avisa. Y solo por
 adopciones desde AVISO_CANDIDATOS_DESDE (settings): sin esa fecha no se avisa a nadie, así el
 primer día no salen mails por adopciones de hace meses.
 
@@ -49,7 +53,9 @@ logger = logging.getLogger(__name__)
 
 #"No asignado" y "En proceso de contacto": los que siguen esperando una respuesta
 ESTADOS_A_AVISAR = ("N", "P")
-DIAS_DE_ESPERA = 3
+#Lo que pasa entre que se marca "Adoptado" y que sale el aviso: si fue un error y lo vuelve a
+#"En adopción" antes, no sale nada (salir de "Adoptado" borra avisar_candidatos).
+HORAS_DE_MARGEN = 24
 MAX_SUGERIDOS = 4
 #la primera corrida con un corte viejo no puede mandar cientos de mails de una: el resto
 #sale en las corridas siguientes
@@ -96,11 +102,35 @@ def pendientes(ahora=None):
 
     return (EstadoFormulario.objects
             .filter(tipo__in=TIPOS_PREADOPCION, estado__in=ESTADOS_A_AVISAR, aviso_cierre_el__isnull=True,
-                    gato__estado="A", gato__fecha_adopcion__gte=corte)
-            .filter(Q(gato__estado_formulario__isnull=False)
-                    | Q(gato__fecha_adopcion__lte=ahora - timedelta(days=DIAS_DE_ESPERA)))
+                    gato__estado="A", gato__avisar_candidatos=True, gato__fecha_adopcion__gte=corte,
+                    gato__fecha_adopcion__lte=ahora - timedelta(hours=HORAS_DE_MARGEN))
             .select_related("gato", "copiado_de")
             .order_by("id"))
+
+
+def avisables_por_animal(animales):
+    """{id del animal: [ids de los formularios que recibirían el aviso]}, para varios animales
+    en una consulta: el panel cuenta, al elegir quién adoptó, a cuántos más se les avisaría."""
+
+    resultado = {}
+    for animal_id, formulario_id in (EstadoFormulario.objects
+                                     .filter(gato__in=animales, tipo__in=TIPOS_PREADOPCION,
+                                             estado__in=ESTADOS_A_AVISAR, aviso_cierre_el__isnull=True)
+                                     .values_list("gato_id", "id")):
+        resultado.setdefault(animal_id, []).append(formulario_id)
+    return resultado
+
+
+def candidatos(animal, sin=None):
+    """Cuántas personas recibirían el aviso si este animal se adopta: los formularios de
+    pre-adopción que todavía esperan respuesta, sin el de quien adoptó (`sin`, un id). Es el
+    número que ve el rescatista al lado de la casilla."""
+
+    formularios = EstadoFormulario.objects.filter(gato=animal, tipo__in=TIPOS_PREADOPCION,
+                                                  estado__in=ESTADOS_A_AVISAR, aviso_cierre_el__isnull=True)
+    if sin:
+        formularios = formularios.exclude(id=sin)
+    return formularios.count()
 
 
 def mails(formularios):

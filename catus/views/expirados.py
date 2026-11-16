@@ -40,7 +40,8 @@ class RespuestaView(BaseView):
         if respuesta == expiracion.SIGUE:
             estados.republicar(link.animal)
         else:
-            estados.marcar_adoptado(link.animal)
+            #la casilla "avisarles a quienes se postularon": sin marcar (o sin casilla) no se avisa
+            estados.marcar_adoptado(link.animal, avisar=request.POST.get("avisar_candidatos") == "1")
 
         #redirigir: recargar la página no vuelve a mandar el POST
         return redirect("/sigue-en-adopcion/{}/?hecho={}".format(token, respuesta))

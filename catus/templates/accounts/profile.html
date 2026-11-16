@@ -1258,6 +1258,7 @@ animal, a propósito: así el sitio no muestra animales que ya se adoptaron hace
 {{ block.super }}
 <script src="/static/js/tinymce/tinymce.min.js"></script>
 {{ candidatos_json|json_script:"candidatos-por-animal" }}
+{{ avisables_json|json_script:"avisables-por-animal" }}
 <script type="text/javascript" src="/static/js/sweetalert.all.min.js"></script>
 <!-- Agregar la librería Tippy.js -->
 <script src="/static/vendor/popper-2.11.8/popper.min.js"></script>
@@ -1478,8 +1479,10 @@ function logout() {
 // Quienes mandaron formulario por cada animal en adopción o reservado, para elegir quién
 // lo adoptó. Los nombres los escribe cualquiera desde el formulario público.
 var candidatosPorAnimal = {};
+var avisablesPorAnimal = {};
 try {
     candidatosPorAnimal = JSON.parse(document.getElementById("candidatos-por-animal").textContent) || {};
+    avisablesPorAnimal = JSON.parse(document.getElementById("avisables-por-animal").textContent) || {};
 } catch (e) {}
 
 function escaparHtml(texto) {
@@ -1573,10 +1576,12 @@ function updateAnimal(animalId, options) {
     })
 }
 
-function enviarAdoptado(animalId, formularioId) {
+function enviarAdoptado(animalId, formularioId, avisar) {
+    var datos = formularioId ? {estado_formulario_id: formularioId} : {};
+    datos.avisar_candidatos = avisar ? "1" : "0";
     updateAnimal(animalId, {
         url: "/animal/marcaradoptado/",
-        datos: formularioId ? {estado_formulario_id: formularioId} : {},
+        datos: datos,
         badge: "info",
         successMessage: " marcado como adoptado! Ya no aparecerá en la web.",
         text: "Adoptado",
@@ -1601,10 +1606,24 @@ function itemCandidato(candidato) {
 
 function marcarAdoptado(animalId, nombre) {
     var candidatos = candidatosPorAnimal[String(animalId)] || [];
+    var avisables = avisablesPorAnimal[String(animalId)] || [];
     if (!window.Swal) {
-        enviarAdoptado(animalId, "");
+        //sin el diálogo no se puede preguntar: se marca sin avisarle a nadie
+        enviarAdoptado(animalId, "", false);
         return;
     }
+
+    //"avisarles a los demás que se postularon": cuántos, sin el que elija como adoptante
+    function textoDelAviso(elegido) {
+        var n = avisables.filter(function (id) { return String(id) !== String(elegido); }).length;
+        if (!n) { return ""; }
+        return (n === 1 ? "Avisarle a la otra persona que se postuló" : "Avisarles a las otras " + n + " personas que se postularon") +
+            " que ya encontró familia, " + (n === 1 ? "ofreciéndole" : "ofreciéndoles") + " otros animales en adopción. " +
+            "El mail sale al día siguiente: si te equivocaste, volvelo a «En adopción» antes y no se manda.";
+    }
+    var aviso = avisables.length ?
+        '<label class="aviso-candidatos" id="aviso-candidatos"><input type="checkbox" id="avisar-candidatos" checked>' +
+        '<span id="aviso-candidatos-texto">' + escaparHtml(textoDelAviso("")) + '</span></label>' : '';
 
     var lista = candidatos.map(itemCandidato).join("") ||
         '<p class="elegir-adoptante-vacio">Este animal no recibió formularios. Buscá a la persona por su nombre.</p>';
@@ -1616,13 +1635,19 @@ function marcarAdoptado(animalId, nombre) {
             '<input type="search" id="buscar-adoptante" class="form-control" placeholder="Buscar por nombre entre tus formularios" autocomplete="off">' +
             '<div id="lista-adoptantes" class="elegir-adoptante-lista">' + lista + '</div>' +
             '<label class="elegir-adoptante-item elegir-adoptante-otra"><input type="radio" name="adoptante" value="otra"><span>Otra persona (no mandó formulario)</span></label>' +
-            '</div>',
+            '</div>' + aviso,
         showCancelButton: true,
         confirmButtonText: "Marcar adoptado",
         cancelButtonText: "Cancelar",
         focusConfirm: false,
         didOpen: function() {
             var espera = null;
+            //el número del aviso cambia según a quién elija como adoptante
+            $(document).on("change.aviso", "input[name=adoptante]", function() {
+                var texto = textoDelAviso($(this).val());
+                $("#aviso-candidatos-texto").text(texto);
+                $("#aviso-candidatos").toggle(!!texto);
+            });
             $("#buscar-adoptante").on("input", function() {
                 var texto = $.trim($(this).val());
                 clearTimeout(espera);
@@ -1645,13 +1670,17 @@ function marcarAdoptado(animalId, nombre) {
                 Swal.showValidationMessage("Elegí a la persona, o \"Otra persona\"");
                 return false;
             }
-            return elegido;
+            var casilla = $("#avisar-candidatos");
+            return {elegido: elegido, avisar: casilla.length > 0 && casilla.is(":visible") && casilla.is(":checked")};
+        },
+        willClose: function() {
+            $(document).off("change.aviso");
         }
     }).then(function(result) {
         if (!result.isConfirmed) {
             return;
         }
-        enviarAdoptado(animalId, result.value === "otra" ? "" : result.value);
+        enviarAdoptado(animalId, result.value.elegido === "otra" ? "" : result.value.elegido, result.value.avisar);
     });
 }
 

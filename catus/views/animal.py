@@ -6,6 +6,7 @@ from PIL import Image
 from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
+from catus.services import aviso_candidatos
 from catus.services.duplicados import DuplicadosService
 from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
@@ -185,7 +186,13 @@ class EditView(LoginRequiredMixin, BaseView):
         if not estado or estado == animal.estado:
             return
 
-        estados.cambiar_estado(animal, estado, guardar=False)
+        #la casilla "avisarles a los demás que se postularon", que aparece al elegir "Adoptado"
+        #(animal/edit.html). Si no se mostró (nadie se postuló, sin JS), no se avisa a nadie.
+        avisar = None
+        if estado == estados.ADOPTADO and self.request.POST.get("aviso_candidatos_mostrado") == "1":
+            avisar = self.request.POST.get("avisar_candidatos") == "1"
+
+        estados.cambiar_estado(animal, estado, guardar=False, avisar=avisar)
 
     def avisar_del_animal_nuevo(self, animal, **datos):
         """Le avisa al equipo que un animal espera su aprobación. Un fallo del mail no
@@ -368,6 +375,8 @@ class EditView(LoginRequiredMixin, BaseView):
 
         context["animal"] = animal
         context["is_post"] = is_post
+        #cuántos recibirían el aviso "ya encontró familia" si lo marca adoptado desde acá
+        context["avisables"] = aviso_candidatos.candidatos(animal) if animal is not None and animal.estado != estados.ADOPTADO else 0
 
         if is_post:
 
@@ -879,7 +888,9 @@ class MarcarAdoptado(UpdateAnimal):
         #UpdateAnimal ya dejó afuera los animales de otra persona, y el servicio solo acepta
         #formularios de este mismo rescatista
         elegido = estados.formulario_del_adoptante(animal, (post_data or {}).get("estado_formulario_id"))
-        estados.marcar_adoptado(animal, formulario=elegido)
+        #la casilla del diálogo: "1" o "0"; sin ella (una pestaña vieja), no se avisa a nadie
+        avisar = {"1": True, "0": False}.get((post_data or {}).get("avisar_candidatos"))
+        estados.marcar_adoptado(animal, formulario=elegido, avisar=avisar)
 
 
 class PosponerPreguntaAdopcion(UpdateAnimal):
