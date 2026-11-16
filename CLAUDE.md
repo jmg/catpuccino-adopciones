@@ -161,7 +161,7 @@ render HTML cells.
   "bebés"); `save()` fills `edad_en_meses` from it with `services/edad.py::estimar_meses`
   when it is empty or the text changed (a hand-set value survives other edits; a parser
   failure is logged and never stops the save). `None` means unknown. Migration
-  `0042_edad_en_meses` filled the existing rows with a frozen copy of the parser.
+  `0046_edad_en_meses` filled the existing rows with a frozen copy of the parser.
 - `AnimalImage` — gallery photo plus a separately generated `image_for_instagram` and its
   layout parameters (font size, name/age placement).
 - `EstadoFormulario` — a submitted adoption form's pipeline state, keyed by a uuid `hash`

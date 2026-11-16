@@ -237,9 +237,9 @@ class EdadEnMesesAlGuardarTest(TestCase):
 
 
 class MigracionEdadEnMesesTest(TestCase):
-    """0042_edad_en_meses: completa los animales que ya estaban, con su copia del parser."""
+    """0046_edad_en_meses: completa los animales que ya estaban, con su copia del parser."""
 
-    migracion = importlib.import_module("catus.migrations.0042_edad_en_meses")
+    migracion = importlib.import_module("catus.migrations.0046_edad_en_meses")
 
     def test_completa_solo_los_que_no_tienen_valor(self):
 

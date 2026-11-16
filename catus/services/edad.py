@@ -7,7 +7,7 @@ estima y, si no puede, devuelve None: un animal de edad desconocida aparece con 
 en ningún filtro de edad, que es mejor que ponerlo en el que no es.
 
 Es una función pura (sin base, sin settings) y no levanta excepciones con ningún texto:
-corre adentro de Animal.save(). Hay una copia congelada en la migración 0042_edad_en_meses,
+corre adentro de Animal.save(). Hay una copia congelada en la migración 0046_edad_en_meses,
 que la usó para completar los animales que ya estaban cargados; si esto cambia, aquella
 no se toca.
 
