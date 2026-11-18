@@ -326,6 +326,19 @@ elif isinstance(_avisar_coincidencias, str):
 else:
     BUENADOPTANTE_AVISAR_COINCIDENCIAS_A = [str(d).strip() for d in _avisar_coincidencias if str(d).strip()]
 
+#a quién le llegan los avisos de la revisión de publicaciones: lo que la IA marcó, lo que no
+#pudo revisar en un día y lo que vuelve a la cola después de un "No publicar"
+#(MailService.send_new_animal_mail). Lista, o direcciones separadas por coma. Sin la clave, al
+#mail del equipo de siempre. Va en la config y no acá para no dejar una casilla personal en el
+#repo.
+_avisos_de_revision = app_config.get("AVISOS_DE_REVISION_A")
+if _avisos_de_revision is None:
+    AVISOS_DE_REVISION_A = ["catpuccino.ok@gmail.com"]
+elif isinstance(_avisos_de_revision, str):
+    AVISOS_DE_REVISION_A = [d.strip() for d in _avisos_de_revision.split(",") if d.strip()]
+else:
+    AVISOS_DE_REVISION_A = [str(d).strip() for d in _avisos_de_revision if str(d).strip()]
+
 #Posteo automatico en Instagram: al aprobar un animal, el posteo queda agendado y sale
 #solo cuando pasa la demora. Arranca APAGADO a proposito. Publicar en la cuenta de la
 #organizacion es irreversible y se ve de afuera, asi que prenderlo tiene que ser una

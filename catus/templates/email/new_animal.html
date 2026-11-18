@@ -7,11 +7,21 @@ El nombre y el texto los escribe cualquiera que se registre: el nombre sale esca
 descripción pasa por |html_seguro, como en el sitio. El botón lleva a la cola y no a una
 acción: aprobar es un POST desde ahí.
 {% endcomment %}
-{% block preheader %}{{ animal.nombre }} espera la aprobación del equipo.{% endblock %}
+{% block preheader %}{% if caso == "marcado" and animal.aprobado %}La revisión marcó a {{ animal.nombre }}, que está publicado.{% else %}{{ animal.nombre }} espera la aprobación del equipo.{% endif %}{% endblock %}
 {% block content %}
 {% if vuelve %}
 {% include "email/_titulo.html" with antetitulo="Vuelve a revisión" titulo=animal.nombre %}
 <p style="margin:0 0 14px;">No se había publicado{% if motivo_anterior %} (<i>{{ motivo_anterior }}</i>){% endif %}. Quien lo cargó lo editó y vuelve a esperar la aprobación del equipo.</p>
+{% elif caso == "marcado" %}
+{% include "email/_titulo.html" with antetitulo="La revisión lo marcó" titulo=animal.nombre %}
+{% if animal.aprobado %}
+<p style="margin:0 0 14px;">Está publicado y la revisión con IA lo marcó para mirar a mano. Sigue en el sitio hasta que alguien decida; no sale a Instagram mientras esté marcado.</p>
+{% else %}
+<p style="margin:0 0 14px;">La revisión con IA lo marcó para mirar a mano: espera la aprobación del equipo.</p>
+{% endif %}
+{% elif caso == "sin_revision" %}
+{% include "email/_titulo.html" with antetitulo="No se pudo revisar" titulo=animal.nombre %}
+<p style="margin:0 0 14px;">La revisión con IA lo intentó durante un día y no pudo correr. No es sospecha: espera que lo apruebe una persona.</p>
 {% else %}
 {% include "email/_titulo.html" with antetitulo="Nuevo animal para revisar" titulo=animal.nombre %}
 {% endif %}

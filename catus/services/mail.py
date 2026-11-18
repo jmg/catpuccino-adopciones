@@ -9,17 +9,22 @@ from datetime import datetime, timedelta
 
 class MailService(BaseService):
 
-    def send_new_animal_mail(self, animal, motivo_anterior=None, vuelve=False):
-        """Al equipo: un animal espera que alguien lo apruebe.
+    #por qué llega el aviso, además del alta que la revisión no aprobó (services/revision_pendiente.py)
+    AVISO_MARCADO = "marcado"            #la IA lo marcó después: al reintentar o tras una edición
+    AVISO_SIN_REVISION = "sin_revision"  #un día de reintentos y la revisión nunca pudo correr
 
-        Sólo para los que esperan: el alta que la revisión aprobó sola ya está en el sitio, y
+    def send_new_animal_mail(self, animal, motivo_anterior=None, vuelve=False, caso=None):
+        """A quien revisa (settings.AVISOS_DE_REVISION_A): un animal necesita que lo mire una persona.
+
+        Sólo para los que lo necesitan: el alta que la revisión aprobó sola ya está en el sitio, y
         el mail decía "espera la aprobación del equipo" de algo que no esperaba nada. Lleva lo
         que dijo la revisión con IA, que es lo primero que hay que mirar, y un botón a la cola
         y no a una acción: antes era un link que aprobaba con un GET, así que lo aprobaba
         cualquier cosa que lo abriera (un antivirus que revisa los links, una vista previa).
 
         `vuelve` es el que el equipo había marcado "No publicar" y su dueño editó: vuelve a la
-        cola, y el mail dice por qué no se había publicado.
+        cola, y el mail dice por qué no se había publicado. `caso` es AVISO_MARCADO (la IA lo
+        marcó más tarde, y puede estar publicado) o AVISO_SIN_REVISION (no se pudo revisar).
         """
 
         if settings.ENV == "LOCAL":
@@ -27,16 +32,20 @@ class MailService(BaseService):
 
         if vuelve:
             subject = "Catpuccino Adopciones - Vuelve a revisión: {}".format(animal.nombre)
+        elif caso == self.AVISO_MARCADO:
+            subject = "Catpuccino Adopciones - La revisión marcó a {}".format(animal.nombre)
+        elif caso == self.AVISO_SIN_REVISION:
+            subject = "Catpuccino Adopciones - No se pudo revisar a {}".format(animal.nombre)
         else:
             subject = "Catpuccino Adopciones - Nuevo Ingreso"
 
         content = self.render("email/new_animal.html", {
             "animal": animal, "settings": settings,
-            "vuelve": vuelve, "motivo_anterior": motivo_anterior,
+            "vuelve": vuelve, "motivo_anterior": motivo_anterior, "caso": caso,
             "link_pendientes": "{}/tools/animalespendientes/#animal-{}".format(settings.SSL_HOST, animal.id),
         })
 
-        send_html_email(subject, content, settings.SEND_MAIL, ["catpuccino.ok@gmail.com"])
+        send_html_email(subject, content, settings.SEND_MAIL, list(settings.AVISOS_DE_REVISION_A))
 
     def send_mail_no_publicado(self, usuario, animales, motivo=None, sacado_del_sitio=False):
         """Al rescatista: el equipo decidió no publicar estos animales suyos.

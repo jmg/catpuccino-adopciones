@@ -174,6 +174,16 @@ class Animal(BaseEntity):
     revision_ia_motivo = models.TextField(null=True, blank=True)
     revision_ia_fecha = models.DateTimeField(null=True, blank=True)
 
+    #Cuántas veces el cron volvió a intentar una revisión que no pudo correr ('E')
+    #(services/revision_pendiente.py). Vuelve a 0 con un veredicto o cuando el dueño edita
+    #lo revisable; al llegar al tope el cron deja de intentar y le avisa a una persona.
+    revision_ia_intentos = models.PositiveSmallIntegerField(default=0, db_default=0)
+
+    #Lo devolvió a la cola su dueño después de que el equipo decidiera no publicarlo: lo
+    #decide una persona, así que ni el alta, ni la edición, ni el cron lo aprueban aunque la
+    #revisión dé OK. Se apaga cuando una persona lo aprueba (AprobarView).
+    espera_a_una_persona = models.BooleanField(default=False, db_default=False)
+
     def necesita_revision_humana(self):
 
         return self.revision_ia_estado == self.REVISION_REVISAR

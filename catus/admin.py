@@ -120,6 +120,7 @@ class AnimalAdmin(admin.ModelAdmin):
             #dejó de significar "lo miró alguien" cuando la revisión automática empezó a
             #aprobar sola.
             animal.aprobado_por_persona = True
+            animal.espera_a_una_persona = False
             animal.save()
             animales_aprobados += 1
 

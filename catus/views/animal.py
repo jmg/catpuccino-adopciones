@@ -6,7 +6,7 @@ from PIL import Image
 from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
-from catus.services import aviso_candidatos
+from catus.services import aviso_candidatos, revision_pendiente
 from catus.services.duplicados import DuplicadosService
 from catus.services.images import ImageService
 from catus.services.instagram_auto import InstagramAutoService
@@ -241,6 +241,10 @@ class EditView(LoginRequiredMixin, BaseView):
         animal.no_publicar_motivo = None
         animal.expiro_el = None
         animal.fecha_ingreso = timezone.now()
+
+        #una persona ya decidió una vez que no: ni la IA ni el cron lo aprueban aunque la
+        #revisión dé OK (services/revision_pendiente.py). Lo apaga AprobarView.
+        animal.espera_a_una_persona = True
 
     def get_error_messages(self, animal_form, image_form_set):
         """Arma la lista de errores que ve el rescatista cuando no se puede guardar.
@@ -533,7 +537,15 @@ class EditView(LoginRequiredMixin, BaseView):
                 self.request.session["animal_save_success"] = True
 
                 if cambio_lo_revisable and not is_new_animal:
-                    ModeracionService().revisar_y_guardar(animal)
+                    revision_antes = animal.revision_ia_estado
+                    veredicto = ModeracionService().revisar_y_guardar(animal)
+
+                    #lo que sigue de la regla "la IA aprueba o avisa" (services/revision_pendiente.py):
+                    #si esperaba y ahora da OK se aprueba; si lo marca, llega el mail. El que
+                    #vuelve a la cola de un "No publicar" no: ese lo decide una persona, y su
+                    #mail sale acá abajo.
+                    if not vuelve_a_la_cola and revision_pendiente.despues_de_editar(animal, revision_antes, veredicto):
+                        self.request.session["is_new_animal_approved"] = True
 
                 #El dueño editó uno que el equipo no publicó: vuelve a la cola y el equipo se
                 #entera como de un alta, después de la revisión para que el mail diga lo que
@@ -598,7 +610,11 @@ class EditView(LoginRequiredMixin, BaseView):
                         #eso se ve en /tools/colainstagram/.
                         self.request.session["is_new_animal_approved"] = True
                     else:
-                        self.avisar_del_animal_nuevo(animal)
+                        #si la IA lo marcó, el mail sale ya; si no pudo revisarlo, no: el cron
+                        #lo reintenta cada hora y avisa él si lo marca o si en un día no puede
+                        #(services/revision_pendiente.py). Con la revisión apagada sale ya.
+                        if revision_pendiente.avisar_al_cargar(revision, moderacion):
+                            self.avisar_del_animal_nuevo(animal)
                         #el mensaje que ve el rescatista es el mismo de siempre ("estamos
                         #revisando la publicación"): si el filtro se equivoca, acusar a
                         #alguien que acaba de rescatar un animal es peor que esperar a que
@@ -681,6 +697,7 @@ class AprobarView(SuperuserRequiredMixin, BaseView):
         #el sitio
         animal.no_publicar_el = None
         animal.no_publicar_motivo = None
+        animal.espera_a_una_persona = False
         animal.save()
 
         #aprobar es lo que agenda el posteo en Instagram. Agendar no puede hacer

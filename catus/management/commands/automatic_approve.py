@@ -60,3 +60,26 @@ class Command(BaseCommand):
         #que queda registrado del cron es esto, con los ids y sin datos personales
         ids = " (ids: {})".format(", ".join(str(i) for i in nuevos)) if nuevos else ""
         self.stdout.write("Pasan a aprobación automática: {}.{}".format(len(nuevos), ids))
+
+        self.reintentar_revisiones()
+
+    def reintentar_revisiones(self):
+        """Lo que quedó en "no se pudo revisar" vuelve a pasar por la IA (services/revision_pendiente.py).
+
+        Va en este cron porque ya corre cada hora y tiene su monitor en Jentry; un fallo acá no
+        puede tapar lo de arriba, que ya se hizo.
+        """
+        from catus.services import revision_pendiente
+
+        try:
+            resumen = revision_pendiente.reintentar()
+        except Exception as error:
+            logger.warning("No se pudieron reintentar las revisiones: %s", type(error).__name__)
+            return
+
+        if resumen.get("apagada"):
+            self.stdout.write("Revisiones pendientes: la revisión con IA está apagada.")
+            return
+
+        partes = ["{} {}".format(clave, valores) for clave, valores in resumen.items() if valores]
+        self.stdout.write("Revisiones pendientes: {}.".format("; ".join(partes) if partes else "ninguna"))

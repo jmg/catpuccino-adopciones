@@ -74,7 +74,8 @@ their `flock` does not coordinate across containers.
 Custom management commands in `catus/management/commands/` are the cron/batch surface:
 `publish` (post queued animals to Instagram), `update_post_id`, `update_status_in_ig`
 (comment "adoptado" on published posts), `refresh_token` (renew the long-lived Facebook
-token before expiry), `pull_from_ig`, `automatic_approve`, `optimize_images`,
+token before expiry), `pull_from_ig`, `automatic_approve` (hourly; also re-reviews what the AI could
+not review, see "Nothing stays without a verdict"), `optimize_images`,
 `update_estado_form`, `expirar_animales` (daily: expires listings, mails the rescuers and runs
 the candidates' notice), `avisar_candidatos` and `completar_fecha_adopcion` (both only count
 without `--aplicar`), `archivar_pendientes` (run by hand, not a cron: see "The team's queue"),
@@ -322,6 +323,27 @@ approved on its own (`aprobado_por_persona=False`) do not count. That fallback i
 rescuers without opening the door for brand-new accounts — which matters because registration
 is open. The matrix is pinned mostly in `tests/test_moderacion.py` (`AutoAprobacionTest`,
 `SinCupoTest`) and the cron rule in `tests/test_commands.py::AutomaticApproveTest`.
+
+**Nothing stays without a verdict** (`services/revision_pendiente.py`, asked for on
+2026-11-18: "the AI approves what is fine; what it flags reaches me by mail"). `E` used to be a
+dead end: a new account's upload waited for a person nobody told (1532 waited nine days, loaded
+while the review was off). Now the hourly `automatic_approve` cron also re-reviews animals in
+`D`/`R` with `E` (`reintentar()`, `POR_CORRIDA` 20): `OK` approves what was waiting exactly like
+an upload (no `aprobado_por_persona`, Instagram scheduled, `fecha_ingreso` = now, and the
+rescuer gets the team's approval mail since they left on "estamos revisando"); `R` mails the
+reviewer; another `E` adds to `Animal.revision_ia_intentos`, and at `MAX_INTENTOS` (24, a day)
+it stops and mails "no se pudo revisar" (not for history-approved ones, which stay published).
+The caps don't burn attempts. Nor are animals a person approved (`aprobado_por_persona`)
+re-reviewed. History-approved `E` animals are: they stay
+published, and an `R` mails and keeps them off Instagram. On upload, an `E` no longer mails at
+once (the cron retries within the hour) unless the review is off. On an edit that changes what
+is reviewed, a waiting animal whose re-review gives `OK` is approved, an `R` mails only when it
+first appears, and the attempts reset. Never approved by the AI: what a person decided —
+`Animal.espera_a_una_persona`, set when the owner edits a "No publicar" back to the queue and
+cleared when a person approves — and anything with `no_publicar_el` still unapproved. The
+reviewer's address is `AVISOS_DE_REVISION_A` in the config (list or comma-separated; default
+the team's `catpuccino.ok@gmail.com`), so no personal address lives in the repo. Pinned in
+`tests/test_revision_pendiente.py`.
 - **The model describes, the code decides.** `PROMPT` asks only for what is visible;
   `decidir()` holds the policy. An earlier version asked the model to judge and it echoed the
   prompt's rules instead of looking, flagging 10 of 14 real gallery photos. After the split,
@@ -448,9 +470,12 @@ The rescuer's panel shows them as "No se publicó" with the reason, without the 
 (`vuelve=True`, with the previous reason). It never auto-approves, even on an AI `OK`: a person
 said no once. A superuser editing it does not undo the decision.
 
-The team's "para revisar" mail (`MailService.send_new_animal_mail`) goes only for listings that
-wait: an upload the AI approved on its own is already on the site and sends nothing. It carries
-the AI verdict and reason, and its button goes to the queue, not to an action.
+The team's "para revisar" mail (`MailService.send_new_animal_mail`, to `AVISOS_DE_REVISION_A`)
+goes only for listings that need a person: an upload the AI flagged, one returning from "No
+publicar", one the AI flagged later (`caso="marcado"`, which may be published) and one it could
+not review in a day (`caso="sin_revision"`). An upload the AI approved on its own is already on
+the site and sends nothing. It carries the AI verdict and reason, and its button goes to the
+queue, not to an action.
 
 `archivar_pendientes` marks as not published whatever has waited more than `--dias` (30) days,
 with `MOTIVO_SIN_REVISION`. Without `--aplicar` it only prints counts by age and by account id
